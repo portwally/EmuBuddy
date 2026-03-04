@@ -50,5 +50,6 @@ playground.xcworkspace
 *.dylib
 
 # MAME build
+mame-build/mame/
 mame-build/*.o
 mame-build/build/
