@@ -31,12 +31,38 @@ final class AppState: ObservableObject {
 
     /// Launch a MAME emulation session with the given profile and media.
     func launchSession(profile: MachineProfile, media: [MediaSlot: URL]) async {
+        print("[EmuBuddy] launchSession called — profile: \(profile.name), media: \(media.map { "\($0.key.displayName): \($0.value.lastPathComponent)" })")
+
         guard let config = configStore.mameConfig() else {
+            print("[EmuBuddy] ERROR: mameConfig() returned nil")
+            print("[EmuBuddy]   mameBinaryURL: \(String(describing: configStore.mameBinaryURL))")
+            print("[EmuBuddy]   romDirectoryURL: \(String(describing: configStore.romDirectoryURL))")
             launchError = "MAME is not configured. Please run the setup wizard."
             return
         }
 
+        print("[EmuBuddy] Config OK — binary: \(config.mameBinaryURL.path), roms: \(config.romPath.path)")
         launchError = nil
+
+        // Ensure all MAME support directories exist
+        let fm = FileManager.default
+        for dir in [config.cfgPath, config.nvramPath, config.statePath, config.snapshotPath] {
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+
+        // Verify media files exist
+        for (slot, url) in media {
+            guard fm.fileExists(atPath: url.path) else {
+                print("[EmuBuddy] ERROR: Media file not found — \(slot.displayName): \(url.path)")
+                launchError = "Media file not found for \(slot.displayName): \(url.lastPathComponent)"
+                return
+            }
+        }
+
+        print("[EmuBuddy] Media files verified, launching...")
+
+        // Remember which profile was used
+        configStore.lastUsedProfileID = profile.id
 
         do {
             let session = try await mameEngine.launch(
@@ -44,23 +70,41 @@ final class AppState: ObservableObject {
                 media: media,
                 config: config
             )
+            print("[EmuBuddy] Launch succeeded, PID: \(session.processID)")
             activeSession = session
+
+            // Record play in library for recently-played tracking
+            for (_, url) in media {
+                libraryService.recordPlay(for: url)
+            }
 
             // Monitor for termination
             Task {
+                print("[EmuBuddy] Starting status stream monitor...")
                 for await status in mameEngine.statusStream {
                     switch status {
-                    case .terminated:
-                        activeSession = nil
+                    case .terminated(let exitCode):
+                        print("[EmuBuddy] MAME terminated with exit code: \(exitCode)")
+                        await MainActor.run {
+                            if exitCode != 0 {
+                                launchError = "MAME exited unexpectedly (code \(exitCode))."
+                            }
+                            activeSession = nil
+                        }
                     case .error(let msg):
-                        launchError = msg
-                        activeSession = nil
+                        print("[EmuBuddy] MAME error: \(msg)")
+                        await MainActor.run {
+                            launchError = msg
+                            activeSession = nil
+                        }
                     default:
-                        break
+                        print("[EmuBuddy] Status: \(status)")
                     }
                 }
+                print("[EmuBuddy] Status stream ended")
             }
         } catch {
+            print("[EmuBuddy] Launch failed: \(error)")
             launchError = error.localizedDescription
         }
     }

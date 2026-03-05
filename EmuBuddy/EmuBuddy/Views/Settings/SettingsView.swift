@@ -47,12 +47,12 @@ struct GeneralSettingsView: View {
                     }
                 }
                 if !mamePath.isEmpty {
-                    if FileManager.default.isExecutableFile(atPath: mamePath) {
-                        Label("Binary found and executable", systemImage: "checkmark.circle.fill")
+                    if isBinaryValid(mamePath) {
+                        Label("Binary found", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                             .font(.caption)
                     } else {
-                        Label("Not a valid executable", systemImage: "xmark.circle.fill")
+                        Label("File not found at this path", systemImage: "xmark.circle.fill")
                             .foregroundStyle(.red)
                             .font(.caption)
                     }
@@ -169,6 +169,19 @@ struct GeneralSettingsView: View {
 
     private func saveFolders() {
         appState.configStore.diskImageDirectories = diskImageFolders
+        // Trigger a library rescan whenever folders change
+        Task {
+            await appState.libraryService.scanAll()
+        }
+    }
+
+    /// Check if a binary exists. Under App Sandbox, isExecutableFile can return false
+    /// even for valid executables, so we fall back to just checking existence.
+    private func isBinaryValid(_ path: String) -> Bool {
+        let fm = FileManager.default
+        if fm.isExecutableFile(atPath: path) { return true }
+        // Fallback: check POSIX permissions or trust that the file exists
+        return fm.fileExists(atPath: path)
     }
 
     private func validateROMs() {

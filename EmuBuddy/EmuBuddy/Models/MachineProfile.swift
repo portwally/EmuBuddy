@@ -32,6 +32,26 @@ struct MachineProfile: Codable, Identifiable, Hashable {
     }
 }
 
+extension MachineProfile {
+    /// Whether this profile has a hard drive controller card in one of its slots.
+    var hasHardDriveController: Bool {
+        slots.values.contains { $0.isHardDriveController }
+    }
+
+    /// Whether this profile's machine type supports the enhanced //e firmware
+    /// needed by CFFA2 (65C02-based machines: apple2ee, apple2ep, //c, IIGS).
+    var supportsEnhancedCards: Bool {
+        switch machineType {
+        case .apple2eEnhanced, .apple2ePlatinum,
+             .apple2c, .apple2cPlus,
+             .apple2gsROM00, .apple2gsROM01, .apple2gsROM03:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 // MARK: - Machine Type
 // Matches actual MAME driver names from `emubuddy -listfull`
 
@@ -150,10 +170,12 @@ enum RAMSize: String, Codable, CaseIterable {
 
 // MARK: - CPU Speed
 
-enum CPUSpeed: String, Codable, CaseIterable {
+enum CPUSpeed: String, Codable, CaseIterable, Identifiable {
     case normal = "normal"
     case fast   = "fast"
     case warp   = "warp"
+
+    var id: String { rawValue }
 
     var displayName: String {
         switch self {
@@ -410,6 +432,18 @@ enum SlotCard: String, Codable, CaseIterable, Identifiable {
         .mouse, .memexp, .ramfactor, .cffa2, .softcard,
         .uthernet, .thclock, .vulcan, .hsscsi
     ]
+
+    /// Whether this card provides hard drive media support (accepts -hard1, -hard2, etc.)
+    var isHardDriveController: Bool {
+        switch self {
+        case .cffa2, .cffa202, .focusDrive, .zipDrive, .booti,
+             .vulcan, .vulcanGold,
+             .scsi, .hsscsi, .cmsscsi, .corvus, .sider1, .sider2:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - Game I/O Devices (gameio slot)
@@ -445,20 +479,20 @@ extension MachineProfile {
             ramSize: .kb48,
             slots: [6: .diskIIng]
         ),
-        // Apple //e
+        // Apple //e (MAME apple2ee/apple2ep only support 64K base RAM)
         MachineProfile(
             name: "Apple //e Enhanced",
             machineType: .apple2eEnhanced,
-            ramSize: .kb128,
+            ramSize: .kb64,
             slots: [6: .diskIIng]
         ),
         MachineProfile(
             name: "Apple //e Platinum",
             machineType: .apple2ePlatinum,
-            ramSize: .kb128,
+            ramSize: .kb64,
             slots: [4: .mockingboard, 6: .diskIIng]
         ),
-        // Apple //c
+        // Apple //c (internal RAM, 128K valid)
         MachineProfile(
             name: "Apple //c",
             machineType: .apple2c,

@@ -8,6 +8,7 @@ struct EmuBuddyApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
+                .focusedValue(\.appState, appState)
         }
         .commands {
             EmuBuddyCommands()

@@ -6,15 +6,21 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
     private let configStore: ConfigStore
     private var activeProcess: Process?
     private var statusContinuation: AsyncStream<EngineStatus>.Continuation?
+    /// Captured stderr output from the last MAME run (read after process exits).
+    private var lastStderrOutput: String = ""
+    /// Captured stdout output from the last MAME run.
+    private var lastStdoutOutput: String = ""
 
-    var statusStream: AsyncStream<EngineStatus> {
-        AsyncStream { continuation in
-            self.statusContinuation = continuation
-        }
-    }
+    /// Eagerly-created status stream so the continuation exists before launch.
+    let statusStream: AsyncStream<EngineStatus>
 
     init(config: ConfigStore) {
         self.configStore = config
+        // Set up the stream eagerly so the continuation is ready before any launch.
+        // Using makeStream (Swift 5.9+) avoids Sendable capture issues.
+        let (stream, continuation) = AsyncStream.makeStream(of: EngineStatus.self)
+        self.statusStream = stream
+        self.statusContinuation = continuation
     }
 
     // MARK: - Launch
@@ -25,28 +31,111 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
         config: MAMEConfig
     ) async throws -> EmulationSession {
 
+        // Use the original URL from config (preserves security-scoped bookmark access)
+        let binaryURL = config.mameBinaryURL
+        let binaryPath = binaryURL.path
+
+        print("[EmuBuddy] Binary URL: \(binaryURL)")
+        print("[EmuBuddy] Binary path: \(binaryPath)")
+        print("[EmuBuddy] File exists: \(FileManager.default.fileExists(atPath: binaryPath))")
+
+        // Start security-scoped access (needed for containerized/sandboxed apps)
+        let didAccessBinary = binaryURL.startAccessingSecurityScopedResource()
+        print("[EmuBuddy] Security-scoped access for binary: \(didAccessBinary)")
+
         // Validate MAME binary exists
-        guard FileManager.default.fileExists(atPath: config.mameBinaryURL.path) else {
-            throw MAMEEngineError.mameBinaryNotFound(config.mameBinaryURL)
+        guard FileManager.default.fileExists(atPath: binaryPath) else {
+            if didAccessBinary { binaryURL.stopAccessingSecurityScopedResource() }
+            throw MAMEEngineError.mameBinaryNotFound(binaryURL)
         }
 
         // Build command-line arguments
         let arguments = buildArguments(machine: machine, media: media, config: config)
 
-        // Create and configure the process
+        // Log the full command for debugging
+        let fullCmd = ([binaryPath] + arguments).joined(separator: " ")
+        print("[EmuBuddy] Launching: \(fullCmd)")
+
+        // Create and configure the process — use launchPath (string) instead of
+        // executableURL to avoid Foundation URL resolution issues in sandboxed containers
         let process = Process()
-        process.executableURL = config.mameBinaryURL
+        process.executableURL = URL(fileURLWithPath: binaryPath)
         process.arguments = arguments
 
-        // Capture stdout and stderr
-        let stdoutPipe = Pipe()
+        // Set environment for SDL3 on macOS (ensure proper video driver)
+        var env = ProcessInfo.processInfo.environment
+        env["SDL_VIDEODRIVER"] = "cocoa"
+        process.environment = env
+
+        // Capture stderr for error reporting.
+        // IMPORTANT: Read pipes asynchronously to prevent deadlock — if MAME writes more
+        // than the pipe buffer (64KB), it blocks until someone reads. Reading in the
+        // termination handler would deadlock because termination waits for the process to exit.
         let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
+
+        // Don't capture stdout to a pipe — let it go to /dev/null or inherit.
+        // This prevents stdout buffer deadlock (MAME can be chatty).
+        process.standardOutput = FileHandle.nullDevice
+
+        // Reset captured output
+        lastStderrOutput = ""
+        lastStdoutOutput = ""
+
+        // Read stderr asynchronously in background to drain the pipe buffer.
+        // Use a thread-safe accumulator (NSLock-protected) since readabilityHandler
+        // and terminationHandler run on different threads.
+        let stderrHandle = stderrPipe.fileHandleForReading
+        let stderrLock = NSLock()
+        var stderrData = Data()
+
+        stderrHandle.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+                return
+            }
+            stderrLock.lock()
+            stderrData.append(data)
+            stderrLock.unlock()
+            if let text = String(data: data, encoding: .utf8), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                print("[MAME stderr] \(text.trimmingCharacters(in: .newlines))")
+            }
+        }
 
         // Set up termination handler
         process.terminationHandler = { [weak self] proc in
-            self?.statusContinuation?.yield(.terminated(exitCode: proc.terminationStatus))
+            // Release security-scoped access now that the process has exited
+            if didAccessBinary { binaryURL.stopAccessingSecurityScopedResource() }
+
+            guard let self = self else { return }
+
+            // Stop async reading and drain any remaining bytes
+            stderrHandle.readabilityHandler = nil
+            let remainingData = stderrHandle.readDataToEndOfFile()
+
+            stderrLock.lock()
+            stderrData.append(remainingData)
+            let finalStderr = String(data: stderrData, encoding: .utf8) ?? ""
+            stderrLock.unlock()
+
+            self.lastStderrOutput = finalStderr
+            let exitCode = proc.terminationStatus
+
+            print("[MAME] Process exited with code: \(exitCode)")
+
+            if exitCode != 0 {
+                var msg = "MAME exited with code \(exitCode)."
+                if !finalStderr.isEmpty {
+                    let lines = finalStderr.components(separatedBy: .newlines)
+                        .filter { !$0.isEmpty }
+                        .prefix(8)
+                    msg += "\n\n" + lines.joined(separator: "\n")
+                }
+                self.statusContinuation?.yield(.error(msg))
+            } else {
+                self.statusContinuation?.yield(.terminated(exitCode: exitCode))
+            }
         }
 
         // Launch
@@ -69,11 +158,6 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
         )
         await MainActor.run {
             session.processID = process.processIdentifier
-        }
-
-        // Monitor stderr for errors in background
-        Task.detached { [weak self] in
-            self?.monitorStderr(pipe: stderrPipe)
         }
 
         return session
@@ -181,13 +265,4 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
         return args
     }
 
-    // MARK: - Monitoring
-
-    private func monitorStderr(pipe: Pipe) {
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        if let output = String(data: data, encoding: .utf8), !output.isEmpty {
-            // Log stderr output for debugging
-            print("[MAME stderr] \(output)")
-        }
-    }
 }
