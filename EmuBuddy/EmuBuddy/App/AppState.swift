@@ -9,6 +9,7 @@ final class AppState: ObservableObject {
     @Published var selectedSidebarItem: SidebarItem = .library
     @Published var activeSession: EmulationSession?
     @Published var isMAMEConfigured: Bool = false
+    @Published var launchError: String?
 
     // MARK: - Services
     let mameEngine: any MAMEEngine
@@ -24,6 +25,51 @@ final class AppState: ObservableObject {
 
         // Check if MAME is configured on launch
         self.isMAMEConfigured = configStore.mameBinaryURL != nil
+    }
+
+    // MARK: - Launch
+
+    /// Launch a MAME emulation session with the given profile and media.
+    func launchSession(profile: MachineProfile, media: [MediaSlot: URL]) async {
+        guard let config = configStore.mameConfig() else {
+            launchError = "MAME is not configured. Please run the setup wizard."
+            return
+        }
+
+        launchError = nil
+
+        do {
+            let session = try await mameEngine.launch(
+                machine: profile,
+                media: media,
+                config: config
+            )
+            activeSession = session
+
+            // Monitor for termination
+            Task {
+                for await status in mameEngine.statusStream {
+                    switch status {
+                    case .terminated:
+                        activeSession = nil
+                    case .error(let msg):
+                        launchError = msg
+                        activeSession = nil
+                    default:
+                        break
+                    }
+                }
+            }
+        } catch {
+            launchError = error.localizedDescription
+        }
+    }
+
+    /// Stop the current emulation session.
+    func stopSession() async {
+        guard let session = activeSession else { return }
+        await mameEngine.terminate(session: session)
+        activeSession = nil
     }
 }
 

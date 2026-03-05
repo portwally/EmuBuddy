@@ -50,6 +50,7 @@ struct MAMECommandBuilder {
 
     /// Returns the list of ROM files MAME requires for a machine type.
     /// Note: These are approximate — MAME may require additional files depending on version.
+    /// The ROM directory should contain a subfolder matching the MAME driver name.
     static func requiredROMFiles(for machine: MachineType) -> [String] {
         switch machine {
         case .apple2:
@@ -58,14 +59,25 @@ struct MAMECommandBuilder {
         case .apple2Plus:
             return ["341-0011.d0", "341-0012.d8", "341-0013.e0",
                     "341-0014.e8", "341-0015.f0", "341-0020.f8"]
+        case .apple2jPlus:
+            return ["341-0011.d0", "341-0012.d8", "341-0013.e0",
+                    "341-0014.e8", "341-0015.f0", "341-0020.f8"]
         case .apple2e:
             return ["342-0135-b.64", "342-0134-a.64"]
         case .apple2eEnhanced:
             return ["342-0349-b.64", "342-0350-b.64"]
+        case .apple2ePlatinum:
+            return ["342-0349-b.64", "342-0350-b.64"]
         case .apple2c:
             return ["342-0272-b.rom"]
-        case .apple2gs:
-            return ["341s0632-2.bin"]  // ROM 01; ROM 3 uses different file
+        case .apple2cPlus:
+            return ["342-0625-a.rom"]
+        case .apple2gsROM00:
+            return ["341-0728.bin"]
+        case .apple2gsROM01:
+            return ["341s0632-2.bin"]
+        case .apple2gsROM03:
+            return ["341s0632-2.bin"]  // ROM 03 uses same parent ROM set
         }
     }
 }

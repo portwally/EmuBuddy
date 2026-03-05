@@ -81,25 +81,33 @@ struct MachineDetailView: View {
                 Divider()
 
                 // Configuration summary
+                LabeledContent("Family") { Text(profile.machineType.family.rawValue) }
                 LabeledContent("RAM") { Text(profile.ramSize.displayName) }
                 LabeledContent("CPU Speed") { Text(profile.cpuSpeed.displayName) }
-
-                if let rom = profile.romVersion {
-                    LabeledContent("ROM") { Text(rom.displayName) }
-                }
 
                 // Slots
                 if profile.machineType.hasExpansionSlots {
                     Text("Expansion Slots")
                         .font(.headline)
 
-                    ForEach(0..<8, id: \.self) { slot in
+                    ForEach(profile.machineType.configurableSlots, id: \.self) { slot in
                         let card = profile.slots[slot] ?? .empty
-                        LabeledContent("Slot \(slot)") {
+                        HStack {
+                            Text("Slot \(slot)")
+                                .frame(width: 50, alignment: .leading)
                             Text(card.displayName)
                                 .foregroundStyle(card == .empty ? .secondary : .primary)
+                            if card != .empty {
+                                Text("(\(card.category.rawValue))")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                     }
+                } else {
+                    Text("No user-configurable expansion slots")
+                        .foregroundStyle(.secondary)
+                        .font(.callout)
                 }
             }
             .padding()

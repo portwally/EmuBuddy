@@ -52,6 +52,7 @@ for arg in "$@"; do
             ;;
         --clean)
             info "Cleaning build artifacts for subtarget '${SUBTARGET}'..."
+            rm -rf "${MAME_DIR}/build/projects/sdl3/${SUBTARGET}"
             rm -rf "${MAME_DIR}/build/projects/sdl/${SUBTARGET}"
             rm -rf "${MAME_DIR}/build/mingw-gcc/${SUBTARGET}"
             rm -rf "${MAME_DIR}/obj/${SUBTARGET}"*
@@ -85,16 +86,16 @@ if ! xcode-select -p &>/dev/null; then
 fi
 success "Xcode command line tools found"
 
-# Check for SDL2
-if pkg-config --exists sdl2 2>/dev/null; then
-    SDL2_VERSION=$(pkg-config --modversion sdl2)
-    success "SDL2 ${SDL2_VERSION} found (via pkg-config)"
-elif [ -d "/Library/Frameworks/SDL2.framework" ]; then
-    success "SDL2.framework found"
-elif brew list sdl2 &>/dev/null; then
-    success "SDL2 found (via Homebrew)"
+# Check for SDL3 (MAME has moved to SDL3)
+if pkg-config --exists sdl3 2>/dev/null; then
+    SDL3_VERSION=$(pkg-config --modversion sdl3)
+    success "SDL3 ${SDL3_VERSION} found (via pkg-config)"
+elif [ -d "/Library/Frameworks/SDL3.framework" ]; then
+    success "SDL3.framework found"
+elif brew list sdl3 &>/dev/null; then
+    success "SDL3 found (via Homebrew)"
 else
-    error "SDL2 not found. Install with: brew install sdl2"
+    error "SDL3 not found. Install with: brew install sdl3"
 fi
 
 # Check for Python 3
@@ -158,7 +159,10 @@ if [ "${BUILD_MODE}" = "libmame" ]; then
     make BUILD_LIBMAME=1 \
          SUBTARGET="${SUBTARGET}" \
          SOURCES="${SOURCES}" \
+         ARCHOPTS="-I/opt/homebrew/include" \
+         LDFLAGS="-L/opt/homebrew/lib -lSDL3" \
          LDFLAGS_EXTRA="-Wl,-current_version,1.0.0 -Wl,-install_name,@rpath/libmame.dylib" \
+         USE_LIBSDL=1 \
          REGENIE=1 \
          -j"${JOBS}" \
          libmame
@@ -175,11 +179,14 @@ else
     info "Building standalone binary..."
     make SUBTARGET="${SUBTARGET}" \
          SOURCES="${SOURCES}" \
+         ARCHOPTS="-I/opt/homebrew/include" \
+         LDFLAGS="-L/opt/homebrew/lib -lSDL3" \
+         USE_LIBSDL=1 \
          REGENIE=1 \
          -j"${JOBS}"
 
-    # The output binary is named mame<subtarget>
-    BINARY_NAME="mame${SUBTARGET}"
+    # Output binary is named <subtarget> (not mame<subtarget>)
+    BINARY_NAME="${SUBTARGET}"
     if [ -f "${BINARY_NAME}" ]; then
         success "Binary built: ${MAME_DIR}/${BINARY_NAME}"
         ls -lh "${BINARY_NAME}"
@@ -198,8 +205,8 @@ info "━━━━━━━━━━━━━━━━━━━━━━━━�
 success "Build complete!"
 
 # Show included slot devices
-if [ "${BUILD_MODE}" = "binary" ] && [ -f "mame${SUBTARGET}" ]; then
+if [ "${BUILD_MODE}" = "binary" ] && [ -f "${SUBTARGET}" ]; then
     echo ""
     info "Included slot devices for apple2gs:"
-    ./"mame${SUBTARGET}" apple2gs -listslots 2>/dev/null || true
+    ./"${SUBTARGET}" apple2gs -listslots 2>/dev/null || true
 fi

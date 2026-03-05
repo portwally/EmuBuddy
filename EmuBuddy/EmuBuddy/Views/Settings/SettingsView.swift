@@ -10,6 +10,7 @@ struct SettingsView: View {
                 .tabItem {
                     Label("General", systemImage: "gear")
                 }
+                .environmentObject(appState)
 
             DisplaySettingsView()
                 .tabItem {
@@ -21,7 +22,7 @@ struct SettingsView: View {
                     Label("Input", systemImage: "keyboard")
                 }
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 550, height: 450)
     }
 }
 
@@ -31,67 +32,199 @@ struct GeneralSettingsView: View {
     @EnvironmentObject var appState: AppState
     @State private var mamePath: String = ""
     @State private var romPath: String = ""
+    @State private var diskImageFolders: [URL] = []
+    @State private var romValidation: [MachineType: Bool] = [:]
+    @State private var isValidating = false
 
     var body: some View {
         Form {
-            Section("MAME") {
+            Section("MAME Binary") {
                 HStack {
-                    TextField("MAME Binary", text: $mamePath)
+                    TextField("Path to emubuddy binary", text: $mamePath)
                         .textFieldStyle(.roundedBorder)
                     Button("Browse...") {
-                        // TODO: File picker for MAME binary
+                        browseForMAME()
+                    }
+                }
+                if !mamePath.isEmpty {
+                    if FileManager.default.isExecutableFile(atPath: mamePath) {
+                        Label("Binary found and executable", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                    } else {
+                        Label("Not a valid executable", systemImage: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                            .font(.caption)
                     }
                 }
             }
 
-            Section("ROMs") {
+            Section("ROM Directory") {
                 HStack {
-                    TextField("ROM Directory", text: $romPath)
+                    TextField("Path to ROM directory", text: $romPath)
                         .textFieldStyle(.roundedBorder)
                     Button("Browse...") {
-                        // TODO: Folder picker for ROMs
+                        browseForROMs()
                     }
                 }
-                Button("Validate ROMs...") {
-                    // TODO: Run ROM validation for all machine types
+
+                if !romPath.isEmpty {
+                    Button("Validate ROMs") {
+                        validateROMs()
+                    }
+                    .disabled(isValidating)
+
+                    if !romValidation.isEmpty {
+                        ForEach(Array(romValidation.keys).sorted(by: { $0.displayName < $1.displayName }), id: \.self) { machine in
+                            HStack {
+                                Image(systemName: romValidation[machine] == true ? "checkmark.circle.fill" : "xmark.circle")
+                                    .foregroundStyle(romValidation[machine] == true ? .green : .orange)
+                                    .font(.caption)
+                                Text(machine.displayName)
+                                    .font(.caption)
+                            }
+                        }
+                    }
                 }
             }
 
             Section("Disk Image Folders") {
-                // TODO: List of watched folders with add/remove
-                Text("Configure folders to scan for disk images.")
-                    .foregroundStyle(.secondary)
+                if diskImageFolders.isEmpty {
+                    Text("No folders configured. Add folders containing your Apple II disk images.")
+                        .foregroundStyle(.secondary)
+                        .font(.callout)
+                } else {
+                    ForEach(diskImageFolders, id: \.self) { url in
+                        HStack {
+                            Image(systemName: "folder.fill")
+                                .foregroundStyle(.tint)
+                            Text(url.path)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .font(.callout)
+                            Spacer()
+                            Button(action: {
+                                diskImageFolders.removeAll { $0 == url }
+                                saveFolders()
+                            }) {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
                 Button("Add Folder...") {
-                    // TODO: Folder picker
+                    browseForDiskImageFolder()
                 }
             }
         }
         .padding()
+        .onAppear {
+            mamePath = appState.configStore.mameBinaryURL?.path ?? ""
+            romPath = appState.configStore.romDirectoryURL?.path ?? ""
+            diskImageFolders = appState.configStore.diskImageDirectories
+        }
+    }
+
+    private func browseForMAME() {
+        let panel = NSOpenPanel()
+        panel.title = "Select MAME Binary"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            mamePath = url.path
+            appState.configStore.mameBinaryURL = url
+            appState.isMAMEConfigured = true
+        }
+    }
+
+    private func browseForROMs() {
+        let panel = NSOpenPanel()
+        panel.title = "Select ROM Directory"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            romPath = url.path
+            appState.configStore.romDirectoryURL = url
+        }
+    }
+
+    private func browseForDiskImageFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Select Disk Image Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        if panel.runModal() == .OK {
+            for url in panel.urls where !diskImageFolders.contains(url) {
+                diskImageFolders.append(url)
+            }
+            saveFolders()
+        }
+    }
+
+    private func saveFolders() {
+        appState.configStore.diskImageDirectories = diskImageFolders
+    }
+
+    private func validateROMs() {
+        isValidating = true
+        let romURL = URL(fileURLWithPath: romPath)
+        let machinesToCheck: [MachineType] = [
+            .apple2Plus, .apple2eEnhanced, .apple2c, .apple2gsROM01, .apple2gsROM03
+        ]
+        romValidation = [:]
+        for machine in machinesToCheck {
+            let result = MAMECommandBuilder.validateROMs(for: machine, romPath: romURL)
+            romValidation[machine] = result.isValid
+        }
+        isValidating = false
     }
 }
 
-// MARK: - Display Settings (Placeholder)
+// MARK: - Display Settings
 
 struct DisplaySettingsView: View {
     var body: some View {
         Form {
-            Section("Default Display") {
-                Text("Display settings will appear here.")
+            Section("Default Display Settings") {
+                Text("These defaults apply to new machine profiles.")
                     .foregroundStyle(.secondary)
+                    .font(.callout)
+
+                // Placeholder — will be fully wired in Phase 2
+                LabeledContent("Filter") { Text("Sharp Pixels") }
+                LabeledContent("Aspect Ratio") { Text("4:3 (Original)") }
+                LabeledContent("Window Mode") { Text("Windowed") }
+                LabeledContent("Zoom") { Text("2x") }
             }
         }
         .padding()
     }
 }
 
-// MARK: - Input Settings (Placeholder)
+// MARK: - Input Settings
 
 struct InputSettingsView: View {
     var body: some View {
         Form {
-            Section("Keyboard") {
-                Text("Input mapping settings will appear here.")
+            Section("Keyboard Mapping") {
+                Text("Default keyboard mappings for Apple II keys.")
                     .foregroundStyle(.secondary)
+                    .font(.callout)
+
+                LabeledContent("Open Apple") { Text("Left Option") }
+                LabeledContent("Closed Apple") { Text("Right Option") }
+                LabeledContent("Reset") { Text("Ctrl+Cmd+R") }
+            }
+
+            Section("Joystick") {
+                LabeledContent("Source") { Text("Keyboard (Arrow Keys)") }
+                LabeledContent("Numpad as Joystick") { Text("Off") }
             }
         }
         .padding()

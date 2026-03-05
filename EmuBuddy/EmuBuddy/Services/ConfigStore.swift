@@ -7,9 +7,23 @@ final class ConfigStore: ObservableObject {
     private let defaults = UserDefaults.standard
 
     // MARK: - MAME Binary
+    // Default: look for our custom-built `emubuddy` binary
 
     var mameBinaryURL: URL? {
-        get { defaults.url(forKey: "mameBinaryURL") }
+        get {
+            if let stored = defaults.url(forKey: "mameBinaryURL") { return stored }
+            // Auto-detect common locations
+            let candidates = [
+                "/usr/local/bin/emubuddy",
+                "\(NSHomeDirectory())/Documents/EmuBuddy/mame-build/mame/emubuddy",
+            ]
+            for path in candidates {
+                if FileManager.default.isExecutableFile(atPath: path) {
+                    return URL(fileURLWithPath: path)
+                }
+            }
+            return nil
+        }
         set { defaults.set(newValue, forKey: "mameBinaryURL"); objectWillChange.send() }
     }
 
