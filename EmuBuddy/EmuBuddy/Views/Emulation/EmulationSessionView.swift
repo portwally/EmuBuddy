@@ -47,30 +47,28 @@ struct EmulationSessionView: View {
                 // Controls
                 HStack(spacing: 8) {
                     Button(action: {
-                        NotificationCenter.default.post(name: .emubuddySaveState, object: nil)
+                        MAMELuaCommand.saveState()
                     }) {
                         Label("Save", systemImage: "square.and.arrow.down")
                     }
-                    .help("Save State (⇧⌘S)")
+                    .help("Quick Save (⌥⌘S)")
 
                     Button(action: {
-                        NotificationCenter.default.post(name: .emubuddyLoadState, object: nil)
+                        MAMELuaCommand.loadState()
                     }) {
                         Label("Load", systemImage: "square.and.arrow.up")
                     }
-                    .help("Load State (⇧⌘L)")
+                    .help("Quick Load (⌥⌘L)")
 
                     Divider()
                         .frame(height: 20)
 
                     Button(action: {
-                        Task {
-                            await appState.mameEngine.sendInput(session: session, input: .reset)
-                        }
+                        MAMELuaCommand.softReset()
                     }) {
                         Label("Reset", systemImage: "arrow.counterclockwise")
                     }
-                    .help("Reset Machine (⇧⌘R)")
+                    .help("Soft Reset (⌥⌘R)")
 
                     Button(role: .destructive, action: {
                         Task {

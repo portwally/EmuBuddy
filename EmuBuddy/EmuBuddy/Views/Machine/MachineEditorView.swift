@@ -9,8 +9,6 @@ struct MachineEditorView: View {
     let isNew: Bool
     let onSave: (MachineProfile) -> Void
 
-    @State private var selectedSlot: Int?
-
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -53,6 +51,21 @@ struct MachineEditorView: View {
                         }
                     }
 
+                    Section("Input") {
+                        Picker("Game I/O Device", selection: $profile.gameIODevice) {
+                            Text("None").tag(GameIODevice?.none)
+                            ForEach(GameIODevice.allCases) { device in
+                                Text(device.displayName).tag(GameIODevice?.some(device))
+                            }
+                        }
+
+                        Picker("Joystick Source", selection: $profile.inputMapping.joystickSource) {
+                            ForEach(JoystickSource.allCases, id: \.self) { source in
+                                Text(source.displayName).tag(source)
+                            }
+                        }
+                    }
+
                     Section("Display") {
                         Picker("Filter", selection: $profile.displaySettings.filter) {
                             ForEach(DisplayFilter.allCases, id: \.self) { filter in
@@ -86,8 +99,7 @@ struct MachineEditorView: View {
                 if profile.machineType.hasExpansionSlots {
                     SlotConfiguratorView(
                         slots: $profile.slots,
-                        configurableSlots: profile.machineType.configurableSlots,
-                        selectedSlot: $selectedSlot
+                        configurableSlots: profile.machineType.configurableSlots
                     )
                     .frame(minWidth: 350)
                 } else {
@@ -124,7 +136,7 @@ struct MachineEditorView: View {
             }
             .padding()
         }
-        .frame(width: 780, height: 560)
+        .frame(width: 860, height: 600)
         .onChange(of: profile.machineType) { _, newType in
             // Reset RAM to a valid value when machine type changes
             let valid = RAMSize.validSizes(for: newType)
@@ -144,78 +156,87 @@ struct MachineEditorView: View {
 struct SlotConfiguratorView: View {
     @Binding var slots: [Int: SlotCard]
     let configurableSlots: [Int]
-    @Binding var selectedSlot: Int?
+    @State private var popoverSlot: Int?
 
     var body: some View {
         VStack(spacing: 0) {
             Text("Expansion Slots")
                 .font(.headline)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+            Text("Click a slot to assign a card")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 12)
 
             // Slot overview (the "motherboard")
-            VStack(spacing: 4) {
+            VStack(spacing: 6) {
                 ForEach(configurableSlots, id: \.self) { slotNum in
                     let card = slots[slotNum] ?? .empty
                     HStack(spacing: 8) {
                         Text("Slot \(slotNum)")
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(width: 46, alignment: .trailing)
+                            .font(.system(.callout, design: .monospaced))
+                            .frame(width: 50, alignment: .trailing)
 
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(selectedSlot == slotNum ? Color.accentColor.opacity(0.2) : cardColor(card))
-                            .frame(height: 32)
-                            .overlay {
-                                HStack {
-                                    if card != .empty {
-                                        Image(systemName: cardIcon(card.category))
-                                            .font(.caption)
-                                    }
-                                    Text(card == .empty ? "Empty" : card.displayName)
+                        Button(action: {
+                            popoverSlot = slotNum
+                        }) {
+                            HStack(spacing: 6) {
+                                if card != .empty {
+                                    Image(systemName: cardIcon(card.category))
                                         .font(.caption)
-                                        .lineLimit(1)
+                                        .foregroundStyle(.secondary)
                                 }
-                                .foregroundStyle(card == .empty ? .secondary : .primary)
+                                Text(card == .empty ? "Empty" : card.displayName)
+                                    .font(.callout)
+                                    .lineLimit(1)
+                                Spacer()
+                                if card != .empty {
+                                    Text(card.category.rawValue)
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
                             }
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .stroke(selectedSlot == slotNum ? Color.accentColor : Color.clear, lineWidth: 2)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(cardColor(card))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: Binding(
+                            get: { popoverSlot == slotNum },
+                            set: { if !$0 { popoverSlot = nil } }
+                        ), arrowEdge: .trailing) {
+                            CardPickerPopover(
+                                slotNumber: slotNum,
+                                currentCard: slots[slotNum] ?? .empty,
+                                onSelect: { card in
+                                    slots[slotNum] = card
+                                    popoverSlot = nil
+                                }
                             )
-                            .onTapGesture {
-                                selectedSlot = slotNum
-                            }
+                        }
 
                         Button(action: {
                             slots[slotNum] = .empty
                         }) {
-                            Image(systemName: "xmark.circle")
+                            Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
-                                .font(.caption)
+                                .font(.body)
                         }
                         .buttonStyle(.plain)
                         .opacity(card == .empty ? 0 : 1)
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 12)
                 }
             }
-            .padding(.vertical, 8)
 
-            Divider()
-
-            // Card picker for selected slot
-            if let slotNum = selectedSlot {
-                CardPickerView(
-                    slotNumber: slotNum,
-                    currentCard: slots[slotNum] ?? .empty,
-                    onSelect: { card in
-                        slots[slotNum] = card
-                    }
-                )
-            } else {
-                Text("Select a slot to configure")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            Spacer()
         }
     }
 
@@ -249,9 +270,9 @@ struct SlotConfiguratorView: View {
     }
 }
 
-// MARK: - Card Picker
+// MARK: - Card Picker Popover
 
-struct CardPickerView: View {
+struct CardPickerPopover: View {
     let slotNumber: Int
     let currentCard: SlotCard
     let onSelect: (SlotCard) -> Void
@@ -278,14 +299,26 @@ struct CardPickerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header
             HStack {
-                Text("Slot \(slotNumber) — Choose Card")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                Text("Slot \(slotNumber)")
+                    .font(.headline)
                 Spacer()
+                Button("Clear") {
+                    onSelect(.empty)
+                }
+                .font(.caption)
+                .disabled(currentCard == .empty)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            // Search
+            TextField("Search cards...", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 6)
 
             // Category filter chips
             ScrollView(.horizontal, showsIndicators: false) {
@@ -293,32 +326,22 @@ struct CardPickerView: View {
                     CategoryChip(title: "All", isSelected: selectedCategory == nil) {
                         selectedCategory = nil
                     }
-                    CategoryChip(title: "Common", isSelected: false) {
-                        // Quick filter to common cards
-                        selectedCategory = nil
-                        searchText = ""
-                    }
                     ForEach(SlotCardCategory.allCases, id: \.self) { cat in
-                        CategoryChip(title: cat.rawValue, isSelected: selectedCategory == cat) {
+                        CategoryChip(title: shortCategoryName(cat), isSelected: selectedCategory == cat) {
                             selectedCategory = (selectedCategory == cat) ? nil : cat
                         }
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 12)
             }
-            .padding(.vertical, 4)
+            .padding(.bottom, 6)
 
-            // Search
-            TextField("Search cards...", text: $searchText)
-                .textFieldStyle(.roundedBorder)
-                .font(.caption)
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
+            Divider()
 
             // Card list
             List {
-                // Common cards first
                 if selectedCategory == nil && searchText.isEmpty {
+                    // Show common cards first when no filter
                     Section("Common") {
                         ForEach(SlotCard.commonCards, id: \.self) { card in
                             CardRow(card: card, isCurrent: card == currentCard) {
@@ -343,6 +366,21 @@ struct CardPickerView: View {
             }
             .listStyle(.plain)
         }
+        .frame(width: 340, height: 420)
+    }
+
+    private func shortCategoryName(_ cat: SlotCardCategory) -> String {
+        switch cat {
+        case .diskStorage: return "Storage"
+        case .audio: return "Audio"
+        case .serialParallel: return "Serial"
+        case .memory: return "Memory"
+        case .video: return "Video"
+        case .coprocessor: return "CPU"
+        case .input: return "Input"
+        case .network: return "Network"
+        case .other: return "Other"
+        }
     }
 }
 
@@ -353,22 +391,45 @@ struct CardRow: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack {
-                Text(card.displayName)
+            HStack(spacing: 8) {
+                Image(systemName: cardIcon(card.category))
                     .font(.caption)
-                    .fontWeight(isCurrent ? .bold : .regular)
-                Spacer()
-                Text(card.category.rawValue)
-                    .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(card.displayName)
+                        .font(.callout)
+                        .fontWeight(isCurrent ? .semibold : .regular)
+                    Text(card.category.rawValue)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
                 if isCurrent {
-                    Image(systemName: "checkmark")
-                        .font(.caption)
+                    Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.tint)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func cardIcon(_ category: SlotCardCategory) -> String {
+        switch category {
+        case .diskStorage: return "internaldrive"
+        case .audio: return "speaker.wave.2"
+        case .serialParallel: return "cable.connector"
+        case .memory: return "memorychip"
+        case .video: return "display"
+        case .coprocessor: return "cpu"
+        case .input: return "computermouse"
+        case .network: return "network"
+        case .other: return "puzzlepiece"
+        }
     }
 }
 

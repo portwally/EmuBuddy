@@ -8,6 +8,10 @@ final class LibraryService: ObservableObject {
     @Published var items: [LibraryItem] = []
     @Published var isScanning: Bool = false
 
+    /// Tracks whether the initial scan has been performed this session.
+    /// Lives here (not in a view's @State) so it persists across view recreation.
+    private(set) var hasPerformedInitialScan = false
+
     private let configStore: ConfigStore
     private let metadataURL: URL
 
@@ -19,18 +23,27 @@ final class LibraryService: ObservableObject {
 
     // MARK: - Scanning
 
+    /// Perform the initial library scan (called once per app session).
+    func scanIfNeeded() {
+        guard !hasPerformedInitialScan, !isScanning else { return }
+        guard !configStore.diskImageDirectories.isEmpty else { return }
+        hasPerformedInitialScan = true
+        // Use DispatchQueue.main.async to break out of the SwiftUI view update
+        // cycle and avoid "Publishing changes from within view updates" warnings.
+        DispatchQueue.main.async {
+            Task { @MainActor in
+                await self.scanAll()
+            }
+        }
+    }
+
     /// Scan all configured directories for disk images.
     func scanAll() async {
-        // Prevent concurrent scans — check and set atomically (no yield between)
+        // Prevent concurrent scans
         guard !isScanning else {
             print("[LibraryService] Scan already in progress, skipping")
             return
         }
-
-        // Yield to allow the current view update cycle to complete before
-        // modifying @Published properties, preventing "Publishing changes
-        // from within view updates" warnings.
-        await Task.yield()
 
         isScanning = true
 

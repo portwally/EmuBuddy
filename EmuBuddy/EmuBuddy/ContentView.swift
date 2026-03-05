@@ -34,17 +34,29 @@ struct ContentView: View {
         }
 
         // Select the best profile for the media type.
-        // Priority: (1) last-used profile if compatible, (2) best match from all profiles.
+        // Priority: (1) selected in Machines tab, (2) last launched, (3) best match.
+        let machinesTabID = appState.selectedMachineProfileID
         let lastUsedID = appState.configStore.lastUsedProfileID
+        // Preferred ID: what the user selected in the Machines tab, falling back to last launched
+        let preferredID = machinesTabID ?? lastUsedID
+
+        print("[EmuBuddy] selectedMachineProfileID: \(machinesTabID?.uuidString.prefix(8) ?? "nil")")
+        print("[EmuBuddy] lastUsedProfileID: \(lastUsedID?.uuidString.prefix(8) ?? "nil")")
+        print("[EmuBuddy] preferredID: \(preferredID?.uuidString.prefix(8) ?? "nil")")
+        print("[EmuBuddy] Available profiles (\(profiles.count)):")
+        for p in profiles {
+            let hdCapable = p.hasHardDriveController ? " [HD]" : ""
+            print("[EmuBuddy]   • \(p.name) [id=\(p.id.uuidString.prefix(8))...]\(hdCapable)")
+        }
         let selectedProfile: MachineProfile
 
         if needsHardDrive {
             // For HDV files, we need a profile with a hard drive controller (CFFA2, SCSI, etc.)
-            if let lastID = lastUsedID,
-               let lastProfile = profiles.first(where: { $0.id == lastID }),
-               lastProfile.hasHardDriveController {
-                selectedProfile = lastProfile
-                print("[EmuBuddy] Using last-used HD-capable profile: \(lastProfile.name)")
+            if let prefID = preferredID,
+               let prefProfile = profiles.first(where: { $0.id == prefID }),
+               prefProfile.hasHardDriveController {
+                selectedProfile = prefProfile
+                print("[EmuBuddy] Using preferred HD-capable profile: \(prefProfile.name)")
             } else if let hdProfile = profiles.first(where: { $0.hasHardDriveController }) {
                 selectedProfile = hdProfile
                 print("[EmuBuddy] Selected HD-capable profile: \(hdProfile.name)")
@@ -56,11 +68,11 @@ struct ContentView: View {
                 return
             }
         } else {
-            // For floppy images: prefer last-used profile, else first profile
-            if let lastID = lastUsedID,
-               let lastProfile = profiles.first(where: { $0.id == lastID }) {
-                selectedProfile = lastProfile
-                print("[EmuBuddy] Using last-used profile: \(lastProfile.name)")
+            // For floppy images: prefer selected/last-used profile, else first profile
+            if let prefID = preferredID,
+               let prefProfile = profiles.first(where: { $0.id == prefID }) {
+                selectedProfile = prefProfile
+                print("[EmuBuddy] Using preferred profile: \(prefProfile.name)")
             } else {
                 selectedProfile = profiles.first!
             }

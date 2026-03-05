@@ -8,6 +8,7 @@ struct MachineProfile: Codable, Identifiable, Hashable {
     var ramSize: RAMSize
     var cpuSpeed: CPUSpeed
     var slots: [Int: SlotCard]  // Slot 1–7 for most machines
+    var gameIODevice: GameIODevice?  // Game I/O port (joystick, paddles, etc.)
     var displaySettings: DisplaySettings
     var inputMapping: InputMapping
 
@@ -18,6 +19,7 @@ struct MachineProfile: Codable, Identifiable, Hashable {
         ramSize: RAMSize = .kb128,
         cpuSpeed: CPUSpeed = .normal,
         slots: [Int: SlotCard] = [:],
+        gameIODevice: GameIODevice? = .joystick,
         displaySettings: DisplaySettings = .default,
         inputMapping: InputMapping = .default
     ) {
@@ -27,6 +29,7 @@ struct MachineProfile: Codable, Identifiable, Hashable {
         self.ramSize = ramSize
         self.cpuSpeed = cpuSpeed
         self.slots = slots
+        self.gameIODevice = gameIODevice
         self.displaySettings = displaySettings
         self.inputMapping = inputMapping
     }
@@ -156,7 +159,7 @@ enum RAMSize: String, Codable, CaseIterable {
         case .apple2, .apple2Plus, .apple2jPlus:
             return [.kb48, .kb64]
         case .apple2e, .apple2eEnhanced, .apple2ePlatinum:
-            return [.kb64, .kb128]
+            return [.kb64]  // 128K comes from aux memory card, not -ramsize
         case .apple2c, .apple2cPlus:
             return [.kb128]
         case .apple2gsROM00, .apple2gsROM01, .apple2gsROM03:

@@ -134,18 +134,67 @@ final class ConfigStore: ObservableObject {
 
     func savedProfiles() -> [MachineProfile] {
         let url = profilesURL.appendingPathComponent("profiles.json")
-        guard let data = try? Data(contentsOf: url),
-              let profiles = try? JSONDecoder().decode([MachineProfile].self, from: data) else {
+        print("[ConfigStore] Loading profiles from: \(url.path)")
+
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            print("[ConfigStore] No profiles.json found, returning presets and saving them")
+            let presets = MachineProfile.presets
+            saveProfiles(presets)
+            return presets
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            var profiles = try JSONDecoder().decode([MachineProfile].self, from: data)
+            print("[ConfigStore] Loaded \(profiles.count) profiles from disk")
+
+            // Migrate: set default gameIODevice for profiles saved before this field existed
+            var needsResave = false
+            for i in profiles.indices {
+                if profiles[i].gameIODevice == nil {
+                    profiles[i].gameIODevice = .joystick
+                    needsResave = true
+                }
+            }
+            if needsResave {
+                print("[ConfigStore] Migrating profiles: adding default gameIODevice=joystick")
+                saveProfiles(profiles)
+            }
+
+            for p in profiles {
+                let slots = p.slots.sorted(by: { $0.key < $1.key })
+                    .map { "sl\($0.key)=\($0.value.displayName)" }
+                    .joined(separator: ", ")
+                print("[ConfigStore]   • \(p.name) [id=\(p.id.uuidString.prefix(8))...] gameIO=\(p.gameIODevice?.displayName ?? "none") slots=[\(slots)]")
+            }
+            return profiles
+        } catch {
+            print("[ConfigStore] ERROR decoding profiles.json: \(error)")
+            print("[ConfigStore] Falling back to presets")
             return MachineProfile.presets
         }
-        return profiles
     }
 
     func saveProfiles(_ profiles: [MachineProfile]) {
         let url = profilesURL.appendingPathComponent("profiles.json")
-        try? FileManager.default.createDirectory(at: profilesURL, withIntermediateDirectories: true)
-        let data = try? JSONEncoder().encode(profiles)
-        try? data?.write(to: url)
+        print("[ConfigStore] Saving \(profiles.count) profiles to: \(url.path)")
+
+        do {
+            try FileManager.default.createDirectory(at: profilesURL, withIntermediateDirectories: true)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(profiles)
+            try data.write(to: url, options: .atomic)
+            print("[ConfigStore] Profiles saved successfully (\(data.count) bytes)")
+            for p in profiles {
+                let slots = p.slots.sorted(by: { $0.key < $1.key })
+                    .map { "sl\($0.key)=\($0.value.displayName)" }
+                    .joined(separator: ", ")
+                print("[ConfigStore]   • \(p.name) [id=\(p.id.uuidString.prefix(8))...] gameIO=\(p.gameIODevice?.displayName ?? "none") slots=[\(slots)]")
+            }
+        } catch {
+            print("[ConfigStore] ERROR saving profiles: \(error)")
+        }
     }
 
     // MARK: - Last Used Profile

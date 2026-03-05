@@ -1,0 +1,10 @@
+{
+    "plugin": {
+        "name": "emubuddy",
+        "description": "EmuBuddy remote control via command file",
+        "version": "1.0.0",
+        "author": "EmuBuddy",
+        "type": "plugin",
+        "start": "false"
+    }
+}

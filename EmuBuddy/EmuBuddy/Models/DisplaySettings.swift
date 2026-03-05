@@ -19,27 +19,30 @@ struct DisplaySettings: Codable, Hashable {
 }
 
 enum DisplayFilter: String, Codable, CaseIterable {
-    case sharp     = "sharp"
-    case scanlines = "scanlines"
-    case crt       = "crt"
-    case composite = "composite"
+    case sharp      = "sharp"
+    case crt        = "crt"
+    case crtDeluxe  = "crtDeluxe"
+    case lcdGrid    = "lcdGrid"
+    case unfiltered = "unfiltered"
 
     var displayName: String {
         switch self {
-        case .sharp:     return "Sharp Pixels"
-        case .scanlines: return "Scanlines"
-        case .crt:       return "CRT Simulation"
-        case .composite: return "Composite Artifact"
+        case .sharp:      return "Sharp (Default)"
+        case .crt:        return "CRT Simulation"
+        case .crtDeluxe:  return "CRT Deluxe"
+        case .lcdGrid:    return "LCD Grid"
+        case .unfiltered: return "Unfiltered (Soft)"
         }
     }
 
-    /// MAME BGFX chain name.
+    /// MAME BGFX chain name (must match a .json in bgfx/chains/).
     var mameBGFXChain: String {
         switch self {
-        case .sharp:     return "default"
-        case .scanlines: return "hlsl"
-        case .crt:       return "crt-geom"
-        case .composite: return "ntsc"
+        case .sharp:      return "default"
+        case .crt:        return "crt-geom"
+        case .crtDeluxe:  return "crt-geom-deluxe"
+        case .lcdGrid:    return "lcd-grid"
+        case .unfiltered: return "unfiltered"
         }
     }
 }

@@ -7,7 +7,6 @@ struct LibraryBrowserView: View {
     @State private var viewMode: ViewMode = .grid
     @State private var selectedItemID: LibraryItem.ID?
     @State private var filterMediaType: MediaType?
-    @State private var hasScanned = false
 
     /// Callback for quick-launch (picks default profile).
     var onLaunch: ((LibraryItem) -> Void)?
@@ -119,13 +118,11 @@ struct LibraryBrowserView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search disk images...")
-        .task {
-            // Scan library once when view first appears (not on every re-appearance)
-            guard !hasScanned else { return }
-            hasScanned = true
-            if !appState.configStore.diskImageDirectories.isEmpty {
-                await appState.libraryService.scanAll()
-            }
+        .onAppear {
+            // Trigger initial scan via LibraryService (which tracks its own flag).
+            // scanIfNeeded() uses DispatchQueue.main.async internally to avoid
+            // "Publishing changes from within view updates" warnings.
+            appState.libraryService.scanIfNeeded()
         }
     }
 

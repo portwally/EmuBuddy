@@ -4,25 +4,26 @@ import SwiftUI
 struct MachineListView: View {
     @EnvironmentObject var appState: AppState
     @State private var profiles: [MachineProfile] = []
-    @State private var selectedProfileID: UUID?
-    @State private var showingEditor = false
-    @State private var editingProfile: MachineProfile?
-    @State private var showDeleteConfirm = false
+    @State private var showingNewProfileEditor = false
+    @State private var newProfile: MachineProfile?
 
-    private var selectedProfile: MachineProfile? {
-        profiles.first { $0.id == selectedProfileID }
+    /// Uses AppState for selection so it persists across tab switches.
+    private var selectedProfileID: Binding<UUID?> {
+        $appState.selectedMachineProfileID
+    }
+
+    private var selectedProfileIndex: Int? {
+        guard let id = appState.selectedMachineProfileID else { return nil }
+        return profiles.firstIndex(where: { $0.id == id })
     }
 
     var body: some View {
         HSplitView {
             // Profile list
-            List(profiles, selection: $selectedProfileID) { profile in
+            List(profiles, selection: selectedProfileID) { profile in
                 MachineProfileRow(profile: profile)
                     .tag(profile.id)
                     .contextMenu {
-                        Button("Edit...") {
-                            editingProfile = profile
-                        }
                         Button("Duplicate") {
                             duplicateProfile(profile)
                         }
@@ -32,86 +33,86 @@ struct MachineListView: View {
                         }
                     }
             }
-            .frame(minWidth: 250)
+            .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
 
-            // Detail
-            if let profile = selectedProfile {
-                MachineDetailView(
-                    profile: profile,
-                    onEdit: {
-                        editingProfile = profile
-                    },
+            // Detail — inline editor (no separate Edit button / sheet needed)
+            if let idx = selectedProfileIndex {
+                MachineInlineEditorView(
+                    profile: Binding(
+                        get: { profiles[idx] },
+                        set: { newValue in
+                            profiles[idx] = newValue
+                            appState.configStore.saveProfiles(profiles)
+                        }
+                    ),
                     onLaunch: {
                         Task {
-                            await appState.launchSession(profile: profile, media: [:])
+                            await appState.launchSession(profile: profiles[idx], media: [:])
                         }
                     }
                 )
+                .id(profiles[idx].id) // Reset editor state when switching profiles
+                .frame(minWidth: 500, idealWidth: 600)
             } else {
                 Text("Select a machine profile")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(minWidth: 500)
             }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: {
-                    let newProfile = MachineProfile(
+                    newProfile = MachineProfile(
                         name: "New Profile",
                         machineType: .apple2eEnhanced,
-                        ramSize: .kb128,
+                        ramSize: .kb64,
                         slots: [6: .diskIIng]
                     )
-                    editingProfile = newProfile
-                    showingEditor = true
                 }) {
                     Label("New Profile", systemImage: "plus")
                 }
             }
         }
-        .sheet(item: $editingProfile) { profile in
+        .sheet(item: $newProfile) { profile in
             MachineEditorView(
                 profile: profile,
-                isNew: !profiles.contains(where: { $0.id == profile.id })
+                isNew: true
             ) { savedProfile in
-                if let idx = profiles.firstIndex(where: { $0.id == savedProfile.id }) {
-                    profiles[idx] = savedProfile
-                } else {
-                    profiles.append(savedProfile)
-                }
-                selectedProfileID = savedProfile.id
+                profiles.append(savedProfile)
+                appState.selectedMachineProfileID = savedProfile.id
                 appState.configStore.saveProfiles(profiles)
             }
             .environmentObject(appState)
         }
         .onAppear {
             profiles = appState.configStore.savedProfiles()
-            if selectedProfileID == nil {
-                selectedProfileID = profiles.first?.id
+            if appState.selectedMachineProfileID == nil {
+                appState.selectedMachineProfileID = profiles.first?.id
             }
         }
     }
 
     private func duplicateProfile(_ profile: MachineProfile) {
-        var copy = profile
-        copy = MachineProfile(
+        let copy = MachineProfile(
             name: "\(profile.name) Copy",
             machineType: profile.machineType,
             ramSize: profile.ramSize,
             cpuSpeed: profile.cpuSpeed,
             slots: profile.slots,
+            gameIODevice: profile.gameIODevice,
             displaySettings: profile.displaySettings,
             inputMapping: profile.inputMapping
         )
         profiles.append(copy)
-        selectedProfileID = copy.id
+        appState.selectedMachineProfileID = copy.id
         appState.configStore.saveProfiles(profiles)
     }
 
     private func deleteProfile(_ profile: MachineProfile) {
         profiles.removeAll { $0.id == profile.id }
-        if selectedProfileID == profile.id {
-            selectedProfileID = profiles.first?.id
+        if appState.selectedMachineProfileID == profile.id {
+            appState.selectedMachineProfileID = profiles.first?.id
         }
         appState.configStore.saveProfiles(profiles)
     }
@@ -140,29 +141,30 @@ struct MachineProfileRow: View {
     }
 }
 
-// MARK: - Machine Detail
+// MARK: - Inline Editor (replaces the old read-only detail + Edit sheet)
 
-struct MachineDetailView: View {
-    let profile: MachineProfile
-    let onEdit: () -> Void
+/// Editable machine profile shown directly in the detail panel.
+/// Changes auto-save via the binding whenever a field is modified.
+struct MachineInlineEditorView: View {
+    @Binding var profile: MachineProfile
     let onLaunch: () -> Void
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(profile.name)
+            VStack(alignment: .leading, spacing: 0) {
+                // Header with Boot button
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        TextField("Profile Name", text: $profile.name)
                             .font(.title2)
                             .fontWeight(.bold)
+                            .textFieldStyle(.plain)
+
                         Text(profile.machineType.displayName)
                             .foregroundStyle(.secondary)
                     }
-                    Spacer()
 
-                    Button("Edit", action: onEdit)
-                        .controlSize(.regular)
+                    Spacer()
 
                     Button(action: onLaunch) {
                         Label("Boot", systemImage: "power")
@@ -170,85 +172,111 @@ struct MachineDetailView: View {
                     .controlSize(.large)
                     .buttonStyle(.borderedProminent)
                 }
+                .padding()
 
                 Divider()
 
-                // Configuration summary
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), alignment: .leading),
-                    GridItem(.flexible(), alignment: .leading)
-                ], spacing: 12) {
-                    LabeledContent("Family") { Text(profile.machineType.family.rawValue) }
-                    LabeledContent("MAME Driver") {
-                        Text(profile.machineType.mameDriver)
-                            .font(.system(.caption, design: .monospaced))
-                    }
-                    LabeledContent("RAM") { Text(profile.ramSize.displayName) }
-                    LabeledContent("CPU Speed") { Text(profile.cpuSpeed.displayName) }
-                    LabeledContent("Display Filter") { Text(profile.displaySettings.filter.displayName) }
-                    LabeledContent("Window Mode") { Text(profile.displaySettings.windowMode.displayName) }
-                }
-
-                // Slots
-                if profile.machineType.hasExpansionSlots {
-                    Text("Expansion Slots")
-                        .font(.headline)
-
-                    VStack(spacing: 6) {
-                        ForEach(profile.machineType.configurableSlots, id: \.self) { slot in
-                            let card = profile.slots[slot] ?? .empty
-                            HStack {
-                                Text("Slot \(slot)")
-                                    .font(.system(.callout, design: .monospaced))
-                                    .frame(width: 50, alignment: .leading)
-
-                                if card != .empty {
-                                    Image(systemName: slotIcon(card.category))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                // Two-column layout: settings on left, slots on right
+                HStack(alignment: .top, spacing: 0) {
+                    // Left column: General / Input / Display settings
+                    Form {
+                        Section("General") {
+                            Picker("RAM", selection: $profile.ramSize) {
+                                ForEach(RAMSize.validSizes(for: profile.machineType), id: \.self) { size in
+                                    Text(size.displayName).tag(size)
                                 }
+                            }
 
-                                Text(card.displayName)
-                                    .foregroundStyle(card == .empty ? .tertiary : .primary)
+                            Picker("CPU Speed", selection: $profile.cpuSpeed) {
+                                ForEach(CPUSpeed.allCases) { speed in
+                                    Text(speed.displayName).tag(speed)
+                                }
+                            }
+                        }
 
-                                if card != .empty {
-                                    Spacer()
-                                    Text(card.category.rawValue)
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(.quaternary)
-                                        .clipShape(Capsule())
+                        Section("Input") {
+                            Picker("Game I/O Device", selection: $profile.gameIODevice) {
+                                Text("None").tag(GameIODevice?.none)
+                                ForEach(GameIODevice.allCases) { device in
+                                    Text(device.displayName).tag(GameIODevice?.some(device))
+                                }
+                            }
+
+                            Picker("Joystick Source", selection: $profile.inputMapping.joystickSource) {
+                                ForEach(JoystickSource.allCases, id: \.self) { source in
+                                    Text(source.displayName).tag(source)
+                                }
+                            }
+                        }
+
+                        Section("Display") {
+                            Picker("Filter", selection: $profile.displaySettings.filter) {
+                                ForEach(DisplayFilter.allCases, id: \.self) { filter in
+                                    Text(filter.displayName).tag(filter)
+                                }
+                            }
+
+                            Picker("Aspect Ratio", selection: $profile.displaySettings.aspectRatio) {
+                                ForEach(AspectRatio.allCases, id: \.self) { ratio in
+                                    Text(ratio.displayName).tag(ratio)
+                                }
+                            }
+
+                            Picker("Window Mode", selection: $profile.displaySettings.windowMode) {
+                                ForEach(WindowMode.allCases, id: \.self) { mode in
+                                    Text(mode.displayName).tag(mode)
+                                }
+                            }
+
+                            Picker("Color", selection: $profile.displaySettings.colorMode) {
+                                ForEach(ColorMode.allCases, id: \.self) { mode in
+                                    Text(mode.displayName).tag(mode)
                                 }
                             }
                         }
                     }
-                } else {
-                    HStack(spacing: 8) {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.secondary)
-                        Text("The \(profile.machineType.displayName) has no user-configurable expansion slots.")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
+                    .formStyle(.grouped)
+                    .frame(minWidth: 280, idealWidth: 320)
+                    .scrollDisabled(true) // Parent ScrollView handles scrolling
+
+                    Divider()
+
+                    // Right column: Expansion Slots
+                    if profile.machineType.hasExpansionSlots {
+                        SlotConfiguratorView(
+                            slots: $profile.slots,
+                            configurableSlots: profile.machineType.configurableSlots
+                        )
+                        .frame(minWidth: 280, idealWidth: 320)
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "rectangle.slash")
+                                .font(.system(size: 36))
+                                .foregroundStyle(.secondary)
+                            Text("No Expansion Slots")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                            Text("The \(profile.machineType.displayName) has no\nuser-configurable expansion slots.")
+                                .font(.callout)
+                                .foregroundStyle(.tertiary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(minWidth: 280)
                     }
                 }
             }
-            .padding()
         }
-    }
-
-    private func slotIcon(_ category: SlotCardCategory) -> String {
-        switch category {
-        case .diskStorage: return "internaldrive"
-        case .audio: return "speaker.wave.2"
-        case .serialParallel: return "cable.connector"
-        case .memory: return "memorychip"
-        case .video: return "display"
-        case .coprocessor: return "cpu"
-        case .input: return "computermouse"
-        case .network: return "network"
-        case .other: return "puzzlepiece"
+        .onChange(of: profile.machineType) { _, newType in
+            // Reset RAM to a valid value when machine type changes
+            let valid = RAMSize.validSizes(for: newType)
+            if !valid.contains(profile.ramSize) {
+                profile.ramSize = valid.first ?? .kb64
+            }
+            // Clear slots for machines without expansion
+            if !newType.hasExpansionSlots {
+                profile.slots = [:]
+            }
         }
     }
 }

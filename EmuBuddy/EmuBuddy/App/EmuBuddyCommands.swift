@@ -2,7 +2,6 @@ import SwiftUI
 
 // MARK: - Focused Values
 
-/// Pass the active AppState down through the focused scene for menu commands.
 struct FocusedAppStateKey: FocusedValueKey {
     typealias Value = AppState
 }
@@ -15,6 +14,8 @@ extension FocusedValues {
 }
 
 /// Custom menu bar commands for EmuBuddy.
+/// These appear in EmuBuddy's own menu bar (visible when EmuBuddy is the active app).
+/// Controls send Lua commands to MAME via file-based IPC plugin.
 struct EmuBuddyCommands: Commands {
     @FocusedValue(\.appState) var appState
 
@@ -25,44 +26,45 @@ struct EmuBuddyCommands: Commands {
     var body: some Commands {
         // Emulation menu
         CommandMenu("Emulation") {
-            Button("Save State") {
-                // MAME handles save states via its own key bindings (Shift+F7)
-                // In Phase 2 (libMAME), we'll intercept this directly
-                NotificationCenter.default.post(name: .emubuddySaveState, object: nil)
-            }
-            .keyboardShortcut("s", modifiers: [.command, .shift])
-            .disabled(!hasSession)
+            Button("Pause / Resume") { MAMELuaCommand.togglePause() }
+                .keyboardShortcut("p", modifiers: [.command, .option])
+                .disabled(!hasSession)
 
-            Button("Load State...") {
-                NotificationCenter.default.post(name: .emubuddyLoadState, object: nil)
-            }
-            .keyboardShortcut("l", modifiers: [.command, .shift])
-            .disabled(!hasSession)
+            Button("Frame Advance") { MAMELuaCommand.frameAdvance() }
+                .keyboardShortcut(".", modifiers: [.command, .option])
+                .disabled(!hasSession)
+
+            Button("Toggle Throttle") { MAMELuaCommand.toggleThrottle() }
+                .keyboardShortcut("t", modifiers: [.command, .option])
+                .disabled(!hasSession)
 
             Divider()
 
-            Button("Swap Disk 1...") {
-                NotificationCenter.default.post(name: .emubuddySwapDisk, object: 1)
-            }
-            .keyboardShortcut("1", modifiers: [.command, .option])
-            .disabled(!hasSession)
+            Button("Soft Reset") { MAMELuaCommand.softReset() }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+                .disabled(!hasSession)
 
-            Button("Swap Disk 2...") {
-                NotificationCenter.default.post(name: .emubuddySwapDisk, object: 2)
-            }
-            .keyboardShortcut("2", modifiers: [.command, .option])
-            .disabled(!hasSession)
+            Button("Hard Reset") { MAMELuaCommand.hardReset() }
+                .keyboardShortcut("r", modifiers: [.command, .option, .shift])
+                .disabled(!hasSession)
 
             Divider()
 
-            Button("Reset Machine") {
-                Task { @MainActor in
-                    guard let session = appState?.activeSession else { return }
-                    await appState?.mameEngine.sendInput(session: session, input: .reset)
-                }
-            }
-            .keyboardShortcut("r", modifiers: [.command, .shift])
-            .disabled(!hasSession)
+            Button("Quick Save") { MAMELuaCommand.saveState() }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+                .disabled(!hasSession)
+
+            Button("Quick Load") { MAMELuaCommand.loadState() }
+                .keyboardShortcut("l", modifiers: [.command, .option])
+                .disabled(!hasSession)
+
+            Divider()
+
+            Button("Screenshot") { MAMELuaCommand.screenshot() }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+                .disabled(!hasSession)
+
+            Divider()
 
             Button("Stop Emulation") {
                 Task { @MainActor in
@@ -86,8 +88,5 @@ struct EmuBuddyCommands: Commands {
 // MARK: - Notification Names
 
 extension Notification.Name {
-    static let emubuddySaveState = Notification.Name("emubuddySaveState")
-    static let emubuddyLoadState = Notification.Name("emubuddyLoadState")
-    static let emubuddySwapDisk = Notification.Name("emubuddySwapDisk")
     static let emubuddyOpenDiskImage = Notification.Name("emubuddyOpenDiskImage")
 }

@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// Phase 1 MAME engine: launches MAME as a child process.
 final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
@@ -10,6 +11,8 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
     private var lastStderrOutput: String = ""
     /// Captured stdout output from the last MAME run.
     private var lastStdoutOutput: String = ""
+    /// Directory containing the EmuBuddy Lua plugin for MAME.
+    private var pluginBaseDir: String?
 
     /// Eagerly-created status stream so the continuation exists before launch.
     let statusStream: AsyncStream<EngineStatus>
@@ -62,9 +65,15 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: binaryPath)
         process.arguments = arguments
 
-        // Set environment for SDL3 on macOS (ensure proper video driver)
+        // Set working directory to the MAME binary's folder so MAME can resolve
+        // relative paths (artwork/, bgfx/, plugins/, hash/, etc.) correctly.
+        process.currentDirectoryURL = binaryURL.deletingLastPathComponent()
+
+        // Set up environment for our EmuBuddy Lua plugin.
+        // The plugin reads commands from a temp file; we set the path via env var.
+        let cmdFilePath = NSTemporaryDirectory() + "emubuddy_cmd_\(UUID().uuidString).lua"
         var env = ProcessInfo.processInfo.environment
-        env["SDL_VIDEODRIVER"] = "cocoa"
+        env["EMUBUDDY_CMD_FILE"] = cmdFilePath
         process.environment = env
 
         // Capture stderr for error reporting.
@@ -74,8 +83,8 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
         let stderrPipe = Pipe()
         process.standardError = stderrPipe
 
-        // Don't capture stdout to a pipe — let it go to /dev/null or inherit.
-        // This prevents stdout buffer deadlock (MAME can be chatty).
+        // Send stdout to /dev/null — we don't need MAME's stdout output.
+        // This prevents buffer deadlock.
         process.standardOutput = FileHandle.nullDevice
 
         // Reset captured output
@@ -150,7 +159,11 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
         activeProcess = process
         statusContinuation?.yield(.running(processID: process.processIdentifier))
 
-        // Create session
+        // Set up file-based IPC: tell MAMELuaCommand where to write commands
+        MAMELuaCommand.commandFilePath = cmdFilePath
+
+        // Create session BEFORE activating MAME, because session setup
+        // triggers SwiftUI updates that can steal focus from MAME.
         let session = await EmulationSession(
             machineProfile: machine,
             media: media,
@@ -160,14 +173,50 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
             session.processID = process.processIdentifier
         }
 
+        // Activate MAME AFTER all session/UI setup is complete.
+        // This ensures SwiftUI updates from session creation don't steal focus back.
+        // EmuBuddy's NSStatusItem (system tray) remains visible for controls.
+        let mamePID = process.processIdentifier
+        print("[EmuBuddy] MAME launched (PID: \(mamePID)). Will activate after session setup.")
+
+        Task.detached {
+            // Wait a bit longer to let SwiftUI settle after session assignment
+            try? await Task.sleep(nanoseconds: 500_000_000) // 500ms initial delay
+            for attempt in 1...20 {
+                guard process.isRunning else {
+                    print("[EmuBuddy] MAME exited before window appeared")
+                    break
+                }
+                if let mameApp = NSRunningApplication(processIdentifier: mamePID) {
+                    let ok = mameApp.activate(options: [.activateIgnoringOtherApps])
+                    print("[EmuBuddy] MAME activation attempt \(attempt): \(ok)")
+                    if ok { break }
+                }
+                try? await Task.sleep(nanoseconds: 250_000_000) // 250ms between attempts
+            }
+        }
+
         return session
     }
 
     // MARK: - Terminate
 
     func terminate(session: EmulationSession) async {
-        activeProcess?.terminate()
+        // Try graceful exit first via Lua command
+        MAMELuaCommand.exit()
+
+        // Give MAME a moment to shut down gracefully
+        try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+
+        // Force-terminate if still running
+        if activeProcess?.isRunning == true {
+            activeProcess?.terminate()
+        }
         activeProcess = nil
+
+        // Clear the command file path
+        MAMELuaCommand.commandFilePath = nil
+
         await MainActor.run {
             session.status = .stopped
         }
@@ -202,6 +251,97 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
     func sendInput(session: EmulationSession, input: EmulatorInput) async {
         // Phase 1: Input goes directly to MAME's window (not through our process)
         // This becomes useful in Phase 2 (libMAME) where we inject input directly
+    }
+
+    // MARK: - Plugin Setup
+
+    /// Ensures the EmuBuddy Lua plugin files exist on disk for MAME to load.
+    /// Returns the base directory containing the `emubuddy/` plugin folder.
+    private func ensurePluginFiles() -> String {
+        // First check if plugins are bundled in the app
+        if let bundledPlugins = Bundle.main.resourceURL?.appendingPathComponent("plugins"),
+           FileManager.default.fileExists(atPath: bundledPlugins.appendingPathComponent("emubuddy/init.lua").path) {
+            let path = bundledPlugins.path
+            print("[EmuBuddy] Using bundled plugins at: \(path)")
+            return path
+        }
+
+        // Otherwise, write them to Application Support
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let pluginBase = appSupport.appendingPathComponent("EmuBuddy/plugins")
+        let pluginDir = pluginBase.appendingPathComponent("emubuddy")
+
+        let fm = FileManager.default
+        try? fm.createDirectory(at: pluginDir, withIntermediateDirectories: true)
+
+        // plugin.json
+        let pluginJSON = """
+        {
+            "plugin": {
+                "name": "emubuddy",
+                "description": "EmuBuddy remote control via command file",
+                "version": "1.0.0",
+                "author": "EmuBuddy",
+                "type": "plugin",
+                "start": "false"
+            }
+        }
+        """
+        try? pluginJSON.write(to: pluginDir.appendingPathComponent("plugin.json"), atomically: true, encoding: .utf8)
+
+        // init.lua
+        let initLua = """
+        -- EmuBuddy Remote Control Plugin
+        -- Reads Lua commands from a file and executes them each frame.
+
+        local exports = {}
+
+        exports.name = "emubuddy"
+        exports.version = "1.0.0"
+        exports.description = "EmuBuddy remote control via command file"
+        exports.license = "MIT"
+        exports.author = { name = "EmuBuddy" }
+
+        function exports.startplugin()
+            local cmd_file = os.getenv("EMUBUDDY_CMD_FILE")
+            if not cmd_file then
+                print("[emubuddy plugin] EMUBUDDY_CMD_FILE not set, plugin disabled")
+                return
+            end
+
+            print("[emubuddy plugin] Watching command file: " .. cmd_file)
+
+            emu.register_periodic(function()
+                local f = io.open(cmd_file, "r")
+                if f then
+                    local cmd = f:read("*all")
+                    f:close()
+                    os.remove(cmd_file)
+                    if cmd and cmd ~= "" then
+                        for line in cmd:gmatch("[^\\r\\n]+") do
+                            local fn, err = load(line)
+                            if fn then
+                                local ok, result = pcall(fn)
+                                if ok then
+                                    print("[emubuddy plugin] OK: " .. line)
+                                else
+                                    print("[emubuddy plugin] Error: " .. line .. " -> " .. tostring(result))
+                                end
+                            else
+                                print("[emubuddy plugin] Parse error: " .. line .. " -> " .. tostring(err))
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+
+        return exports
+        """
+        try? initLua.write(to: pluginDir.appendingPathComponent("init.lua"), atomically: true, encoding: .utf8)
+
+        print("[EmuBuddy] Wrote plugin files to: \(pluginBase.path)")
+        return pluginBase.path
     }
 
     // MARK: - Command Line Builder
@@ -239,6 +379,11 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
             }
         }
 
+        // Game I/O device (joystick, paddles, etc.)
+        if let gameIO = machine.gameIODevice {
+            args.append(contentsOf: ["-gameio", gameIO.mameDevice])
+        }
+
         // Media
         for (slot, url) in media {
             args.append(contentsOf: [slot.mameFlag, url.path])
@@ -254,10 +399,23 @@ final class SubprocessMAMEEngine: MAMEEngine, @unchecked Sendable {
             args.append(contentsOf: ["-window", "-maximize"])
         }
 
+        // Enable the EmuBuddy Lua plugin for runtime control via file IPC.
+        // Include MAME's own plugins dir (if it exists) so built-in plugins still work.
+        let emubuddyPluginDir = ensurePluginFiles()
+        pluginBaseDir = emubuddyPluginDir
+        let mamePluginsDir = config.mameBinaryURL.deletingLastPathComponent()
+            .appendingPathComponent("plugins").path
+        let combinedPluginPath = emubuddyPluginDir + ";" + mamePluginsDir
+        args.append(contentsOf: ["-pluginspath", combinedPluginPath])
+        args.append(contentsOf: ["-plugin", "emubuddy"])
+
         // Display filter
         if machine.displaySettings.filter != .sharp {
+            let mameDir = config.mameBinaryURL.deletingLastPathComponent().path
             args.append(contentsOf: [
                 "-video", "bgfx",
+                "-bgfx_path", mameDir + "/bgfx",
+                "-artpath", mameDir + "/artwork",
                 "-bgfx_screen_chains", machine.displaySettings.filter.mameBGFXChain
             ])
         }

@@ -10,12 +10,20 @@ final class AppState: ObservableObject {
     @Published var activeSession: EmulationSession?
     @Published var isMAMEConfigured: Bool = false
     @Published var launchError: String?
+    /// Persists the selected machine profile across tab switches.
+    @Published var selectedMachineProfileID: UUID?
 
     // MARK: - Services
     let mameEngine: any MAMEEngine
     let libraryService: LibraryService
     let configStore: ConfigStore
     let saveStateManager: SaveStateManager
+
+    /// Status bar menu (system tray) for emulation controls — visible even when MAME is frontmost.
+    private(set) var emulationStatusBar: EmulationStatusBar?
+
+    /// Forwards nested ObservableObject changes so SwiftUI redraws properly.
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         self.configStore = ConfigStore()
@@ -25,6 +33,17 @@ final class AppState: ObservableObject {
 
         // Check if MAME is configured on launch
         self.isMAMEConfigured = configStore.mameBinaryURL != nil
+
+        // Forward libraryService changes so views observing AppState
+        // redraw when library items/scanning state changes.
+        libraryService.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        // Set up status bar emulation controls (appears when MAME is running)
+        self.emulationStatusBar = EmulationStatusBar(appState: self)
     }
 
     // MARK: - Launch
