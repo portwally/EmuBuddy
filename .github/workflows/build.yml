@@ -42,9 +42,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build build-essential git \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
-            libxfixes-dev libxss-dev libwayland-dev wayland-protocols \
-            libxkbcommon-dev libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev \
-            libpulse-dev libasound2-dev libdbus-1-dev libudev-dev libibus-1.0-dev
+            libxfixes-dev libxss-dev libxtst-dev libxinerama-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev libxkbcommon-dev \
+            libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev \
+            libpulse-dev libasound2-dev libpipewire-0.3-dev libsndio-dev \
+            libdbus-1-dev libudev-dev libibus-1.0-dev
       - name: Configure (SDL3 built from source via FetchContent)
         run: cmake -G Ninja -B build -S gsplus/src
       - name: Build
