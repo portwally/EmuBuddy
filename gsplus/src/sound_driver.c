@@ -253,7 +253,9 @@ parent_sound_get_sample_rate(int read_fd)
 void
 snddrv_shutdown()
 {
-#ifdef _WIN32
+#ifdef SDL_AUDIO
+	sdl_snd_shutdown();
+#elif defined(_WIN32)
 	win32snd_shutdown();
 #else
 	if((g_audio_enable != 0) && (g_pipe_fd[1] >= 0)) {
