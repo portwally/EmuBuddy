@@ -71,13 +71,19 @@ sdl_create_texture(Window_info *win, int w, int h)
 		SDL_DestroyTexture(win->texture);
 		win->texture = NULL;
 	}
+	/* STATIC (not STREAMING) access: we update changed rectangles with
+	 * SDL_UpdateTexture and keep the rest of the frame intact. Static textures
+	 * are the documented target for SDL_UpdateTexture and preserve their
+	 * contents between frames; partial SDL_UpdateTexture on a streaming texture
+	 * is unreliable on the D3D11 backend (Windows showed a black window). */
 	win->texture = SDL_CreateTexture(win->renderer, SDL_PIXELFORMAT_ARGB8888,
-					SDL_TEXTUREACCESS_STREAMING, w, h);
+					SDL_TEXTUREACCESS_STATIC, w, h);
 	if(!win->texture) {
 		printf("SDL_CreateTexture failed: %s\n", SDL_GetError());
 		return;
 	}
-	/* Nearest-neighbour keeps the Apple II pixels crisp when scaled up. */
+	/* Opaque copy (ignore the texture's alpha) and crisp nearest-neighbour. */
+	SDL_SetTextureBlendMode(win->texture, SDL_BLENDMODE_NONE);
 	SDL_SetTextureScaleMode(win->texture, SDL_SCALEMODE_NEAREST);
 }
 
@@ -117,6 +123,8 @@ sdl_video_init(void)
 		printf("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 		exit(1);
 	}
+	printf("SDL renderer backend: %s\n",
+		SDL_GetRendererName(g_mainwin_info.renderer));
 
 	/* Preserve the IIgs aspect ratio, letterboxing as the window resizes. */
 	SDL_SetRenderLogicalPresentation(g_mainwin_info.renderer, w, h,
@@ -361,6 +369,7 @@ sdl_update_display(Window_info *win)
 
 	/* Ask the core for each changed rectangle (it writes pixels into our
 	 * buffer) and upload that rectangle to the texture. */
+	int dbg_rects = 0, dbg_upd_ok = 1;	/* DIAG */
 	for(i = 0; i < MAX_CHANGE_RECTS; i++) {
 		if(!video_out_data(win->data, win->kimage_ptr,
 					win->pixels_per_line, &rect, i)) {
@@ -371,13 +380,25 @@ sdl_update_display(Window_info *win)
 		r.w = rect.width;
 		r.h = rect.height;
 		src = win->data + (size_t)rect.y * win->pixels_per_line + rect.x;
-		SDL_UpdateTexture(win->texture, &r, src,
-				win->pixels_per_line * (int)sizeof(word32));
+		if(!SDL_UpdateTexture(win->texture, &r, src,
+				win->pixels_per_line * (int)sizeof(word32))) {
+			dbg_upd_ok = 0;		/* DIAG */
+		}
+		dbg_rects++;			/* DIAG */
 	}
 
-	SDL_RenderClear(win->renderer);
-	SDL_RenderTexture(win->renderer, win->texture, NULL, NULL);
-	SDL_RenderPresent(win->renderer);
+	bool dbg_c = SDL_RenderClear(win->renderer);		/* DIAG */
+	bool dbg_t = SDL_RenderTexture(win->renderer, win->texture, NULL, NULL); /* DIAG */
+	bool dbg_p = SDL_RenderPresent(win->renderer);		/* DIAG */
+	{ static int df = 0;					/* DIAG */
+	  if(df++ < 4) {
+		int ow = 0, oh = 0;
+		SDL_GetRenderOutputSize(win->renderer, &ow, &oh);
+		printf("DIAG frame %d: rects=%d updOK=%d clear=%d tex=%d present=%d "
+			"texsz=%dx%d out=%dx%d err='%s'\n", df, dbg_rects, dbg_upd_ok,
+			dbg_c, dbg_t, dbg_p, win->width_req, win->main_height,
+			ow, oh, SDL_GetError());
+	  } }
 }
 
 int
