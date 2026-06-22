@@ -179,7 +179,25 @@ endif()
 #  and gives us the SDL3::SDL3 target carrying its include paths and link flags
 #  -- no hand-written -I/-l bookkeeping. This is the payoff we moved to CMake for.
 # ----------------------------------------------------------------------------
-find_package(SDL3 CONFIG REQUIRED)
+# Find SDL3 on the system (Homebrew, apt, vcpkg, ...). If it isn't installed --
+# common on CI runners, since SDL3 is new -- fetch and build it from source so
+# the build is self-sufficient everywhere. Locally this is instant (Homebrew's
+# SDL3 is found); only CI without SDL3 pays the one-time build cost.
+find_package(SDL3 CONFIG QUIET)
+if(NOT SDL3_FOUND)
+    message(STATUS "GSplus: SDL3 not found on system -- fetching from source")
+    include(FetchContent)
+    FetchContent_Declare(SDL3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG release-3.4.10        # matches the version developed against
+        GIT_SHALLOW TRUE)
+    set(SDL_SHARED ON  CACHE BOOL "" FORCE)
+    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST   OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(SDL3)
+else()
+    message(STATUS "GSplus: using system SDL3 ${SDL3_VERSION}")
+endif()
 
 # A SECOND copy of the emulator core, compiled differently from the native one:
 # NO -DMAC (so it behaves as a generic build), plus -DSDL_AUDIO so sound_driver.c
@@ -199,4 +217,83 @@ add_executable(gsplus-sdl
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
 
+# On macOS, build gsplus-sdl as a proper .app bundle with an icon. On Linux and
+# Windows it stays a plain executable (MACOSX_* settings are Apple-only). We
+# guard with if(APPLE) so the .icns file isn't fed to the compiler elsewhere.
+if(APPLE)
+    set(GSPLUS_SDL_ICON ${CMAKE_CURRENT_SOURCE_DIR}/../lib/kegsicon.icns)
+    target_sources(gsplus-sdl PRIVATE ${GSPLUS_SDL_ICON})
+    # Tell CMake to drop the icon into the bundle's Contents/Resources.
+    set_source_files_properties(${GSPLUS_SDL_ICON} PROPERTIES
+        MACOSX_PACKAGE_LOCATION Resources)
+    set_target_properties(gsplus-sdl PROPERTIES
+        MACOSX_BUNDLE TRUE
+        OUTPUT_NAME "GSplus-SDL"
+        MACOSX_BUNDLE_BUNDLE_NAME "GSplus-SDL"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.gsplus.sdl"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_ICON_FILE "kegsicon.icns"
+        # Look for bundled dylibs next to the executable in ../Frameworks.
+        INSTALL_RPATH "@executable_path/../Frameworks")
+endif()
+
+if(NOT APPLE)
+    # Linux/Windows: find a co-located SDL3 shared library next to the binary
+    # ($ORIGIN is the runtime path of the executable on ELF systems).
+    set_target_properties(gsplus-sdl PROPERTIES INSTALL_RPATH "$ORIGIN")
+endif()
+
+if(WIN32)
+    # Copy SDL3.dll next to the .exe so it runs from the build tree and gets
+    # packaged alongside the executable.
+    add_custom_command(TARGET gsplus-sdl POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:gsplus-sdl> $<TARGET_FILE_DIR:gsplus-sdl>
+        COMMAND_EXPAND_LISTS)
+endif()
+
 message(STATUS "GSplus: configured SDL3 target (gsplus-sdl)")
+
+
+# ============================================================================
+#  Phase 3: packaging ("installation a breeze")
+# ============================================================================
+#
+#  `cmake --install build --prefix <dir>` stages the app; `cpack` wraps the
+#  staged files into a downloadable installer. The goal is artifacts a user can
+#  download and run with NO prerequisites (no Homebrew, no SDL install).
+# ----------------------------------------------------------------------------
+if(APPLE)
+    # Install the .app, then make it SELF-CONTAINED. fixup_bundle scans the
+    # binary's dependencies, copies the non-system ones (libSDL3) into
+    # Contents/Frameworks, and rewrites the recorded paths to point inside the
+    # bundle. We then re-sign ad-hoc ("-"): editing a binary invalidates its
+    # code signature, and arm64 macOS refuses to launch a broken-signature app.
+    install(TARGETS gsplus-sdl BUNDLE DESTINATION .)
+    install(CODE [[
+        include(BundleUtilities)
+        fixup_bundle("${CMAKE_INSTALL_PREFIX}/GSplus-SDL.app" "" "")
+        execute_process(COMMAND codesign --force --deep --sign -
+            "${CMAKE_INSTALL_PREFIX}/GSplus-SDL.app")
+    ]])
+    set(CPACK_GENERATOR "DragNDrop")          # -> a .dmg
+    set(CPACK_DMG_VOLUME_NAME "GSplus")
+else()
+    install(TARGETS gsplus-sdl RUNTIME DESTINATION bin)
+    if(WIN32)
+        # Bundle SDL3.dll next to the .exe so the ZIP is self-contained.
+        install(FILES $<TARGET_RUNTIME_DLLS:gsplus-sdl> DESTINATION bin)
+        set(CPACK_GENERATOR "ZIP")            # CI can upgrade to an NSIS installer
+    else()
+        # On Linux the SDL3 .so is bundled by the AppImage step in CI; a plain
+        # TGZ relies on the system SDL3.
+        set(CPACK_GENERATOR "TGZ")
+    endif()
+endif()
+
+set(CPACK_PACKAGE_NAME "GSplus")
+set(CPACK_PACKAGE_VENDOR "GSplus Contributors")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+include(CPack)
