@@ -17,6 +17,9 @@
 
 #include "defc.h"
 #include "sound.h"
+#ifdef SDL_AUDIO
+# include "protos_sdl.h"
+#endif
 
 #if defined(__linux__) || defined(OSS)
 # include <sys/soundcard.h>
@@ -93,6 +96,9 @@ snddrv_init()
 #ifdef PULSE_AUDIO
 	use_shm = 0;
 #endif
+#ifdef SDL_AUDIO
+	use_shm = 0;			// SDL audio runs in-process, never forks
+#endif
 	if(!use_shm) {
 		/* windows and mac, and Linux Pulse Audio */
 		shmaddr = malloc(size);
@@ -100,6 +106,10 @@ snddrv_init()
 		g_sound_shm_addr = shmaddr;
 #ifdef MAC
 		macsnd_init();
+		return;
+#endif
+#ifdef SDL_AUDIO
+		sdl_snd_init(shmaddr);
 		return;
 #endif
 #ifdef _WIN32
@@ -277,8 +287,8 @@ snddrv_send_sound(int real_samps, int size)
 	//					(real_samps << 30) + size);
 
 	call_playit = 0;
-#if defined(MAC) || defined(_WIN32)
-	call_playit = 1;			// Never fork child mac/windows
+#if defined(MAC) || defined(_WIN32) || defined(SDL_AUDIO)
+	call_playit = 1;			// In-process audio: mac/windows/SDL
 #endif
 	if(call_playit || g_pulse_audio) {
 		child_sound_playit(tmp);
@@ -408,6 +418,9 @@ reliable_zero_write(int amt)
 int
 child_send_samples(byte *ptr, int size)
 {
+#ifdef SDL_AUDIO
+	return sdl_send_audio(ptr, size);
+#endif
 #ifdef _WIN32
 	return win32_send_audio(ptr, size);
 #else

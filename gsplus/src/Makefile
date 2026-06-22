@@ -40,6 +40,7 @@ gsplus: $(OBJECTS) $(OBJECTS1) compile_time.o $(SWIFTOBJS)
 	mv gsplus ../GSplus.app/Contents/MacOS/GSplus
 	echo "APPL????" > ../GSplus.app/Contents/PkgInfo
 	cp -f Info.plist ../GSplus.app/Contents/
+	mkdir -p ../GSplus.app/Contents/Resources
 	$(PROJROOT)/lib/make_mac_icon $(PROJROOT)/lib/kegsicon.png
 	cp -f kegs.icns ../GSplus.app/Contents/Resources/
 	touch '../GSplus.app/Icon?'
