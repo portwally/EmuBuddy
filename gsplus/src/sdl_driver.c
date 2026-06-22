@@ -26,6 +26,18 @@
 #include "defc.h"
 #include "protos_sdl.h"
 
+#ifdef _WIN32
+# include <sys/stat.h>
+/* mingw/Windows has no lstat(). The core declares it (defc.h) and the native
+ * Windows driver (windriver.c, which the SDL build excludes) provides this
+ * shim -- so we supply it here. Windows has no POSIX symlinks, so stat() does. */
+int
+lstat(const char *path, struct stat *bufptr)
+{
+	return stat(path, bufptr);
+}
+#endif
+
 /* Each KEGS driver defines its own private "window info" wrapper around a core
  * Kimage. Ours holds the SDL window/renderer/texture plus the scratch pixel
  * buffer the core fills. */
