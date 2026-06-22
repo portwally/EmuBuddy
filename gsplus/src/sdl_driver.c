@@ -369,7 +369,6 @@ sdl_update_display(Window_info *win)
 
 	/* Ask the core for each changed rectangle (it writes pixels into our
 	 * buffer) and upload that rectangle to the texture. */
-	int dbg_rects = 0, dbg_upd_ok = 1;	/* DIAG */
 	for(i = 0; i < MAX_CHANGE_RECTS; i++) {
 		if(!video_out_data(win->data, win->kimage_ptr,
 					win->pixels_per_line, &rect, i)) {
@@ -380,25 +379,13 @@ sdl_update_display(Window_info *win)
 		r.w = rect.width;
 		r.h = rect.height;
 		src = win->data + (size_t)rect.y * win->pixels_per_line + rect.x;
-		if(!SDL_UpdateTexture(win->texture, &r, src,
-				win->pixels_per_line * (int)sizeof(word32))) {
-			dbg_upd_ok = 0;		/* DIAG */
-		}
-		dbg_rects++;			/* DIAG */
+		SDL_UpdateTexture(win->texture, &r, src,
+				win->pixels_per_line * (int)sizeof(word32));
 	}
 
-	bool dbg_c = SDL_RenderClear(win->renderer);		/* DIAG */
-	bool dbg_t = SDL_RenderTexture(win->renderer, win->texture, NULL, NULL); /* DIAG */
-	bool dbg_p = SDL_RenderPresent(win->renderer);		/* DIAG */
-	{ static int df = 0;					/* DIAG */
-	  if(df++ < 4) {
-		int ow = 0, oh = 0;
-		SDL_GetRenderOutputSize(win->renderer, &ow, &oh);
-		printf("DIAG frame %d: rects=%d updOK=%d clear=%d tex=%d present=%d "
-			"texsz=%dx%d out=%dx%d err='%s'\n", df, dbg_rects, dbg_upd_ok,
-			dbg_c, dbg_t, dbg_p, win->width_req, win->main_height,
-			ow, oh, SDL_GetError());
-	  } }
+	SDL_RenderClear(win->renderer);
+	SDL_RenderTexture(win->renderer, win->texture, NULL, NULL);
+	SDL_RenderPresent(win->renderer);
 }
 
 int
