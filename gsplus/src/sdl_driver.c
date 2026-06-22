@@ -123,6 +123,18 @@ sdl_video_init(void)
 					SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
 	sdl_create_texture(&g_mainwin_info, w, h);
+
+	/* Mark this window active so the core renders into it. The X11 and Win32
+	 * drivers do this in their window-create routines; without it kimage->active
+	 * stays 0 and video_get_active() makes us skip every frame (black screen). */
+	video_set_active(km, 1);
+
+	/* Force the core to output the entire screen on the first frame. Without
+	 * this, static content (e.g. the no-ROM config panel) is drawn once during
+	 * kegs_init -- before this window/texture existed -- and never produces
+	 * dirty rectangles again, leaving the texture black. The X11 and Win32
+	 * drivers do the same on window expose. */
+	video_set_x_refresh_needed(km, 1);
 }
 
 /* --------------------------------------------------------------------------
@@ -277,6 +289,14 @@ sdl_poll_events(void)
 		switch(ev.type) {
 		case SDL_EVENT_QUIT:
 			g_quit_requested = 1;
+			break;
+		case SDL_EVENT_WINDOW_EXPOSED:
+		case SDL_EVENT_WINDOW_SHOWN:
+		case SDL_EVENT_WINDOW_RESIZED:
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+		case SDL_EVENT_WINDOW_RESTORED:
+			/* Repaint the whole screen when the window (re)appears or resizes. */
+			video_set_x_refresh_needed(g_mainwin_info.kimage_ptr, 1);
 			break;
 		case SDL_EVENT_KEY_DOWN:
 			sdl_handle_key(win, ev.key.scancode, 0, ev.key.repeat);
