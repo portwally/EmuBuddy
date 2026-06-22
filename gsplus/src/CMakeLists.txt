@@ -217,6 +217,12 @@ add_executable(gsplus-sdl
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
 
+if(WIN32)
+    # The core uses Winsock (scc serial-over-TCP) and Win32 multimedia timers,
+    # which the native Win build links explicitly. SDL3 links its own deps.
+    target_link_libraries(gsplus-sdl PRIVATE ws2_32 winmm)
+endif()
+
 # On macOS, build gsplus-sdl as a proper .app bundle with an icon. On Linux and
 # Windows it stays a plain executable (MACOSX_* settings are Apple-only). We
 # guard with if(APPLE) so the .icns file isn't fed to the compiler elsewhere.

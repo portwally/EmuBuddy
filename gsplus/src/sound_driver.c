@@ -104,15 +104,13 @@ snddrv_init()
 		shmaddr = malloc(size);
 		memset(shmaddr, 0, size);
 		g_sound_shm_addr = shmaddr;
-#ifdef MAC
+#if defined(MAC)
 		macsnd_init();
 		return;
-#endif
-#ifdef SDL_AUDIO
+#elif defined(SDL_AUDIO)
 		sdl_snd_init(shmaddr);
 		return;
-#endif
-#ifdef _WIN32
+#elif defined(_WIN32)
 		win32snd_init(shmaddr);
 		return;
 #endif
@@ -422,8 +420,7 @@ child_send_samples(byte *ptr, int size)
 {
 #ifdef SDL_AUDIO
 	return sdl_send_audio(ptr, size);
-#endif
-#ifdef _WIN32
+#elif defined(_WIN32)
 	return win32_send_audio(ptr, size);
 #else
 # ifdef MAC
