@@ -69,13 +69,15 @@ jobs:
         with:
           msystem: MINGW64
           update: true
+          # No SDL3 package here: it may be unavailable under that exact name,
+          # and FetchContent builds SDL3 from source (as the Linux job does),
+          # so we only need the gcc/cmake/ninja toolchain.
           install: >-
             git
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-SDL3
-      - name: Configure
+      - name: Configure (SDL3 built from source via FetchContent)
         run: cmake -G Ninja -B build -S gsplus/src
       - name: Build
         run: cmake --build build --target gsplus-sdl
