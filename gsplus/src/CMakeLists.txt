@@ -144,16 +144,17 @@ if(APPLE)
     # (Contents/MacOS, Info.plist, etc.) instead of a bare command-line binary.
     # We feed it the two Swift files plus the Mac-only sound driver; the rest of
     # the emulator comes in via the gsplus_core library we link below.
-    add_executable(gsplus MACOSX_BUNDLE
+    add_executable(gsplus MACOSX_BUNDLE EXCLUDE_FROM_ALL
         AppDelegate.swift
         MainView.swift
         macsnd_driver.c
     )
 
-    # Name the produced app "GSplus" -> GSplus.app (matches the Makefile output).
-    # Swift_MODULE_NAME mirrors comp_swift's `-module-name Kegs`.
+    # The native Swift app is legacy/secondary -- "GSplus" is the SDL build. Name
+    # this one GSplus-Cocoa.app so it doesn't collide with GSplus.app, and exclude
+    # it from the default build (build it explicitly with: --target gsplus).
     set_target_properties(gsplus PROPERTIES
-        OUTPUT_NAME "GSplus"
+        OUTPUT_NAME "GSplus-Cocoa"
         Swift_MODULE_NAME "Kegs"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
     )
@@ -258,12 +259,11 @@ if(APPLE)
     # Tell CMake to drop the icon into the bundle's Contents/Resources.
     set_source_files_properties(${GSPLUS_SDL_ICON} PROPERTIES
         MACOSX_PACKAGE_LOCATION Resources)
-    # The app is just "GSplus". We keep the bundle FOLDER named GSplus-SDL.app so
-    # it doesn't collide with the native Swift app's GSplus.app in the same build
-    # dir; the executable inside and the app's display name are plain "GSplus".
+    # The app is just "GSplus" -> GSplus.app with GSplus inside (the native Swift
+    # app is GSplus-Cocoa.app, so no collision).
     set_target_properties(gsplus-sdl PROPERTIES
         MACOSX_BUNDLE TRUE
-        OUTPUT_NAME "GSplus-SDL"
+        OUTPUT_NAME "GSplus"
         MACOSX_BUNDLE_BUNDLE_NAME "GSplus"
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.gsplus.GSplus"
         MACOSX_BUNDLE_BUNDLE_VERSION "${GSPLUS_VERSION}"
@@ -272,20 +272,16 @@ if(APPLE)
         # Look for bundled dylibs next to the executable in ../Frameworks.
         INSTALL_RPATH "@executable_path/../Frameworks")
 
-    # CMake names the bundle folder and the executable both after OUTPUT_NAME, so
-    # to get GSplus-SDL.app/Contents/MacOS/GSplus we rename the executable after
-    # the build and point CFBundleExecutable at it. Renaming the binary, editing
-    # Info.plist, and adding the icon all invalidate the linker's ad-hoc code
-    # signature ("code has no resources but signature indicates they must be
-    # present"), which makes Finder reject the bundle and show the prohibitory
-    # icon. Re-sign (ad-hoc) last so the bundle is valid and shows its icon.
+    # Adding the icon to Resources invalidates the linker's ad-hoc code signature
+    # ("code has no resources but signature indicates they must be present"),
+    # which makes Finder reject the bundle and show the prohibitory icon. Re-sign
+    # ad-hoc after the build so the bundle is valid and shows its icon. First
+    # delete the Ninja depfile (GSplus.d) that lands next to the executable --
+    # codesign chokes on that stray file in Contents/MacOS.
     add_custom_command(TARGET gsplus-sdl POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E rename
-            "$<TARGET_FILE:gsplus-sdl>" "$<TARGET_FILE_DIR:gsplus-sdl>/GSplus"
-        COMMAND /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable GSplus"
-            "$<TARGET_BUNDLE_CONTENT_DIR:gsplus-sdl>/Info.plist"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:gsplus-sdl>/GSplus.d"
         COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:gsplus-sdl>"
-        COMMENT "Finalizing GSplus.app (rename exe, fix plist, re-sign)"
+        COMMENT "Re-signing GSplus.app (ad-hoc)"
         VERBATIM)
 endif()
 
@@ -326,9 +322,9 @@ if(APPLE)
     install(TARGETS gsplus-sdl BUNDLE DESTINATION .)
     install(CODE [[
         include(BundleUtilities)
-        fixup_bundle("${CMAKE_INSTALL_PREFIX}/GSplus-SDL.app" "" "")
+        fixup_bundle("${CMAKE_INSTALL_PREFIX}/GSplus.app" "" "")
         execute_process(COMMAND codesign --force --deep --sign -
-            "${CMAKE_INSTALL_PREFIX}/GSplus-SDL.app")
+            "${CMAKE_INSTALL_PREFIX}/GSplus.app")
     ]])
     set(CPACK_GENERATOR "DragNDrop")          # -> a .dmg
     set(CPACK_DMG_VOLUME_NAME "GSplus")
