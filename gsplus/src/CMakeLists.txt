@@ -245,7 +245,7 @@ endif()
 # Windows it stays a plain executable (MACOSX_* settings are Apple-only). We
 # guard with if(APPLE) so the .icns file isn't fed to the compiler elsewhere.
 if(APPLE)
-    set(GSPLUS_SDL_ICON ${CMAKE_CURRENT_SOURCE_DIR}/../lib/kegsicon.icns)
+    set(GSPLUS_SDL_ICON ${CMAKE_CURRENT_SOURCE_DIR}/../lib/gsplusicon.icns)
     target_sources(gsplus-sdl PRIVATE ${GSPLUS_SDL_ICON})
     # Tell CMake to drop the icon into the bundle's Contents/Resources.
     set_source_files_properties(${GSPLUS_SDL_ICON} PROPERTIES
@@ -260,7 +260,7 @@ if(APPLE)
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.gsplus.GSplus"
         MACOSX_BUNDLE_BUNDLE_VERSION "${GSPLUS_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${GSPLUS_VERSION}"
-        MACOSX_BUNDLE_ICON_FILE "kegsicon.icns"
+        MACOSX_BUNDLE_ICON_FILE "gsplusicon.icns"
         # Look for bundled dylibs next to the executable in ../Frameworks.
         INSTALL_RPATH "@executable_path/../Frameworks")
 
