@@ -43,6 +43,12 @@ if(NOT DEFINED GSPLUS_VERSION OR GSPLUS_VERSION STREQUAL "")
 endif()
 message(STATUS "GSplus: version ${GSPLUS_VERSION}")
 
+# Make the version string available to all targets defined below (the app's
+# window title/startup log in sdl_driver.c and the status line in sim65816.c).
+# Scope to C only: Swift rejects valued -D defines (it has present/absent flags).
+add_compile_definitions(
+    "$<$<COMPILE_LANGUAGE:C>:GSPLUS_VERSION_STR=\"${GSPLUS_VERSION}\">")
+
 # ----------------------------------------------------------------------------
 # The platform-independent core sources.
 # This is exactly the OBJECTS list from the old `ldvars` file -- the files that
@@ -228,10 +234,6 @@ add_executable(gsplus-sdl
     sdl_snd_driver.c
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
-
-# Expose the version string to the app (window title / startup log).
-target_compile_definitions(gsplus-sdl PRIVATE
-    "GSPLUS_VERSION_STR=\"${GSPLUS_VERSION}\"")
 
 if(WIN32)
     # The core uses Winsock (scc serial-over-TCP) and Win32 multimedia timers,
