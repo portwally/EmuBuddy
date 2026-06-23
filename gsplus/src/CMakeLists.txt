@@ -274,13 +274,18 @@ if(APPLE)
 
     # CMake names the bundle folder and the executable both after OUTPUT_NAME, so
     # to get GSplus-SDL.app/Contents/MacOS/GSplus we rename the executable after
-    # the build and point CFBundleExecutable at it.
+    # the build and point CFBundleExecutable at it. Renaming the binary, editing
+    # Info.plist, and adding the icon all invalidate the linker's ad-hoc code
+    # signature ("code has no resources but signature indicates they must be
+    # present"), which makes Finder reject the bundle and show the prohibitory
+    # icon. Re-sign (ad-hoc) last so the bundle is valid and shows its icon.
     add_custom_command(TARGET gsplus-sdl POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E rename
             "$<TARGET_FILE:gsplus-sdl>" "$<TARGET_FILE_DIR:gsplus-sdl>/GSplus"
         COMMAND /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable GSplus"
             "$<TARGET_BUNDLE_CONTENT_DIR:gsplus-sdl>/Info.plist"
-        COMMENT "Renaming bundle executable to GSplus"
+        COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:gsplus-sdl>"
+        COMMENT "Finalizing GSplus.app (rename exe, fix plist, re-sign)"
         VERBATIM)
 endif()
 
