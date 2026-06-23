@@ -239,6 +239,14 @@ if(WIN32)
     # The core uses Winsock (scc serial-over-TCP) and Win32 multimedia timers,
     # which the native Win build links explicitly. SDL3 links its own deps.
     target_link_libraries(gsplus-sdl PRIVATE ws2_32 winmm)
+
+    # Embed the GSplus icon into the .exe (Explorer / taskbar) via a resource
+    # script. Bake the absolute .ico path into the .rc so windres always finds it.
+    enable_language(RC)
+    set(GSPLUS_ICO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../lib/gsplusicon.ico")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/gsplus.rc.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/gsplus.rc" @ONLY)
+    target_sources(gsplus-sdl PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gsplus.rc")
 endif()
 
 # On macOS, build gsplus-sdl as a proper .app bundle with an icon. On Linux and
