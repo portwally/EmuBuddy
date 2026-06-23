@@ -383,6 +383,14 @@ sdl_poll_events(void)
 			/* Repaint the whole screen when the window (re)appears or resizes. */
 			video_set_x_refresh_needed(g_mainwin_info.kimage_ptr, 1);
 			break;
+		case SDL_EVENT_DROP_FILE:
+			/* Drop a disk image on the window to mount it (slot guessed
+			 * from the file size). ev.drop.data is owned by SDL. */
+			if(ev.drop.data) {
+				cfg_inspect_maybe_insert_file(ev.drop.data);
+				video_set_x_refresh_needed(win->kimage_ptr, 1);
+			}
+			break;
 		case SDL_EVENT_KEY_DOWN:
 			/* F11 toggles fullscreen; Shift+F11 toggles scanlines (gsplus
 			 * convention). Neither is sent to the IIgs. */
