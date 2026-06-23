@@ -351,12 +351,14 @@ Cfg_menu g_cfg_video_menu[] = {
 		KNMP(g_video_line_update_interval), CFGTYPE_INT },
 { "Dump text screen to file", (void *)cfg_text_screen_dump, 0, 0, CFGTYPE_FUNC},
 { "", 0, 0, 0, 0 },
-{ "Start Fullscreen (SDL),0,No,1,Yes", KNMP(g_fullscreen), CFGTYPE_INT },
-{ "Borderless Window (SDL),0,No,1,Yes", KNMP(g_borderless), CFGTYPE_INT },
-{ "Ignore Aspect Ratio (SDL),0,No,1,Yes", KNMP(g_noaspect), CFGTYPE_INT },
-{ "High DPI (SDL),0,No,1,Yes", KNMP(g_highdpi), CFGTYPE_INT },
-{ "Disable VSync (SDL),0,No,1,Yes", KNMP(g_novsync), CFGTYPE_INT },
-{ "Force Software Renderer (SDL),0,No,1,Yes", KNMP(g_nohwaccel), CFGTYPE_INT },
+/* name_str (the CLI flag / config.kegs key) has no "g_" prefix -- that's just
+ * our C convention for globals, not something users should type. */
+{ "Start Fullscreen (SDL),0,No,1,Yes", &g_fullscreen, "fullscreen", 0, CFGTYPE_INT },
+{ "Borderless Window (SDL),0,No,1,Yes", &g_borderless, "borderless", 0, CFGTYPE_INT },
+{ "Ignore Aspect Ratio (SDL),0,No,1,Yes", &g_noaspect, "noaspect", 0, CFGTYPE_INT },
+{ "High DPI (SDL),0,No,1,Yes", &g_highdpi, "highdpi", 0, CFGTYPE_INT },
+{ "Disable VSync (SDL),0,No,1,Yes", &g_novsync, "novsync", 0, CFGTYPE_INT },
+{ "Force Software Renderer (SDL),0,No,1,Yes", &g_nohwaccel, "nohwaccel", 0, CFGTYPE_INT },
 { "", 0, 0, 0, 0 },
 { "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
 { 0, 0, 0, 0, 0 },
@@ -534,6 +536,13 @@ config_add_argv_override(const char *str1, const char *str2)
 	const char *equal_ptr;
 	char	*str;
 	int	ret, pos, len;
+
+	// A flag with no following value (e.g. "-foo" at the end of argv, or an
+	// unknown option) arrives with str2 == NULL. Treat it as an empty value so
+	// strlen() below doesn't dereference NULL and crash.
+	if(str2 == 0) {
+		str2 = "";
+	}
 
 	// Handle things like "rom=rompath" and "rom", "rompath"
 	// Look through str1, see if there is '=', if so ignore str2
