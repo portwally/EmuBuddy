@@ -329,16 +329,20 @@ if(APPLE)
     set(CPACK_GENERATOR "DragNDrop")          # -> a .dmg
     set(CPACK_DMG_VOLUME_NAME "GSplus")
 else()
-    install(TARGETS gsplus-sdl RUNTIME DESTINATION bin)
+    # Install to the package root (no bin/ subdir) so the .zip/.tar.gz has the
+    # executable at the top level.
+    install(TARGETS gsplus-sdl RUNTIME DESTINATION .)
     if(WIN32)
         # Bundle SDL3.dll next to the .exe so the ZIP is self-contained.
-        install(FILES $<TARGET_RUNTIME_DLLS:gsplus-sdl> DESTINATION bin)
+        install(FILES $<TARGET_RUNTIME_DLLS:gsplus-sdl> DESTINATION .)
         set(CPACK_GENERATOR "ZIP")            # CI can upgrade to an NSIS installer
     else()
         # On Linux the SDL3 .so is bundled by the AppImage step in CI; a plain
         # TGZ relies on the system SDL3.
         set(CPACK_GENERATOR "TGZ")
     endif()
+    # No top-level "<name>-<version>" wrapper dir -- put files at the archive root.
+    set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 endif()
 
 set(CPACK_PACKAGE_NAME "GSplus")
