@@ -43,6 +43,12 @@ if(NOT DEFINED GSPLUS_VERSION OR GSPLUS_VERSION STREQUAL "")
 endif()
 message(STATUS "GSplus: version ${GSPLUS_VERSION}")
 
+# Make the version string available to all targets defined below (the app's
+# window title/startup log in sdl_driver.c and the status line in sim65816.c).
+# Scope to C only: Swift rejects valued -D defines (it has present/absent flags).
+add_compile_definitions(
+    "$<$<COMPILE_LANGUAGE:C>:GSPLUS_VERSION_STR=\"${GSPLUS_VERSION}\">")
+
 # ----------------------------------------------------------------------------
 # The platform-independent core sources.
 # This is exactly the OBJECTS list from the old `ldvars` file -- the files that
@@ -229,10 +235,6 @@ add_executable(gsplus-sdl
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
 
-# Expose the version string to the app (window title / startup log).
-target_compile_definitions(gsplus-sdl PRIVATE
-    "GSPLUS_VERSION_STR=\"${GSPLUS_VERSION}\"")
-
 if(WIN32)
     # The core uses Winsock (scc serial-over-TCP) and Win32 multimedia timers,
     # which the native Win build links explicitly. SDL3 links its own deps.
@@ -248,22 +250,38 @@ if(APPLE)
     # Tell CMake to drop the icon into the bundle's Contents/Resources.
     set_source_files_properties(${GSPLUS_SDL_ICON} PROPERTIES
         MACOSX_PACKAGE_LOCATION Resources)
+    # The app is just "GSplus". We keep the bundle FOLDER named GSplus-SDL.app so
+    # it doesn't collide with the native Swift app's GSplus.app in the same build
+    # dir; the executable inside and the app's display name are plain "GSplus".
     set_target_properties(gsplus-sdl PROPERTIES
         MACOSX_BUNDLE TRUE
         OUTPUT_NAME "GSplus-SDL"
-        MACOSX_BUNDLE_BUNDLE_NAME "GSplus-SDL"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.gsplus.sdl"
+        MACOSX_BUNDLE_BUNDLE_NAME "GSplus"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.gsplus.GSplus"
         MACOSX_BUNDLE_BUNDLE_VERSION "${GSPLUS_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${GSPLUS_VERSION}"
         MACOSX_BUNDLE_ICON_FILE "kegsicon.icns"
         # Look for bundled dylibs next to the executable in ../Frameworks.
         INSTALL_RPATH "@executable_path/../Frameworks")
+
+    # CMake names the bundle folder and the executable both after OUTPUT_NAME, so
+    # to get GSplus-SDL.app/Contents/MacOS/GSplus we rename the executable after
+    # the build and point CFBundleExecutable at it.
+    add_custom_command(TARGET gsplus-sdl POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rename
+            "$<TARGET_FILE:gsplus-sdl>" "$<TARGET_FILE_DIR:gsplus-sdl>/GSplus"
+        COMMAND /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable GSplus"
+            "$<TARGET_BUNDLE_CONTENT_DIR:gsplus-sdl>/Info.plist"
+        COMMENT "Renaming bundle executable to GSplus"
+        VERBATIM)
 endif()
 
 if(NOT APPLE)
-    # Linux/Windows: find a co-located SDL3 shared library next to the binary
-    # ($ORIGIN is the runtime path of the executable on ELF systems).
-    set_target_properties(gsplus-sdl PROPERTIES INSTALL_RPATH "$ORIGIN")
+    # The binary is just "gsplus" (no -sdl). $ORIGIN lets it find a co-located
+    # SDL3 shared library at runtime (ELF).
+    set_target_properties(gsplus-sdl PROPERTIES
+        OUTPUT_NAME "gsplus"
+        INSTALL_RPATH "$ORIGIN")
 endif()
 
 if(WIN32)

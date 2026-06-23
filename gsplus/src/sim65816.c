@@ -14,6 +14,12 @@
 #include "defc.h"
 #undef INCLUDE_RCSID_C
 
+/* GSplus version for the status line, set by the build from the git tag (see
+ * CMakeLists.txt). Fallback for non-CMake (Makefile) builds. */
+#ifndef GSPLUS_VERSION_STR
+# define GSPLUS_VERSION_STR	"1.38.0"
+#endif
+
 double g_dtime_sleep = 0;
 double g_dtime_in_sleep = 0;
 extern char *g_argv0_path;
@@ -1523,9 +1529,9 @@ update_60hz(dword64 dfcyc, double dtime_now)
 
 		draw_iwm_status(2, status_buf);
 
-		snprintf(status_buf, sizeof(status_buf), " KEGS v%-6s       "
+		snprintf(status_buf, sizeof(status_buf), " GSplus %-6s      "
 			"Press F4 for Config Menu    %s %s",
-			g_kegs_version_str, code_str1, code_str2);
+			GSPLUS_VERSION_STR, code_str1, code_str2);
 		video_update_status_line(3, status_buf);
 
 		g_status_refresh_needed = 1;

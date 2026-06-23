@@ -55,6 +55,14 @@ typedef struct {
 
 static Window_info g_mainwin_info;
 
+/* Window/display options, defined in config.c and settable via the command line
+ * (e.g. "-fullscreen 1") or config.kegs. */
+extern int g_fullscreen, g_borderless, g_noaspect, g_highdpi;
+extern int g_novsync, g_nohwaccel;
+extern int g_mainwin_xpos, g_mainwin_ypos;	/* window position (KEGS config vars) */
+
+static int g_is_fullscreen = 0;		/* current fullscreen state (F11 toggles) */
+
 /* Version string (set by the build from the git tag; see CMakeLists.txt). */
 #ifndef GSPLUS_VERSION_STR
 # define GSPLUS_VERSION_STR	"dev"
@@ -117,24 +125,38 @@ sdl_video_init(void)
 
 	video_update_scale(km, w, h, 1);
 
+	/* Window flags and size from the configured display options. */
+	SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE;
+	if(g_highdpi)    { flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY; }
+	if(g_borderless) { flags |= SDL_WINDOW_BORDERLESS; }
+	if(g_fullscreen) { flags |= SDL_WINDOW_FULLSCREEN; g_is_fullscreen = 1; }
+
 	g_mainwin_info.window = SDL_CreateWindow("GSplus " GSPLUS_VERSION_STR,
-				w, h,
-				SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+				w, h, flags);
 	if(!g_mainwin_info.window) {
 		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
 		exit(1);
 	}
-	g_mainwin_info.renderer = SDL_CreateRenderer(g_mainwin_info.window, NULL);
+	if(!g_fullscreen) {
+		SDL_SetWindowPosition(g_mainwin_info.window,
+					g_mainwin_xpos, g_mainwin_ypos);
+	}
+
+	/* "-nohwaccel 1" forces the software renderer; otherwise SDL picks the best. */
+	g_mainwin_info.renderer = SDL_CreateRenderer(g_mainwin_info.window,
+				g_nohwaccel ? "software" : NULL);
 	if(!g_mainwin_info.renderer) {
 		printf("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 		exit(1);
 	}
+	SDL_SetRenderVSync(g_mainwin_info.renderer, g_novsync ? 0 : 1);
 	printf("SDL renderer backend: %s\n",
 		SDL_GetRendererName(g_mainwin_info.renderer));
 
-	/* Preserve the IIgs aspect ratio, letterboxing as the window resizes. */
+	/* Keep the IIgs aspect ratio (letterbox) unless -noaspect stretches to fill. */
 	SDL_SetRenderLogicalPresentation(g_mainwin_info.renderer, w, h,
-					SDL_LOGICAL_PRESENTATION_LETTERBOX);
+		g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
+			   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
 	sdl_create_texture(&g_mainwin_info, w, h);
 
@@ -313,9 +335,20 @@ sdl_poll_events(void)
 			video_set_x_refresh_needed(g_mainwin_info.kimage_ptr, 1);
 			break;
 		case SDL_EVENT_KEY_DOWN:
+			/* F11 toggles fullscreen (gsplus convention); not sent to the IIgs. */
+			if(ev.key.scancode == SDL_SCANCODE_F11) {
+				if(!ev.key.repeat) {
+					g_is_fullscreen = !g_is_fullscreen;
+					SDL_SetWindowFullscreen(win->window, g_is_fullscreen);
+				}
+				break;
+			}
 			sdl_handle_key(win, ev.key.scancode, 0, ev.key.repeat);
 			break;
 		case SDL_EVENT_KEY_UP:
+			if(ev.key.scancode == SDL_SCANCODE_F11) {
+				break;
+			}
 			sdl_handle_key(win, ev.key.scancode, 1, 0);
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
