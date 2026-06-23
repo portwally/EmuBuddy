@@ -46,6 +46,8 @@ typedef struct {
 	SDL_Window	*window;
 	SDL_Renderer	*renderer;
 	SDL_Texture	*texture;
+	SDL_Texture	*overlay;		/* scanline overlay, drawn over texture */
+	int		overlay_for;		/* intensity the overlay was filled for */
 	word32		*data;			/* dest buffer for video_out_data() */
 	int		active;
 	int		width_req;		/* current logical width  (pixels) */
@@ -59,9 +61,11 @@ static Window_info g_mainwin_info;
  * (e.g. "-fullscreen 1") or config.kegs. */
 extern int g_fullscreen, g_borderless, g_noaspect, g_highdpi;
 extern int g_novsync, g_nohwaccel;
+extern int g_scanline_simulator;	/* CRT scanline overlay intensity, 0-100 */
 extern int g_mainwin_xpos, g_mainwin_ypos;	/* window position (KEGS config vars) */
 
 static int g_is_fullscreen = 0;		/* current fullscreen state (F11 toggles) */
+static int g_scanline_saved = 50;	/* intensity to restore when toggled back on */
 
 /* Version string (set by the build from the git tag; see CMakeLists.txt). */
 #ifndef GSPLUS_VERSION_STR
@@ -98,6 +102,51 @@ sdl_create_texture(Window_info *win, int w, int h)
 	/* Opaque copy (ignore the texture's alpha) and crisp nearest-neighbour. */
 	SDL_SetTextureBlendMode(win->texture, SDL_BLENDMODE_NONE);
 	SDL_SetTextureScaleMode(win->texture, SDL_SCALEMODE_NEAREST);
+
+	/* (Re)create the scanline overlay at the same size. It blends over the main
+	 * texture, so it uses alpha (BLEND). Filled on demand from the intensity. */
+	if(win->overlay) {
+		SDL_DestroyTexture(win->overlay);
+		win->overlay = NULL;
+	}
+	win->overlay = SDL_CreateTexture(win->renderer, SDL_PIXELFORMAT_ARGB8888,
+					SDL_TEXTUREACCESS_STATIC, w, h);
+	if(win->overlay) {
+		SDL_SetTextureBlendMode(win->overlay, SDL_BLENDMODE_BLEND);
+		SDL_SetTextureScaleMode(win->overlay, SDL_SCALEMODE_NEAREST);
+	}
+	win->overlay_for = -1;		/* force a refill */
+}
+
+/* Fill the overlay with semi-transparent black on every odd line, simulating
+ * CRT scanlines. intensity is 0-100 and maps to the alpha of those lines. */
+static void
+sdl_fill_overlay(Window_info *win, int intensity)
+{
+	word32	*buf;
+	word32	argb;
+	int	w, h, x, y, alpha;
+
+	if(!win->overlay) {
+		return;
+	}
+	w = win->width_req;
+	h = win->main_height;
+	buf = calloc((size_t)w * h, sizeof(word32));
+	if(!buf) {
+		return;
+	}
+	alpha = intensity * 255 / 100;
+	if(alpha > 255) { alpha = 255; }
+	argb = (word32)alpha << 24;		/* black (RGB 0) with this alpha */
+	for(y = 1; y < h; y += 2) {		/* odd lines only */
+		for(x = 0; x < w; x++) {
+			buf[(size_t)y * w + x] = argb;
+		}
+	}
+	SDL_UpdateTexture(win->overlay, NULL, buf, w * (int)sizeof(word32));
+	free(buf);
+	win->overlay_for = intensity;
 }
 
 static void
@@ -335,11 +384,22 @@ sdl_poll_events(void)
 			video_set_x_refresh_needed(g_mainwin_info.kimage_ptr, 1);
 			break;
 		case SDL_EVENT_KEY_DOWN:
-			/* F11 toggles fullscreen (gsplus convention); not sent to the IIgs. */
+			/* F11 toggles fullscreen; Shift+F11 toggles scanlines (gsplus
+			 * convention). Neither is sent to the IIgs. */
 			if(ev.key.scancode == SDL_SCANCODE_F11) {
 				if(!ev.key.repeat) {
-					g_is_fullscreen = !g_is_fullscreen;
-					SDL_SetWindowFullscreen(win->window, g_is_fullscreen);
+					if(SDL_GetModState() & SDL_KMOD_SHIFT) {
+						if(g_scanline_simulator > 0) {
+							g_scanline_saved = g_scanline_simulator;
+							g_scanline_simulator = 0;
+						} else {
+							g_scanline_simulator = g_scanline_saved;
+						}
+					} else {
+						g_is_fullscreen = !g_is_fullscreen;
+						SDL_SetWindowFullscreen(win->window,
+									g_is_fullscreen);
+					}
 				}
 				break;
 			}
@@ -424,6 +484,15 @@ sdl_update_display(Window_info *win)
 
 	SDL_RenderClear(win->renderer);
 	SDL_RenderTexture(win->renderer, win->texture, NULL, NULL);
+
+	/* Scanline overlay on top, if enabled. */
+	if((g_scanline_simulator > 0) && win->overlay) {
+		if(win->overlay_for != g_scanline_simulator) {
+			sdl_fill_overlay(win, g_scanline_simulator);
+		}
+		SDL_RenderTexture(win->renderer, win->overlay, NULL, NULL);
+	}
+
 	SDL_RenderPresent(win->renderer);
 }
 

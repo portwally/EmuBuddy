@@ -163,6 +163,7 @@ int	g_noaspect = 0;		/* stretch to fill instead of keeping the ratio */
 int	g_highdpi = 1;		/* request a high-DPI backing surface */
 int	g_novsync = 0;		/* disable vsync */
 int	g_nohwaccel = 0;	/* force the software renderer */
+int	g_scanline_simulator = 0; /* CRT scanline overlay intensity, 0-100 (0=off) */
 
 Cfg_menu g_cfg_disk_menu[] = {
 { "Disk Configuration", g_cfg_disk_menu, 0, 0, CFGTYPE_MENU },
@@ -359,6 +360,7 @@ Cfg_menu g_cfg_video_menu[] = {
 { "High DPI (SDL),0,No,1,Yes", &g_highdpi, "highdpi", 0, CFGTYPE_INT },
 { "Disable VSync (SDL),0,No,1,Yes", &g_novsync, "novsync", 0, CFGTYPE_INT },
 { "Force Software Renderer (SDL),0,No,1,Yes", &g_nohwaccel, "nohwaccel", 0, CFGTYPE_INT },
+{ "Scanline Simulator 0-100 (SDL)", &g_scanline_simulator, "scanline", 0, CFGTYPE_INT },
 { "", 0, 0, 0, 0 },
 { "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
 { 0, 0, 0, 0, 0 },
