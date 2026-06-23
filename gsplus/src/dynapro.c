@@ -13,10 +13,10 @@
 //  forked files are storage_type $5 from Technote tn-pdos-025.
 
 #include "defc.h"
-#ifdef _WIN32
-# include "win_dirent.h"
+#if defined(_WIN32) && defined(_MSC_VER)
+# include "win_dirent.h"	/* MSVC has no <dirent.h>; windriver.c implements it */
 #else
-# include <dirent.h>
+# include <dirent.h>		/* mingw (incl. the SDL build), Linux, macOS */
 #endif
 #include <time.h>
 
