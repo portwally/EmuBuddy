@@ -29,7 +29,7 @@ anyway**. If the `.exe` won't start after unzipping, right-click it →
 
 **macOS** - the app is only ad-hoc signed, so Gatekeeper flags it. Right-click
 the app → **Open**, then confirm **Open**. If macOS still refuses, run
-`xattr -dr com.apple.quarantine /Applications/GSplus-SDL.app`.
+`xattr -dr com.apple.quarantine /Applications/GSplus.app`.
 
 **Linux** - the `.tar.gz` relies on a system SDL3 (`libsdl3` from your package
 manager). A self-contained AppImage is planned.
@@ -49,11 +49,11 @@ cmake -G Ninja -B build -S gsplus/src
 cmake --build build --target gsplus-sdl
 ```
 
-This produces the SDL3 app:
+This produces the GSplus app:
 
-- **macOS:** `build/GSplus-SDL.app`
-- **Linux:** `build/gsplus-sdl`
-- **Windows:** `build/gsplus-sdl.exe` (with `SDL3.dll` alongside)
+- **macOS:** `build/GSplus.app`
+- **Linux:** `build/gsplus`
+- **Windows:** `build/gsplus.exe` (with `SDL3.dll` alongside)
 
 ### Dependencies
 

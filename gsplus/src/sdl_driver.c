@@ -25,6 +25,7 @@
 
 #include "defc.h"
 #include "protos_sdl.h"
+#include "gsplus_icon.h"		/* embedded RGBA window icon */
 
 #ifdef _WIN32
 # include <sys/stat.h>
@@ -189,6 +190,18 @@ sdl_video_init(void)
 	if(!g_fullscreen) {
 		SDL_SetWindowPosition(g_mainwin_info.window,
 					g_mainwin_xpos, g_mainwin_ypos);
+	}
+
+	/* Window/taskbar icon. macOS uses the .app's icns, but this gives Linux
+	 * and Windows a proper icon while running. */
+	{
+		SDL_Surface *icon = SDL_CreateSurfaceFrom(gsplus_icon_width,
+				gsplus_icon_height, SDL_PIXELFORMAT_RGBA32,
+				(void *)gsplus_icon_rgba, gsplus_icon_width * 4);
+		if(icon) {
+			SDL_SetWindowIcon(g_mainwin_info.window, icon);
+			SDL_DestroySurface(icon);
+		}
 	}
 
 	/* "-nohwaccel 1" forces the software renderer; otherwise SDL picks the best. */
