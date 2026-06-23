@@ -55,6 +55,11 @@ typedef struct {
 
 static Window_info g_mainwin_info;
 
+/* Version string (set by the build from the git tag; see CMakeLists.txt). */
+#ifndef GSPLUS_VERSION_STR
+# define GSPLUS_VERSION_STR	"dev"
+#endif
+
 /* Up-front buffer size: large enough for every IIgs video mode (incl. borders
  * and scaling headroom). The actual window is sized to the current mode. */
 #define SDL_MAX_WIDTH	1280
@@ -112,7 +117,8 @@ sdl_video_init(void)
 
 	video_update_scale(km, w, h, 1);
 
-	g_mainwin_info.window = SDL_CreateWindow("GSplus (SDL3)", w, h,
+	g_mainwin_info.window = SDL_CreateWindow("GSplus " GSPLUS_VERSION_STR,
+				w, h,
 				SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
 	if(!g_mainwin_info.window) {
 		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -393,6 +399,8 @@ main(int argc, char **argv)
 {
 	int	mdepth = 32;		/* ARGB8888 -> 32-bit pixels */
 	int	ret;
+
+	printf("GSplus %s (SDL3)\n", GSPLUS_VERSION_STR);
 
 	ret = parse_argv(argc, argv, 1);
 	if(ret) {

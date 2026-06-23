@@ -27,9 +27,21 @@ cmake_minimum_required(VERSION 3.20)
 # Declare the project: a name, a version, and which languages are used.
 # (We'll add Swift here in the next milestone; C is all the core needs.)
 project(gsplus
-    VERSION 0.0.1
+    VERSION 1.38.0
     DESCRIPTION "GSplus - cross-platform Apple IIgs emulator (KEGS-based)"
     LANGUAGES C)
+
+# ----------------------------------------------------------------------------
+# Version. gsplus versions are MAJOR.MINOR.PATCH where MAJOR.MINOR mirrors the
+# upstream KEGS version (currently 1.38) and PATCH is the gsplus increment.
+# CI passes the exact git tag via -DGSPLUS_VERSION (e.g. -DGSPLUS_VERSION=1.38.0)
+# so the tag, the app, and the release artifacts all carry the same version.
+# Local builds without -DGSPLUS_VERSION fall back to the project() version above.
+# ----------------------------------------------------------------------------
+if(NOT DEFINED GSPLUS_VERSION OR GSPLUS_VERSION STREQUAL "")
+    set(GSPLUS_VERSION "${PROJECT_VERSION}")
+endif()
+message(STATUS "GSplus: version ${GSPLUS_VERSION}")
 
 # ----------------------------------------------------------------------------
 # The platform-independent core sources.
@@ -217,6 +229,10 @@ add_executable(gsplus-sdl
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
 
+# Expose the version string to the app (window title / startup log).
+target_compile_definitions(gsplus-sdl PRIVATE
+    "GSPLUS_VERSION_STR=\"${GSPLUS_VERSION}\"")
+
 if(WIN32)
     # The core uses Winsock (scc serial-over-TCP) and Win32 multimedia timers,
     # which the native Win build links explicitly. SDL3 links its own deps.
@@ -237,8 +253,8 @@ if(APPLE)
         OUTPUT_NAME "GSplus-SDL"
         MACOSX_BUNDLE_BUNDLE_NAME "GSplus-SDL"
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.gsplus.sdl"
-        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${GSPLUS_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${GSPLUS_VERSION}"
         MACOSX_BUNDLE_ICON_FILE "kegsicon.icns"
         # Look for bundled dylibs next to the executable in ../Frameworks.
         INSTALL_RPATH "@executable_path/../Frameworks")
@@ -300,6 +316,6 @@ endif()
 
 set(CPACK_PACKAGE_NAME "GSplus")
 set(CPACK_PACKAGE_VENDOR "GSplus Contributors")
-set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VERSION "${GSPLUS_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
 include(CPack)

@@ -22,7 +22,12 @@ jobs:
       - name: Install tools
         run: brew install cmake ninja sdl3
       - name: Configure
-        run: cmake -G Ninja -B build -S gsplus/src
+        run: |
+          ARGS=""
+          case "$GITHUB_REF" in
+            refs/tags/v*) ARGS="-DGSPLUS_VERSION=${GITHUB_REF_NAME#v}" ;;
+          esac
+          cmake -G Ninja -B build -S gsplus/src $ARGS
       - name: Build
         run: cmake --build build --target gsplus-sdl
       - name: Package (.dmg)
@@ -48,7 +53,12 @@ jobs:
             libpulse-dev libasound2-dev libpipewire-0.3-dev libsndio-dev \
             libdbus-1-dev libudev-dev libibus-1.0-dev
       - name: Configure (SDL3 built from source via FetchContent)
-        run: cmake -G Ninja -B build -S gsplus/src
+        run: |
+          ARGS=""
+          case "$GITHUB_REF" in
+            refs/tags/v*) ARGS="-DGSPLUS_VERSION=${GITHUB_REF_NAME#v}" ;;
+          esac
+          cmake -G Ninja -B build -S gsplus/src $ARGS
       - name: Build
         run: cmake --build build --target gsplus-sdl
       - name: Package (.tar.gz)
@@ -78,7 +88,12 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
       - name: Configure (SDL3 built from source via FetchContent)
-        run: cmake -G Ninja -B build -S gsplus/src
+        run: |
+          ARGS=""
+          case "$GITHUB_REF" in
+            refs/tags/v*) ARGS="-DGSPLUS_VERSION=${GITHUB_REF_NAME#v}" ;;
+          esac
+          cmake -G Ninja -B build -S gsplus/src $ARGS
       - name: Build
         run: cmake --build build --target gsplus-sdl
       - name: Package (.zip)
