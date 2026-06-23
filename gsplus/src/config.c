@@ -152,6 +152,18 @@ extern Cfg_menu g_cfg_main_menu[];
 #define KNMP(a)		&a, #a, 0
 #define KNM(a)		&a, #a
 
+/* SDL display options not present in upstream KEGS. Registered in the Video
+ * Settings menu below, so they're settable via the config panel, config.kegs,
+ * and the command line (KEGS style, e.g. "-g_fullscreen 1"). The SDL driver
+ * reads them; the X11 and native macOS drivers ignore them. (Window size and
+ * position use KEGS's existing g_mainwin_width/height/xpos/ypos.) */
+int	g_fullscreen = 0;	/* start in fullscreen (F11 toggles at runtime) */
+int	g_borderless = 0;	/* no window title bar / border */
+int	g_noaspect = 0;		/* stretch to fill instead of keeping the ratio */
+int	g_highdpi = 1;		/* request a high-DPI backing surface */
+int	g_novsync = 0;		/* disable vsync */
+int	g_nohwaccel = 0;	/* force the software renderer */
+
 Cfg_menu g_cfg_disk_menu[] = {
 { "Disk Configuration", g_cfg_disk_menu, 0, 0, CFGTYPE_MENU },
 { "s5d1 = ", 0, 0, 0, CFGTYPE_DISK + 0x5000 },
@@ -338,6 +350,13 @@ Cfg_menu g_cfg_video_menu[] = {
 	"8,Off (Update video every 8 lines)",
 		KNMP(g_video_line_update_interval), CFGTYPE_INT },
 { "Dump text screen to file", (void *)cfg_text_screen_dump, 0, 0, CFGTYPE_FUNC},
+{ "", 0, 0, 0, 0 },
+{ "Start Fullscreen (SDL),0,No,1,Yes", KNMP(g_fullscreen), CFGTYPE_INT },
+{ "Borderless Window (SDL),0,No,1,Yes", KNMP(g_borderless), CFGTYPE_INT },
+{ "Ignore Aspect Ratio (SDL),0,No,1,Yes", KNMP(g_noaspect), CFGTYPE_INT },
+{ "High DPI (SDL),0,No,1,Yes", KNMP(g_highdpi), CFGTYPE_INT },
+{ "Disable VSync (SDL),0,No,1,Yes", KNMP(g_novsync), CFGTYPE_INT },
+{ "Force Software Renderer (SDL),0,No,1,Yes", KNMP(g_nohwaccel), CFGTYPE_INT },
 { "", 0, 0, 0, 0 },
 { "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
 { 0, 0, 0, 0, 0 },
