@@ -61,7 +61,7 @@ static Window_info g_mainwin_info;
 /* Window/display options, defined in config.c and settable via the command line
  * (e.g. "-fullscreen 1") or config.kegs. */
 extern int g_fullscreen, g_borderless, g_noaspect, g_highdpi;
-extern int g_novsync, g_nohwaccel;
+extern int g_nohwaccel;
 extern int g_scanline_simulator;	/* CRT scanline overlay intensity, 0-100 */
 extern int g_mainwin_xpos, g_mainwin_ypos;	/* window position (KEGS config vars) */
 
@@ -222,7 +222,13 @@ sdl_video_init(void)
 		printf("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 		exit(1);
 	}
-	SDL_SetRenderVSync(g_mainwin_info.renderer, g_novsync ? 0 : 1);
+	/* Keep vsync OFF: the core paces every frame to the emulated 60.05Hz via
+	 * micro_sleep() in run_16ms(), so a vsync-blocked SDL_RenderPresent() would
+	 * add a second ~16ms wait per frame, running the whole emulator (and its
+	 * audio production) at half speed and starving the audio queue. Making vsync
+	 * coexist with the core's pacer is a backlog item; for now the core is the
+	 * sole frame-rate authority. */
+	SDL_SetRenderVSync(g_mainwin_info.renderer, 0);
 	printf("SDL renderer backend: %s\n",
 		SDL_GetRendererName(g_mainwin_info.renderer));
 
