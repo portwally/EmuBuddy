@@ -2,5 +2,10 @@
 
 # Build / runtime artifacts
 gsplus/GSplus.app/
-gsplus/src/config.kegs
+gsplus/src/build/
+config.kegs
+
+# Local Claude Code tooling
+.agents/
+skills-lock.json
 
