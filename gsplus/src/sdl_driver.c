@@ -66,6 +66,7 @@ extern int g_nohwaccel;
 extern int g_scanline_simulator;	/* CRT scanline overlay intensity, 0-100 */
 extern int g_mainwin_xpos, g_mainwin_ypos;	/* window position (KEGS config vars) */
 extern char *g_cfg_ssdir;		/* screenshot output dir ("" = current dir) */
+extern int g_halt_sim;			/* nonzero while the debugger has the CPU halted */
 
 static int g_is_fullscreen = 0;		/* current fullscreen state (F11 toggles) */
 static int g_scanline_saved = 50;	/* intensity to restore when toggled back on */
@@ -645,6 +646,132 @@ sdl_update_display(Window_info *win)
 	SDL_RenderPresent(win->renderer);
 }
 
+/* --------------------------------------------------------------------------
+ * Terminal debugger REPL.
+ *
+ * The core's built-in 65816 monitor (debugger.c) already writes all its output
+ * to stdout. What it lacked under SDL was a way to receive input -- it used to
+ * read keystrokes from a dedicated debugger window. Rather than rebuild a
+ * terminal inside SDL (scrollback, copy/paste, history are all hard), we drive
+ * the monitor straight from the launching terminal, which already has them.
+ *
+ * A reader thread blocks on stdin so the SDL main loop never stalls; complete
+ * lines land in a small queue that sdl_debugger_poll() drains while the CPU is
+ * halted (middle-click break, or the F7 toggle). Launched with no terminal
+ * (double-clicked .app/.exe), stdin hits EOF and the thread simply exits -- the
+ * emulator runs normally, just without an interactive debugger.
+ * ------------------------------------------------------------------------- */
+
+#define DBG_LINE_MAX	256
+#define DBG_QUEUE_LEN	32
+
+static char g_dbg_queue[DBG_QUEUE_LEN][DBG_LINE_MAX];
+static int g_dbg_q_head = 0;		/* next slot to read (main thread)   */
+static int g_dbg_q_tail = 0;		/* next slot to write (reader thread) */
+static SDL_Mutex *g_dbg_mutex = NULL;
+static int g_dbg_prompt_shown = 0;
+
+/* Reader thread: block on stdin, push each completed line onto the queue. */
+static int SDLCALL
+sdl_stdin_reader(void *data)
+{
+	char	line[DBG_LINE_MAX];
+	int	next;
+
+	(void)data;
+	while(fgets(line, sizeof(line), stdin)) {
+		SDL_LockMutex(g_dbg_mutex);
+		next = (g_dbg_q_tail + 1) % DBG_QUEUE_LEN;
+		if(next != g_dbg_q_head) {		/* silently drop if full */
+			SDL_strlcpy(g_dbg_queue[g_dbg_q_tail], line, DBG_LINE_MAX);
+			g_dbg_q_tail = next;
+		}
+		SDL_UnlockMutex(g_dbg_mutex);
+	}
+	return 0;		/* EOF: no terminal attached, or input closed */
+}
+
+/* Pop one queued line into out[DBG_LINE_MAX], stripping the trailing newline.
+ * Returns 1 if a line was available, 0 otherwise. */
+static int
+sdl_dbg_dequeue(char *out)
+{
+	int	got = 0, i;
+
+	SDL_LockMutex(g_dbg_mutex);
+	if(g_dbg_q_head != g_dbg_q_tail) {
+		SDL_strlcpy(out, g_dbg_queue[g_dbg_q_head], DBG_LINE_MAX);
+		g_dbg_q_head = (g_dbg_q_head + 1) % DBG_QUEUE_LEN;
+		got = 1;
+	}
+	SDL_UnlockMutex(g_dbg_mutex);
+	if(got) {
+		for(i = 0; out[i]; i++) {
+			if((out[i] == '\n') || (out[i] == '\r')) {
+				out[i] = 0;
+				break;
+			}
+		}
+	}
+	return got;
+}
+
+static void
+sdl_dbg_prompt(void)
+{
+	printf("gsplus> ");
+	fflush(stdout);
+	g_dbg_prompt_shown = 1;
+}
+
+/* Create the stdin reader thread. Non-fatal on failure: the emulator still
+ * runs, just without terminal debugger input. */
+static void
+sdl_debugger_init(void)
+{
+	SDL_Thread *thread;
+
+	g_dbg_mutex = SDL_CreateMutex();
+	if(!g_dbg_mutex) {
+		printf("Debugger: SDL_CreateMutex failed: %s\n", SDL_GetError());
+		return;
+	}
+	thread = SDL_CreateThread(sdl_stdin_reader, "stdin-reader", NULL);
+	if(!thread) {
+		printf("Debugger: SDL_CreateThread failed: %s\n", SDL_GetError());
+		return;
+	}
+	SDL_DetachThread(thread);	/* fire-and-forget; dies with the process */
+}
+
+/* Drive the terminal monitor: prompt once on halt, then feed queued lines to
+ * the core's command parser. Called once per frame from the main loop. */
+static void
+sdl_debugger_poll(void)
+{
+	char	line[DBG_LINE_MAX];
+
+	if(!g_dbg_mutex || !g_halt_sim) {
+		g_dbg_prompt_shown = 0;		/* running: re-prompt on next halt */
+		return;
+	}
+	if(!g_dbg_prompt_shown) {
+		printf("\n[debugger] CPU halted -- type 'h' for help, 'g' to "
+							"continue\n");
+		sdl_dbg_prompt();
+	}
+	/* The terminal echoes what the user types; do_debug_cmd() echoes the
+	 * command and prints its output. Stop if a command (g/s) resumes the CPU. */
+	while(g_halt_sim && sdl_dbg_dequeue(line)) {
+		do_debug_cmd(line);
+		if(g_halt_sim) {
+			sdl_dbg_prompt();
+		} else {
+			g_dbg_prompt_shown = 0;
+		}
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -666,6 +793,7 @@ main(int argc, char **argv)
 	}
 
 	sdl_video_init();
+	sdl_debugger_init();
 
 	/* Main loop: run_16ms() runs one video frame's worth of CPU + video. */
 	while(!g_quit_requested) {
@@ -675,6 +803,7 @@ main(int argc, char **argv)
 			break;
 		}
 		sdl_poll_events();
+		sdl_debugger_poll();
 		sdl_update_display(&g_mainwin_info);
 	}
 
