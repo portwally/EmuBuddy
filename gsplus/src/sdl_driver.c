@@ -165,6 +165,17 @@ sdl_video_init(void)
 	w = video_get_x_width(km);
 	h = video_get_x_height(km);
 
+	/* Tell the core our pixel layout (ARGB8888 -> 0x00RRGGBB) and build the
+	 * palettes. The Apple II text/lores/hires palette (g_a2palette_1624) is
+	 * populated ONLY by video_set_palette(); without this call it stays all
+	 * zeros and every text/HGR pixel renders black, while super-hires (which
+	 * uses g_palette_8to1624 directly) still works. The X11 and Win32 drivers
+	 * do exactly this in their own init. */
+	video_set_red_mask(0xff0000);
+	video_set_green_mask(0x00ff00);
+	video_set_blue_mask(0x0000ff);
+	video_set_palette();
+
 	g_mainwin_info.kimage_ptr = km;
 	g_mainwin_info.width_req = w;
 	g_mainwin_info.main_height = h;
@@ -477,6 +488,9 @@ sdl_update_display(Window_info *win)
 		SDL_SetRenderLogicalPresentation(win->renderer, w, h,
 					SDL_LOGICAL_PRESENTATION_LETTERBOX);
 		sdl_create_texture(win, w, h);
+		/* The new texture starts out blank, so ask the core to re-emit
+		 * the whole screen rather than just the next frame's deltas. */
+		video_set_x_refresh_needed(win->kimage_ptr, 1);
 	}
 
 	/* Ask the core for each changed rectangle (it writes pixels into our
