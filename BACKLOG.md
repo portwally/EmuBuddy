@@ -16,6 +16,8 @@ Effort: **S** small · **M** medium · **L** large. Priority: High / Med / Low.
 - **F1 — Window & display options**: `-fullscreen`, `-borderless`, `-noaspect`,
   `-highdpi`, `-novsync`, `-nohwaccel`, window position; F11 fullscreen toggle.
 - **F2 — Scanline simulator**: `-scanline <0-100>`, Shift+F11 toggle.
+- **F3 — Drag-and-drop**: drop a disk image on the window to mount it (slot
+  guessed from file size).
 
 ---
 
@@ -23,7 +25,6 @@ Effort: **S** small · **M** medium · **L** large. Priority: High / Med / Low.
 
 | Item | Pri | Eff | Notes |
 |---|---|---|---|
-| **Drag-and-drop** disk/ROM loading | High | M | Drop a file on the window to mount it (`SDL_EVENT_DROP_FILE`). |
 | **Screenshots** | Med | M | `-ssdir` + hotkey. BMP (no dep) or PNG (adds SDL3_image). |
 | **Clipboard** copy/paste | Med | M | Wire SDL clipboard to the core's copy/paste hooks **(core)**. |
 
@@ -77,7 +78,7 @@ Effort: **S** small · **M** medium · **L** large. Priority: High / Med / Low.
 
 ## Suggested order
 
-Drag-and-drop → Gamepad → Fast-forward → Screenshots → Clipboard.
+Gamepad → Fast-forward → Screenshots → Clipboard.
 
 ## Dagen's wishlist
 

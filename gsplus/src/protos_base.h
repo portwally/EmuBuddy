@@ -183,6 +183,8 @@ int cfg_partition_make_list_from_name(const char *namestr);
 int cfg_partition_make_list(int fd);
 int cfg_maybe_insert_disk(int slot, int drive, const char *namestr);
 void cfg_insert_disk_dynapro(int slot, int drive, const char *name);
+int cfg_guess_image_size(const char *filename);
+void cfg_inspect_maybe_insert_file(const char *filename);
 int cfg_stat(char *path, struct stat *sb, int do_lstat);
 word32 cfg_get_le16(byte *bptr);
 word32 cfg_get_le32(byte *bptr);

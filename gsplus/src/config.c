@@ -2517,6 +2517,55 @@ cfg_insert_disk_dynapro(int slot, int drive, const char *name)
 	insert_disk(slot, drive, name, 0, 0, -1, dynapro_blocks);
 }
 
+/* Guess what kind of disk image a file is from its size, for blind operations
+ * like drag-and-drop. Returns: -1 unknown, 0 small (<140K), 1 5.25" (~140K),
+ * 2 3.5" (~800K), 3 larger (hard drive). */
+int
+cfg_guess_image_size(const char *filename)
+{
+	struct stat stat_buf;
+	int	len;
+
+	if(stat(filename, &stat_buf) < 0) {
+		printf("Cannot stat %s\n", filename);
+		return -1;
+	}
+	len = (int)stat_buf.st_size;
+	if(len < 140*1024) {
+		return 0;
+	} else if(len < 140*1024 + 256 + 1) {
+		return 1;
+	} else if(len < 800*1024 + 256 + 1) {
+		return 2;
+	}
+	return 3;
+}
+
+/* Inspect a file and insert it into a guessed slot (drive 1). Used by
+ * drag-and-drop: small/large images -> SmartPort (slot 7), 5.25" -> slot 6,
+ * 3.5" -> slot 5. */
+void
+cfg_inspect_maybe_insert_file(const char *filename)
+{
+	int	slot;
+
+	switch(cfg_guess_image_size(filename)) {
+	case 0: slot = 7; break;
+	case 1: slot = 6; break;
+	case 2: slot = 5; break;
+	case 3: slot = 7; break;
+	default: slot = 0; break;
+	}
+	if(slot > 0) {
+		printf("Drag-and-drop: inserting %s in slot %d, drive 1\n",
+							filename, slot);
+		cfg_maybe_insert_disk(slot, 0, filename);
+	} else {
+		printf("Drag-and-drop: cannot determine where to put %s\n",
+							filename);
+	}
+}
+
 int
 cfg_stat(char *path, struct stat *sb, int do_lstat)
 {
