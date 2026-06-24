@@ -61,14 +61,17 @@ sdl_send_audio(byte *ptr, int size)
 	int	max_queued;
 
 	if(g_sdl_audio_stream) {
-		/* Keep latency bounded: if the emulator runs ahead of real time
-		 * (e.g. fast-forward) the queue grows without limit, so drop the
-		 * backlog once it exceeds ~0.5s of stereo S16 (rate*4 bytes/sec). */
+		/* SDL's audio thread plays from this queue on its own schedule,
+		 * decoupled from our main-loop pushes -- so the queue must stay
+		 * non-empty to avoid underruns (which sound like stutter). Keep
+		 * latency bounded WITHOUT emptying it: if we're already more than
+		 * ~0.5s of stereo S16 (rate*4 bytes/sec) ahead of playback, drop
+		 * these new samples rather than SDL_ClearAudioStream()ing the whole
+		 * backlog -- clearing leaves the buffer empty and causes a gap. */
 		max_queued = g_preferred_rate * 2;
-		if(SDL_GetAudioStreamQueued(g_sdl_audio_stream) > max_queued) {
-			SDL_ClearAudioStream(g_sdl_audio_stream);
+		if(SDL_GetAudioStreamQueued(g_sdl_audio_stream) <= max_queued) {
+			SDL_PutAudioStreamData(g_sdl_audio_stream, ptr, size);
 		}
-		SDL_PutAudioStreamData(g_sdl_audio_stream, ptr, size);
 	}
 
 	/* MUST be >= 0: the core's reliable_buf_write() calls exit(1) otherwise. */
