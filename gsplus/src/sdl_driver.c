@@ -22,6 +22,7 @@
  */
 
 #include <SDL3/SDL.h>
+#include <time.h>
 
 #include "defc.h"
 #include "protos_sdl.h"
@@ -64,9 +65,11 @@ extern int g_fullscreen, g_borderless, g_noaspect, g_highdpi;
 extern int g_nohwaccel;
 extern int g_scanline_simulator;	/* CRT scanline overlay intensity, 0-100 */
 extern int g_mainwin_xpos, g_mainwin_ypos;	/* window position (KEGS config vars) */
+extern char *g_cfg_ssdir;		/* screenshot output dir ("" = current dir) */
 
 static int g_is_fullscreen = 0;		/* current fullscreen state (F11 toggles) */
 static int g_scanline_saved = 50;	/* intensity to restore when toggled back on */
+static int g_screenshot_requested = 0;	/* set by Shift+F12, serviced at frame end */
 
 /* Version string (set by the build from the git tag; see CMakeLists.txt). */
 #ifndef GSPLUS_VERSION_STR
@@ -192,7 +195,7 @@ sdl_video_init(void)
 	if(g_borderless) { flags |= SDL_WINDOW_BORDERLESS; }
 	if(g_fullscreen) { flags |= SDL_WINDOW_FULLSCREEN; g_is_fullscreen = 1; }
 
-	g_mainwin_info.window = SDL_CreateWindow("GSplus " GSPLUS_VERSION_STR,
+	g_mainwin_info.window = SDL_CreateWindow("GSplus",
 				w, h, flags);
 	if(!g_mainwin_info.window) {
 		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -422,6 +425,15 @@ sdl_poll_events(void)
 			}
 			break;
 		case SDL_EVENT_KEY_DOWN:
+			/* Shift+F12 saves a screenshot (gsplus convention); it is not
+			 * sent to the IIgs. Plain F12 still reaches the emulator. */
+			if(ev.key.scancode == SDL_SCANCODE_F12 &&
+					(SDL_GetModState() & SDL_KMOD_SHIFT)) {
+				if(!ev.key.repeat) {
+					g_screenshot_requested = 1;
+				}
+				break;
+			}
 			/* F11 toggles fullscreen; Shift+F11 toggles scanlines (gsplus
 			 * convention). Neither is sent to the IIgs. */
 			if(ev.key.scancode == SDL_SCANCODE_F11) {
@@ -447,6 +459,12 @@ sdl_poll_events(void)
 			if(ev.key.scancode == SDL_SCANCODE_F11) {
 				break;
 			}
+			/* Swallow the matching Shift+F12 release so the IIgs never
+			 * sees a stray F12 key-up from a screenshot combo. */
+			if(ev.key.scancode == SDL_SCANCODE_F12 &&
+					(SDL_GetModState() & SDL_KMOD_SHIFT)) {
+				break;
+			}
 			sdl_handle_key(win, ev.key.scancode, 1, 0);
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
@@ -470,6 +488,89 @@ sdl_poll_events(void)
 		default:
 			break;
 		}
+	}
+}
+
+/* Build "[<ssdir>/]gsplus_screenshot_YYYYMMDD_HHMMSS.png" into buf. With no
+ * ssdir configured the file lands in the current working directory. */
+static void
+sdl_build_screenshot_path(char *buf, size_t buflen)
+{
+	char	fname[64];
+	time_t	now;
+	struct tm *tmv;
+
+	now = time(NULL);
+	tmv = localtime(&now);
+	strftime(fname, sizeof(fname),
+			"gsplus_screenshot_%Y%m%d_%H%M%S.png", tmv);
+
+	if(g_cfg_ssdir && g_cfg_ssdir[0]) {
+		size_t len = strlen(g_cfg_ssdir);
+		const char *sep = (g_cfg_ssdir[len - 1] == '/') ? "" : "/";
+		snprintf(buf, buflen, "%s%s%s", g_cfg_ssdir, sep, fname);
+	} else {
+		snprintf(buf, buflen, "%s", fname);
+	}
+}
+
+/* Grab the currently-rendered frame (post-scaling, including any scanline
+ * overlay and letterbox borders) and write it to a PNG. Called after the frame
+ * is drawn but before SDL_RenderPresent, so the back buffer is still valid. */
+static void
+sdl_save_screenshot(Window_info *win)
+{
+	SDL_Surface *shot, *conv;
+	unsigned char *packed;
+	char	path[1100];
+	size_t	rowbytes;
+	int	w, h, y, rc;
+
+	shot = SDL_RenderReadPixels(win->renderer, NULL);
+	if(!shot) {
+		printf("Screenshot failed: SDL_RenderReadPixels: %s\n",
+			SDL_GetError());
+		return;
+	}
+	/* Normalise to byte-order RGBA, which is what write_png_rgba() expects. */
+	conv = SDL_ConvertSurface(shot, SDL_PIXELFORMAT_RGBA32);
+	SDL_DestroySurface(shot);
+	if(!conv) {
+		printf("Screenshot failed: SDL_ConvertSurface: %s\n",
+			SDL_GetError());
+		return;
+	}
+
+	/* SDL surfaces may pad rows (pitch >= w*4); pack them tightly. */
+	w = conv->w;
+	h = conv->h;
+	rowbytes = (size_t)w * 4;
+	packed = malloc(rowbytes * (size_t)h);
+	if(!packed) {
+		SDL_DestroySurface(conv);
+		return;
+	}
+	for(y = 0; y < h; y++) {
+		unsigned char *dst = packed + (size_t)y * rowbytes;
+		memcpy(dst, (unsigned char *)conv->pixels
+				+ (size_t)y * conv->pitch, rowbytes);
+		/* The renderer's back buffer can carry a non-opaque alpha, which
+		 * makes viewers composite the PNG over white and wash the colors
+		 * out. A screenshot is opaque, so force every alpha byte to 0xff. */
+		for(int x = 0; x < w; x++) {
+			dst[x * 4 + 3] = 0xff;
+		}
+	}
+	SDL_DestroySurface(conv);
+
+	sdl_build_screenshot_path(path, sizeof(path));
+	rc = write_png_rgba(path, packed, w, h);
+	free(packed);
+
+	if(rc) {
+		printf("Screenshot failed: could not write %s\n", path);
+	} else {
+		printf("Screenshot saved: %s (%dx%d)\n", path, w, h);
 	}
 }
 
@@ -532,6 +633,13 @@ sdl_update_display(Window_info *win)
 			sdl_fill_overlay(win, g_scanline_simulator);
 		}
 		SDL_RenderTexture(win->renderer, win->overlay, NULL, NULL);
+	}
+
+	/* Service a pending Shift+F12 capture now, while the just-drawn frame is
+	 * still in the back buffer (RenderPresent may invalidate it). */
+	if(g_screenshot_requested) {
+		sdl_save_screenshot(win);
+		g_screenshot_requested = 0;
 	}
 
 	SDL_RenderPresent(win->renderer);

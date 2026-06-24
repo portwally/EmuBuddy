@@ -15,4 +15,8 @@ void	sdl_snd_init(word32 *shmaddr);
 int	sdl_send_audio(byte *ptr, int size);
 void	sdl_snd_shutdown(void);
 
+/* png_write.c */
+int	write_png_rgba(const char *path, const unsigned char *rgba,
+			int w, int h);
+
 #endif /* GSPLUS_PROTOS_SDL_H */
