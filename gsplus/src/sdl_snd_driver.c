@@ -23,6 +23,25 @@ extern int g_preferred_rate;		/* desired sample rate, set by the core */
 
 static SDL_AudioStream *g_sdl_audio_stream = NULL;
 
+/* Push `bytes` of silence into the stream, to rebuild a latency cushion when
+ * we're about to underrun. Done in chunks so we don't need a huge buffer. */
+static void
+sdl_put_silence(int bytes)
+{
+	byte	zerobuf[4096];
+	int	chunk;
+
+	memset(zerobuf, 0, sizeof(zerobuf));
+	while(bytes > 0) {
+		chunk = bytes;
+		if(chunk > (int)sizeof(zerobuf)) {
+			chunk = (int)sizeof(zerobuf);
+		}
+		SDL_PutAudioStreamData(g_sdl_audio_stream, zerobuf, chunk);
+		bytes -= chunk;
+	}
+}
+
 void
 sdl_snd_init(word32 *shmaddr)
 {
@@ -58,18 +77,38 @@ sdl_snd_init(word32 *shmaddr)
 int
 sdl_send_audio(byte *ptr, int size)
 {
-	int	max_queued;
+	int	bytes_per_sec, target, low, high, queued, pad;
 
 	if(g_sdl_audio_stream) {
-		/* SDL's audio thread plays from this queue on its own schedule,
-		 * decoupled from our main-loop pushes -- so the queue must stay
-		 * non-empty to avoid underruns (which sound like stutter). Keep
-		 * latency bounded WITHOUT emptying it: if we're already more than
-		 * ~0.5s of stereo S16 (rate*4 bytes/sec) ahead of playback, drop
+		/* SDL's audio thread drains this queue at a steady rate on its own
+		 * thread, decoupled from our main-loop pushes. The emulator, however,
+		 * feeds us in uneven bursts: run_16ms() paces to realtime with
+		 * micro_sleep(), whose OS granularity is coarse (Windows Sleep() is
+		 * ~15ms). So the *average* feed rate is correct but it arrives jittery,
+		 * and if the queue ever empties between bursts, playback stutters --
+		 * which is exactly what's heard on Windows. (stereo S16 = 4 bytes/frame) */
+		bytes_per_sec = g_preferred_rate * 4;
+		target = bytes_per_sec / 8;	/* ~125ms cushion: swamps ~15ms jitter */
+		low    = bytes_per_sec / 16;	/* ~62ms: about to run dry */
+		high   = bytes_per_sec / 2;	/* ~500ms: too far ahead, cap latency */
+
+		queued = (int)SDL_GetAudioStreamQueued(g_sdl_audio_stream);
+
+		/* About to underrun: prepend silence to rebuild the cushion. This adds
+		 * no audible gap -- the queue was already near-empty so a gap was
+		 * coming regardless -- and because the producer is realtime-locked the
+		 * cushion then holds steady instead of being whittled back to zero. */
+		if(queued < low) {
+			pad = target - queued;
+			if(pad > 0) {
+				sdl_put_silence(pad);
+			}
+		}
+
+		/* Don't let latency grow without bound when we're running ahead: drop
 		 * these new samples rather than SDL_ClearAudioStream()ing the whole
-		 * backlog -- clearing leaves the buffer empty and causes a gap. */
-		max_queued = g_preferred_rate * 2;
-		if(SDL_GetAudioStreamQueued(g_sdl_audio_stream) <= max_queued) {
+		 * backlog (clearing empties the buffer and causes a gap). */
+		if(queued <= high) {
 			SDL_PutAudioStreamData(g_sdl_audio_stream, ptr, size);
 		}
 	}
