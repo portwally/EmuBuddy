@@ -224,7 +224,10 @@ endif()
 # gsplus_core library because its .o files already have -DMAC baked in.
 add_library(gsplus_core_sdl STATIC ${GSPLUS_CORE_SOURCES})
 target_include_directories(gsplus_core_sdl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_definitions(gsplus_core_sdl PUBLIC SDL_AUDIO)
+# SDL_AUDIO routes sound through the SDL backend; SDL_INPUT compiles the native
+# joystick backends (IOKit/joydev/mmsystem) out of joystick_driver.c so the
+# SDL_Gamepad backend in sdl_driver.c provides joystick_init/update instead.
+target_compile_definitions(gsplus_core_sdl PUBLIC SDL_AUDIO SDL_INPUT)
 target_compile_options(gsplus_core_sdl PRIVATE -Wall)
 
 # The portable executable: SDL driver + SDL audio backend, linked against the

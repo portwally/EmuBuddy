@@ -10,11 +10,19 @@
 
 #include "defc.h"
 
-#ifdef __linux__
+/* For the SDL build the joystick backend lives in sdl_driver.c (SDL_Gamepad),
+ * so compile out all the native per-platform backends below and mark the
+ * routines as defined to skip the fallback stubs. The shared callback helpers
+ * at the bottom of this file stay -- they touch no platform/SDL APIs. */
+#ifdef SDL_INPUT
+# define JOYSTICK_DEFINED
+#endif
+
+#if defined(__linux__) && !defined(SDL_INPUT)
 # include <linux/joystick.h>
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL_INPUT)
 # include <windows.h>
 # include <mmsystem.h>
 #endif
@@ -37,7 +45,7 @@ int	g_joystick_callback_buttons = 0;
 int	g_joystick_callback_x = 32767;
 int	g_joystick_callback_y = 32767;
 
-#ifdef __linux__
+#if defined(__linux__) && !defined(SDL_INPUT)
 # define JOYSTICK_DEFINED
 void
 joystick_init()
@@ -121,7 +129,7 @@ joystick_update_buttons()
 }
 #endif /* LINUX */
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL_INPUT)
 # define JOYSTICK_DEFINED
 #undef JOYSTICK_DEFINED
 	// HACK: remove
