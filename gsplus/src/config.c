@@ -157,7 +157,7 @@ extern Cfg_menu g_cfg_main_menu[];
  * and the command line (KEGS style, e.g. "-g_fullscreen 1"). The SDL driver
  * reads them; the X11 and native macOS drivers ignore them. (Window size and
  * position use KEGS's existing g_mainwin_width/height/xpos/ypos.) */
-int	g_fullscreen = 0;	/* start in fullscreen (F11 toggles at runtime) */
+int	g_fullscreen = 0;	/* fullscreen state; applied live, F11 also toggles it */
 int	g_borderless = 0;	/* no window title bar / border */
 int	g_noaspect = 0;		/* stretch to fill instead of keeping the ratio */
 int	g_highdpi = 1;		/* request a high-DPI backing surface */
@@ -354,13 +354,14 @@ Cfg_menu g_cfg_video_menu[] = {
 { "", 0, 0, 0, 0 },
 /* name_str (the CLI flag / config.kegs key) has no "g_" prefix -- that's just
  * our C convention for globals, not something users should type. */
-{ "Start Fullscreen (SDL),0,No,1,Yes", &g_fullscreen, "fullscreen", 0, CFGTYPE_INT },
-{ "Borderless Window (SDL),0,No,1,Yes", &g_borderless, "borderless", 0, CFGTYPE_INT },
-{ "Ignore Aspect Ratio (SDL),0,No,1,Yes", &g_noaspect, "noaspect", 0, CFGTYPE_INT },
-{ "High DPI (SDL),0,No,1,Yes", &g_highdpi, "highdpi", 0, CFGTYPE_INT },
-{ "Force Software Renderer (SDL),0,No,1,Yes", &g_nohwaccel, "nohwaccel", 0, CFGTYPE_INT },
-{ "Scanline Simulator 0-100 (SDL)", &g_scanline_simulator, "scanline", 0, CFGTYPE_INT },
-{ "Screenshot Directory (SDL)", &g_cfg_ssdir, "ssdir", 0, CFGTYPE_STR },
+{ "--GSplus/SDL options--", 0, 0, 0, 0 },
+{ "Fullscreen,0,No,1,Yes", &g_fullscreen, "fullscreen", 0, CFGTYPE_INT },
+{ "Borderless Window (restart required),0,No,1,Yes", &g_borderless, "borderless", 0, CFGTYPE_INT },
+{ "Ignore Aspect Ratio (restart required),0,No,1,Yes", &g_noaspect, "noaspect", 0, CFGTYPE_INT },
+{ "High DPI (restart required),0,No,1,Yes", &g_highdpi, "highdpi", 0, CFGTYPE_INT },
+{ "Force Software Renderer (restart required),0,No,1,Yes", &g_nohwaccel, "nohwaccel", 0, CFGTYPE_INT },
+{ "Scanline Simulator 0-100", &g_scanline_simulator, "scanline", 0, CFGTYPE_INT },
+{ "Screenshot Directory", &g_cfg_ssdir, "ssdir", 0, CFGTYPE_STR },
 { "", 0, 0, 0, 0 },
 { "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
 { 0, 0, 0, 0, 0 },
@@ -1064,6 +1065,16 @@ cfg_int_update(int *iptr, int new_val)
 	//  where it's value may need special handling
 
 	old_val = *iptr;
+	if(iptr == &g_scanline_simulator) {
+		// Scanline intensity is a 0-100 percentage (0=off, 100=max).
+		// Clamp here so it can't go negative or above 100 from any
+		// path: typed edits, +/- arrows, or a hand-edited config file.
+		if(new_val < 0) {
+			new_val = 0;
+		} else if(new_val > 100) {
+			new_val = 100;
+		}
+	}
 	*iptr = new_val;
 	if(old_val == new_val) {
 		return;

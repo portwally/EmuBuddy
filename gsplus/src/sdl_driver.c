@@ -504,12 +504,30 @@ joystick_init(void)
 	sdl_open_first_gamepad();
 }
 
+/* Apply the g_fullscreen config var to the live window whenever it changes.
+ * Both F11 and the F4 config menu write g_fullscreen; this keeps the actual
+ * window state (g_is_fullscreen) in sync with it, so toggling the option in
+ * the config panel takes effect immediately, not just on the next launch. */
+static void
+sdl_sync_fullscreen(Window_info *win)
+{
+	int	want = g_fullscreen ? 1 : 0;
+
+	if(want != g_is_fullscreen) {
+		g_is_fullscreen = want;
+		SDL_SetWindowFullscreen(win->window, want);
+	}
+}
+
 static void
 sdl_poll_events(void)
 {
 	SDL_Event ev;
 	Window_info *win = &g_mainwin_info;
 	int	mask, mx, my;
+
+	/* Pick up fullscreen changes made from the F4 config menu. */
+	sdl_sync_fullscreen(win);
 
 	while(SDL_PollEvent(&ev)) {
 		switch(ev.type) {
@@ -554,9 +572,10 @@ sdl_poll_events(void)
 							g_scanline_simulator = g_scanline_saved;
 						}
 					} else {
-						g_is_fullscreen = !g_is_fullscreen;
-						SDL_SetWindowFullscreen(win->window,
-									g_is_fullscreen);
+						/* Toggle the config var and apply it,
+						 * so F11 and the config menu agree. */
+						g_fullscreen = !g_is_fullscreen;
+						sdl_sync_fullscreen(win);
 					}
 				}
 				break;
