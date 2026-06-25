@@ -397,6 +397,113 @@ sdl_button_mask(int sdl_button)
 	return (1 << sdl_button) >> 1;
 }
 
+/* ----------------------------------------------------------------------- */
+/* Game controller (joystick / paddle) support.                            */
+/*                                                                          */
+/* The IIgs sees a 2-axis, 2-button analog joystick on the paddle inputs.   */
+/* We drive it from SDL3's high-level Gamepad API, which gives a standard    */
+/* layout (left stick + A/B) and a built-in mapping database across         */
+/* XInput/DirectInput/HID/Bluetooth pads. The core polls us via             */
+/* joystick_update() whenever a program reads the paddle trigger ($C070);   */
+/* we just sample current state, which SDL keeps fresh because              */
+/* sdl_poll_events() pumps the event queue every frame (and handles         */
+/* hotplug). These three entry points replace the native IOKit/joydev/      */
+/* mmsystem backends in joystick_driver.c, which is compiled out for the    */
+/* SDL build (see SDL_INPUT in CMakeLists.txt). The user still picks        */
+/* "Native Joystick 1" in the config menu (F4) to route paddles here.       */
+
+extern int g_joystick_native_type1;	/* paddles.c: -1 = no joystick present */
+extern int g_paddle_buttons;		/* paddles.c: bits 0,1 = buttons 0,1 */
+extern int g_paddle_val[4];		/* paddles.c: [0]=X [1]=Y, -32768..32767 */
+
+static SDL_Gamepad *g_sdl_gamepad = NULL;	/* the open controller, or NULL */
+
+/* Open the first connected controller SDL has a gamepad mapping for. */
+static void
+sdl_open_first_gamepad(void)
+{
+	SDL_JoystickID *ids;
+	int	count, i;
+
+	if(g_sdl_gamepad) {
+		return;				/* already have one */
+	}
+	ids = SDL_GetGamepads(&count);
+	if(!ids) {
+		return;
+	}
+	for(i = 0; i < count; i++) {
+		if(!SDL_IsGamepad(ids[i])) {
+			continue;
+		}
+		g_sdl_gamepad = SDL_OpenGamepad(ids[i]);
+		if(g_sdl_gamepad) {
+			g_joystick_native_type1 = 1;
+			printf("SDL gamepad opened: %s\n",
+				SDL_GetGamepadName(g_sdl_gamepad));
+			break;
+		}
+	}
+	SDL_free(ids);
+}
+
+/* Read the two face buttons into the low bits of g_paddle_buttons. */
+void
+joystick_update_buttons(void)
+{
+	int	buttons;
+
+	if(!g_sdl_gamepad) {
+		return;
+	}
+	buttons = 0;
+	if(SDL_GetGamepadButton(g_sdl_gamepad, SDL_GAMEPAD_BUTTON_SOUTH)) {
+		buttons |= 1;		/* button 0 (e.g. A) */
+	}
+	if(SDL_GetGamepadButton(g_sdl_gamepad, SDL_GAMEPAD_BUTTON_EAST)) {
+		buttons |= 2;		/* button 1 (e.g. B) */
+	}
+	g_paddle_buttons = (g_paddle_buttons & ~3) | buttons;
+}
+
+/* Sample axes + buttons into the paddle globals. Called from paddles.c. */
+void
+joystick_update(dword64 dfcyc)
+{
+	int	i;
+
+	/* Default: centered, both buttons up. 0xc keeps the unused upper
+	 * paddle buttons high, matching the native backends. */
+	for(i = 0; i < 4; i++) {
+		g_paddle_val[i] = 32767;
+	}
+	g_paddle_buttons = 0xc;
+
+	if(!g_sdl_gamepad) {
+		return;
+	}
+	/* SDL gamepad axes are already Sint16 (-32768..32767), exactly the
+	 * paddle range the core expects. */
+	g_paddle_val[0] = SDL_GetGamepadAxis(g_sdl_gamepad,
+						SDL_GAMEPAD_AXIS_LEFTX);
+	g_paddle_val[1] = SDL_GetGamepadAxis(g_sdl_gamepad,
+						SDL_GAMEPAD_AXIS_LEFTY);
+	joystick_update_buttons();
+	paddle_update_trigger_dcycs(dfcyc);
+}
+
+/* Called once from kegs_init() (before sdl_video_init's SDL_Init). */
+void
+joystick_init(void)
+{
+	g_joystick_native_type1 = -1;
+	if(!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
+		printf("SDL_INIT_GAMEPAD failed: %s\n", SDL_GetError());
+		return;
+	}
+	sdl_open_first_gamepad();
+}
+
 static void
 sdl_poll_events(void)
 {
@@ -485,6 +592,22 @@ sdl_poll_events(void)
 			adb_update_mouse(win->kimage_ptr, mx, my,
 				(ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN) ? mask : 0,
 				mask & 7);
+			break;
+		case SDL_EVENT_GAMEPAD_ADDED:
+			/* A controller was plugged in; adopt it if we have none. */
+			sdl_open_first_gamepad();
+			break;
+		case SDL_EVENT_GAMEPAD_REMOVED:
+			/* If the pad we were using went away, drop it and try to
+			 * fall back to any other still-connected controller. */
+			if(g_sdl_gamepad &&
+					SDL_GetGamepadID(g_sdl_gamepad) ==
+							ev.gdevice.which) {
+				SDL_CloseGamepad(g_sdl_gamepad);
+				g_sdl_gamepad = NULL;
+				g_joystick_native_type1 = -1;
+				sdl_open_first_gamepad();
+			}
 			break;
 		default:
 			break;
