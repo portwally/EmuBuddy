@@ -14,6 +14,10 @@ you want the native macOS or Windows versions, use
 [KEGS](http://kegs.sourceforge.net) directly. GSplus tracks the KEGS version it's
 based on (currently 1.38).
 
+<a href="gsplus-screenshot-mac.png">
+  <img src="gsplus-screenshot-mac.png" alt="GSplus running on macOS" width="400">
+</a>
+
 ## You'll need a ROM
 
 Like any IIgs emulator, GSplus needs an Apple IIgs ROM file to boot. Without one
