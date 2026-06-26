@@ -45,6 +45,25 @@ manager). A self-contained AppImage is planned.
 This is an early reboot - expect rough edges. SDL3 **video, input, and audio**
 are working on macOS, Linux, and Windows.
 
+### What's been added in GSplus
+
+Everything below is part of the SDL3 build and isn't in stock KEGS:
+
+- **Window & display options** - `-fullscreen`, `-borderless`, `-noaspect`,
+  , plus window position; F11 toggles fullscreen.
+- **Screenshot capture** - Shift+F12 grabs the framebuffer.
+- **Gamepad support** - cross-platform SDL_Gamepad mapped to the IIgs joystick.
+- **Terminal debugger** - a REPL for the built-in 65816 debugger from the
+  controlling terminal.
+- **Drag-and-drop disk loading** - drop a disk image on the window and GSplus
+  guesses the slot from its size.
+- **CRT scanline simulator** - `-scanline <0-100>`, Shift+F11 to toggle.
+- **Curved CRT effect** - `-crt 1` with `-crtcurve` / `-crtmask`, Ctrl+F11 to
+  toggle. Screen curvature, RGB phosphor mask, bloom, and vignette; composes
+  with the scanline simulator.
+- **One cross-platform build** - the same SDL3 app and CMake build on macOS,
+  Linux, and Windows, with prebuilt downloads for each.
+
 ## Building from source
 
 GSplus builds with CMake (Ninja generator). SDL3 is used if installed, otherwise
