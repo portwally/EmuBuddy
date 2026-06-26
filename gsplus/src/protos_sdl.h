@@ -19,4 +19,10 @@ void	sdl_snd_shutdown(void);
 int	write_png_rgba(const char *path, const unsigned char *rgba,
 			int w, int h);
 
+#ifdef __APPLE__
+/* sdl_mac_menu.m -- retune SDL's default macOS menu so ⌘ combos reach the
+ * IIgs and GSplus quits on ⌥⌘Q instead of ⌘Q. */
+void	sdl_mac_fix_menu(void);
+#endif
+
 #endif /* GSPLUS_PROTOS_SDL_H */

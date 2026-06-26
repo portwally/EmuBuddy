@@ -462,6 +462,13 @@ sdl_video_init(void)
 	 * dirty rectangles again, leaving the texture black. The X11 and Win32
 	 * drivers do the same on window expose. */
 	video_set_x_refresh_needed(km, 1);
+
+#ifdef __APPLE__
+	/* SDL has now installed its default macOS menu bar. Strip the ⌘ shortcuts
+	 * off its items so combos like ⌘W/⌘Q reach the emulated IIgs (which uses
+	 * ⌘ as Open-Apple), and move GSplus's own Quit to ⌥⌘Q. */
+	sdl_mac_fix_menu();
+#endif
 }
 
 /* --------------------------------------------------------------------------
