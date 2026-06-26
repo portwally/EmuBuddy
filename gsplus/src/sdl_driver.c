@@ -50,6 +50,16 @@ typedef struct {
 	SDL_Texture	*texture;
 	SDL_Texture	*overlay;		/* scanline overlay, drawn over texture */
 	int		overlay_for;		/* intensity the overlay was filled for */
+	/* CRT effect resources (built lazily by sdl_create_texture when on). */
+	SDL_Texture	*crt_target;		/* composited screen (fb+scanline+mask) */
+	SDL_Texture	*glow_target;		/* downscaled crt_target, used for bloom */
+	SDL_Texture	*mask;			/* RGB aperture-grille phosphor mask (MUL) */
+	int		mask_for;		/* g_crt_mask the mask was filled for */
+	SDL_Vertex	*crt_verts;		/* warped curvature mesh vertices */
+	int		*crt_idx;		/* mesh triangle indices */
+	int		crt_nverts;
+	int		crt_nidx;
+	int		crt_curve_for;		/* g_crt_curve the mesh was built for */
 	word32		*data;			/* dest buffer for video_out_data() */
 	int		active;
 	int		width_req;		/* current logical width  (pixels) */
@@ -64,6 +74,9 @@ static Window_info g_mainwin_info;
 extern int g_fullscreen, g_borderless, g_noaspect, g_highdpi;
 extern int g_nohwaccel;
 extern int g_scanline_simulator;	/* CRT scanline overlay intensity, 0-100 */
+extern int g_crt;			/* curved CRT effect on/off */
+extern int g_crt_curve;			/* CRT screen curvature, 0-100 */
+extern int g_crt_mask;			/* CRT phosphor-mask strength, 0-100 */
 extern int g_mainwin_xpos, g_mainwin_ypos;	/* window position (KEGS config vars) */
 extern char *g_cfg_ssdir;		/* screenshot output dir ("" = current dir) */
 extern int g_halt_sim;			/* nonzero while the debugger has the CPU halted */
@@ -71,6 +84,17 @@ extern int g_halt_sim;			/* nonzero while the debugger has the CPU halted */
 static int g_is_fullscreen = 0;		/* current fullscreen state (F11 toggles) */
 static int g_scanline_saved = 50;	/* intensity to restore when toggled back on */
 static int g_screenshot_requested = 0;	/* set by Shift+F12, serviced at frame end */
+
+/* CRT effect tuning. The curvature amount is a config var (g_crt_curve, 0-100);
+ * these bake the rest of the look so the user gets one "CRT Effect" toggle. */
+#define CRT_MESH_COLS	32		/* curvature mesh resolution (cells) */
+#define CRT_MESH_ROWS	24
+#define CRT_VIGNETTE	0.28f		/* corner darkening, 0..1 */
+#define CRT_MASK_MIN	60		/* off-channel level at full mask strength
+					 * (0-255); g_crt_mask scales 255 (off)
+					 * down toward this floor */
+#define CRT_GLOW_DIV	3		/* glow downsample factor (blur radius) */
+#define CRT_GLOW_LEVEL	90		/* additive bloom strength, 0-255 */
 
 /* Version string (set by the build from the git tag; see CMakeLists.txt). */
 #ifndef GSPLUS_VERSION_STR
@@ -83,6 +107,10 @@ static int g_screenshot_requested = 0;	/* set by Shift+F12, serviced at frame en
 #define SDL_MAX_HEIGHT	1024
 
 static int g_quit_requested = 0;
+
+static void sdl_create_crt(Window_info *win, int w, int h);
+static void sdl_build_crt_mesh(Window_info *win, int w, int h);
+static void sdl_render_crt(Window_info *win);
 
 /* (Re)create the streaming texture at the given size. ARGB8888 matches what
  * video_out_data() writes when mdepth == 32. */
@@ -121,6 +149,181 @@ sdl_create_texture(Window_info *win, int w, int h)
 		SDL_SetTextureScaleMode(win->overlay, SDL_SCALEMODE_NEAREST);
 	}
 	win->overlay_for = -1;		/* force a refill */
+
+	/* (Re)build the CRT effect resources at the new size. Cheap to keep around
+	 * even when the effect is off; the render path just skips them. */
+	sdl_create_crt(win, w, h);
+}
+
+/* --------------------------------------------------------------------------
+ * Curved-CRT effect (no shaders, no extra libraries).
+ *
+ * Built entirely on the 2D renderer:
+ *   - an RGB aperture-grille "phosphor" mask (a tiled texture, MULTIPLY blend)
+ *   - the existing scanline overlay (BLEND)
+ *   - screen curvature via SDL_RenderGeometry: a warped vertex mesh that the GPU
+ *     samples the framebuffer onto, with vignette baked into the vertex colours
+ *   - bloom/glow via a downscaled (= blurred) copy redrawn additively
+ *
+ * Each frame, sdl_render_crt() composites framebuffer+scanlines+mask into an
+ * offscreen target, downscales it for glow, then warps both onto the curve.
+ * -------------------------------------------------------------------------- */
+
+/* Fill the phosphor mask with vertical R/G/B stripes. With MULTIPLY blend each
+ * column lets one channel through and dims the other two, the classic Trinitron
+ * aperture-grille look. Alpha 255 so the multiply is exact.
+ *
+ * The off-channel "dim" level is driven by g_crt_mask (0-100): 0 leaves them at
+ * 255 (mask invisible), 100 pulls them down to CRT_MASK_MIN (strongest). The
+ * default is deliberately subtle. */
+static void
+sdl_fill_mask(Window_info *win, int w, int h)
+{
+	word32	*buf;
+	int	x, y, col, r, g, b, dim, strength;
+
+	if(!win->mask) {
+		return;
+	}
+	buf = malloc((size_t)w * h * sizeof(word32));
+	if(!buf) {
+		return;
+	}
+	strength = g_crt_mask;
+	if(strength < 0)   { strength = 0; }
+	if(strength > 100) { strength = 100; }
+	dim = 255 - (strength * (255 - CRT_MASK_MIN) / 100);
+	for(x = 0; x < w; x++) {
+		col = x % 3;
+		r = g = b = dim;
+		if(col == 0)      { r = 255; }
+		else if(col == 1) { g = 255; }
+		else              { b = 255; }
+		word32 argb = 0xff000000u | ((word32)r << 16) |
+				((word32)g << 8) | (word32)b;
+		for(y = 0; y < h; y++) {
+			buf[(size_t)y * w + x] = argb;
+		}
+	}
+	SDL_UpdateTexture(win->mask, NULL, buf, w * (int)sizeof(word32));
+	free(buf);
+	win->mask_for = g_crt_mask;
+}
+
+/* Build the curvature mesh: a CRT_MESH_COLS x CRT_MESH_ROWS grid whose vertices
+ * are barrel-distorted (edges bow outward, corners pull in) and tinted darker
+ * toward the corners for a vignette. UVs stay uniform so the GPU maps the flat
+ * framebuffer onto the curved surface. Positions are in logical pixels; the
+ * renderer's logical presentation then letterboxes them into the window. */
+static void
+sdl_build_crt_mesh(Window_info *win, int w, int h)
+{
+	int	i, j, nx, ny, n, idx;
+	float	curve, u, v, px, py, wx, wy, r2, vig;
+
+	nx = CRT_MESH_COLS + 1;
+	ny = CRT_MESH_ROWS + 1;
+	free(win->crt_verts);
+	free(win->crt_idx);
+	win->crt_verts = malloc((size_t)nx * ny * sizeof(SDL_Vertex));
+	win->crt_idx = malloc((size_t)CRT_MESH_COLS * CRT_MESH_ROWS * 6 *
+				sizeof(int));
+	if(!win->crt_verts || !win->crt_idx) {
+		free(win->crt_verts); win->crt_verts = NULL;
+		free(win->crt_idx);   win->crt_idx = NULL;
+		return;
+	}
+
+	/* 0-100 curvature knob -> a gentle 0..~0.30 distortion coefficient. */
+	curve = (float)g_crt_curve * 0.003f;
+
+	n = 0;
+	for(j = 0; j < ny; j++) {
+		for(i = 0; i < nx; i++) {
+			u = (float)i / (float)CRT_MESH_COLS;
+			v = (float)j / (float)CRT_MESH_ROWS;
+			px = u * 2.0f - 1.0f;		/* [-1,1] */
+			py = v * 2.0f - 1.0f;
+			/* Barrel: bow each axis out in its middle, pull corners
+			 * in by the square of the other axis' distance. */
+			wx = px * (1.0f - curve * py * py);
+			wy = py * (1.0f - curve * px * px);
+			win->crt_verts[n].position.x = (wx * 0.5f + 0.5f) * w;
+			win->crt_verts[n].position.y = (wy * 0.5f + 0.5f) * h;
+			win->crt_verts[n].tex_coord.x = u;
+			win->crt_verts[n].tex_coord.y = v;
+			r2 = px * px + py * py;		/* 0 centre .. 2 corner */
+			vig = 1.0f - CRT_VIGNETTE * (r2 * 0.5f);
+			if(vig < 0.0f) { vig = 0.0f; }
+			win->crt_verts[n].color.r = vig;
+			win->crt_verts[n].color.g = vig;
+			win->crt_verts[n].color.b = vig;
+			win->crt_verts[n].color.a = 1.0f;
+			n++;
+		}
+	}
+	win->crt_nverts = n;
+
+	idx = 0;
+	for(j = 0; j < CRT_MESH_ROWS; j++) {
+		for(i = 0; i < CRT_MESH_COLS; i++) {
+			int n00 = j * nx + i;
+			int n10 = n00 + 1;
+			int n01 = n00 + nx;
+			int n11 = n01 + 1;
+			win->crt_idx[idx++] = n00;
+			win->crt_idx[idx++] = n10;
+			win->crt_idx[idx++] = n11;
+			win->crt_idx[idx++] = n00;
+			win->crt_idx[idx++] = n11;
+			win->crt_idx[idx++] = n01;
+		}
+	}
+	win->crt_nidx = idx;
+	win->crt_curve_for = g_crt_curve;
+}
+
+/* (Re)create the offscreen targets + mask + mesh at the given logical size. */
+static void
+sdl_create_crt(Window_info *win, int w, int h)
+{
+	int	gw, gh;
+
+	if(win->crt_target)  { SDL_DestroyTexture(win->crt_target);  }
+	if(win->glow_target) { SDL_DestroyTexture(win->glow_target); }
+	if(win->mask)        { SDL_DestroyTexture(win->mask);        }
+	win->crt_target = win->glow_target = win->mask = NULL;
+
+	/* Composite target: framebuffer + scanlines + mask land here, then the
+	 * curve mesh samples it. LINEAR so the warp/upscale to the window softens
+	 * like a real tube instead of showing hard pixel edges. */
+	win->crt_target = SDL_CreateTexture(win->renderer,
+				SDL_PIXELFORMAT_ARGB8888,
+				SDL_TEXTUREACCESS_TARGET, w, h);
+	if(win->crt_target) {
+		SDL_SetTextureScaleMode(win->crt_target, SDL_SCALEMODE_LINEAR);
+	}
+
+	/* Glow target: a small copy of crt_target. Downsampling with LINEAR is a
+	 * cheap box blur; drawn back additively it becomes the bloom halo. */
+	gw = w / CRT_GLOW_DIV; if(gw < 1) { gw = 1; }
+	gh = h / CRT_GLOW_DIV; if(gh < 1) { gh = 1; }
+	win->glow_target = SDL_CreateTexture(win->renderer,
+				SDL_PIXELFORMAT_ARGB8888,
+				SDL_TEXTUREACCESS_TARGET, gw, gh);
+	if(win->glow_target) {
+		SDL_SetTextureScaleMode(win->glow_target, SDL_SCALEMODE_LINEAR);
+	}
+
+	win->mask = SDL_CreateTexture(win->renderer, SDL_PIXELFORMAT_ARGB8888,
+				SDL_TEXTUREACCESS_STATIC, w, h);
+	if(win->mask) {
+		SDL_SetTextureBlendMode(win->mask, SDL_BLENDMODE_MUL);
+		SDL_SetTextureScaleMode(win->mask, SDL_SCALEMODE_LINEAR);
+		sdl_fill_mask(win, w, h);
+	}
+
+	sdl_build_crt_mesh(win, w, h);
 }
 
 /* Fill the overlay with semi-transparent black on every odd line, simulating
@@ -560,11 +763,14 @@ sdl_poll_events(void)
 				}
 				break;
 			}
-			/* F11 toggles fullscreen; Shift+F11 toggles scanlines (gsplus
-			 * convention). Neither is sent to the IIgs. */
+			/* F11 toggles fullscreen; Shift+F11 toggles scanlines;
+			 * Ctrl+F11 toggles the curved CRT effect (gsplus
+			 * convention). None is sent to the IIgs. */
 			if(ev.key.scancode == SDL_SCANCODE_F11) {
 				if(!ev.key.repeat) {
-					if(SDL_GetModState() & SDL_KMOD_SHIFT) {
+					if(SDL_GetModState() & SDL_KMOD_CTRL) {
+						g_crt = !g_crt;
+					} else if(SDL_GetModState() & SDL_KMOD_SHIFT) {
 						if(g_scanline_simulator > 0) {
 							g_scanline_saved = g_scanline_simulator;
 							g_scanline_simulator = 0;
@@ -717,6 +923,70 @@ sdl_save_screenshot(Window_info *win)
 	}
 }
 
+/* Render the framebuffer with the full curved-CRT effect. Assumes the changed
+ * rectangles have already been uploaded into win->texture. Three passes:
+ *   1. composite framebuffer + scanlines + mask into crt_target (no curvature),
+ *   2. downscale crt_target into glow_target (a cheap blur for bloom),
+ *   3. warp crt_target onto the curvature mesh in the window, then add the glow.
+ * Logical presentation is disabled for the offscreen passes (we want a 1:1 fill)
+ * and restored for the final on-window geometry pass. */
+static void
+sdl_render_crt(Window_info *win)
+{
+	SDL_Renderer *r = win->renderer;
+	int	w = win->width_req;
+	int	h = win->main_height;
+
+	/* Rebuild the mesh if the curvature knob changed at runtime. */
+	if(win->crt_curve_for != g_crt_curve) {
+		sdl_build_crt_mesh(win, w, h);
+		if(!win->crt_verts) {
+			return;
+		}
+	}
+
+	/* --- Pass 1: composite into crt_target (1:1, no logical scaling). --- */
+	SDL_SetRenderLogicalPresentation(r, 0, 0,
+				SDL_LOGICAL_PRESENTATION_DISABLED);
+	SDL_SetRenderTarget(r, win->crt_target);
+	SDL_RenderTexture(r, win->texture, NULL, NULL);
+	if((g_scanline_simulator > 0) && win->overlay) {
+		if(win->overlay_for != g_scanline_simulator) {
+			sdl_fill_overlay(win, g_scanline_simulator);
+		}
+		SDL_RenderTexture(r, win->overlay, NULL, NULL);
+	}
+	if((g_crt_mask > 0) && win->mask) {
+		if(win->mask_for != g_crt_mask) {
+			sdl_fill_mask(win, win->width_req, win->main_height);
+		}
+		SDL_RenderTexture(r, win->mask, NULL, NULL);
+	}
+
+	/* --- Pass 2: downscale crt_target -> glow_target (LINEAR = blur). --- */
+	SDL_SetRenderTarget(r, win->glow_target);
+	SDL_RenderTexture(r, win->crt_target, NULL, NULL);
+
+	/* --- Pass 3: warp onto the curve in the window, then add the glow. --- */
+	SDL_SetRenderTarget(r, NULL);
+	SDL_SetRenderLogicalPresentation(r, w, h,
+		g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
+			   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+	SDL_RenderClear(r);
+
+	SDL_SetTextureBlendMode(win->crt_target, SDL_BLENDMODE_NONE);
+	SDL_SetTextureColorMod(win->crt_target, 255, 255, 255);
+	SDL_RenderGeometry(r, win->crt_target, win->crt_verts, win->crt_nverts,
+				win->crt_idx, win->crt_nidx);
+
+	SDL_SetTextureBlendMode(win->glow_target, SDL_BLENDMODE_ADD);
+	SDL_SetTextureColorMod(win->glow_target, CRT_GLOW_LEVEL, CRT_GLOW_LEVEL,
+				CRT_GLOW_LEVEL);
+	SDL_RenderGeometry(r, win->glow_target, win->crt_verts, win->crt_nverts,
+				win->crt_idx, win->crt_nidx);
+}
+
 static void
 sdl_update_display(Window_info *win)
 {
@@ -767,15 +1037,20 @@ sdl_update_display(Window_info *win)
 				win->pixels_per_line * (int)sizeof(word32));
 	}
 
-	SDL_RenderClear(win->renderer);
-	SDL_RenderTexture(win->renderer, win->texture, NULL, NULL);
-
-	/* Scanline overlay on top, if enabled. */
-	if((g_scanline_simulator > 0) && win->overlay) {
-		if(win->overlay_for != g_scanline_simulator) {
-			sdl_fill_overlay(win, g_scanline_simulator);
+	if(g_crt && win->crt_target && win->glow_target && win->crt_verts) {
+		/* Full curved-CRT path (curvature + mask + glow + vignette). */
+		sdl_render_crt(win);
+	} else {
+		/* Plain path: framebuffer straight to the window, optional flat
+		 * scanline overlay on top. */
+		SDL_RenderClear(win->renderer);
+		SDL_RenderTexture(win->renderer, win->texture, NULL, NULL);
+		if((g_scanline_simulator > 0) && win->overlay) {
+			if(win->overlay_for != g_scanline_simulator) {
+				sdl_fill_overlay(win, g_scanline_simulator);
+			}
+			SDL_RenderTexture(win->renderer, win->overlay, NULL, NULL);
 		}
-		SDL_RenderTexture(win->renderer, win->overlay, NULL, NULL);
 	}
 
 	/* Service a pending Shift+F12 capture now, while the just-drawn frame is

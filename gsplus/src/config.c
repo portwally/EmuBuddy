@@ -163,6 +163,9 @@ int	g_noaspect = 0;		/* stretch to fill instead of keeping the ratio */
 int	g_highdpi = 1;		/* request a high-DPI backing surface */
 int	g_nohwaccel = 0;	/* force the software renderer */
 int	g_scanline_simulator = 0; /* CRT scanline overlay intensity, 0-100 (0=off) */
+int	g_crt = 0;		/* curved CRT effect (curvature+mask+glow+vignette) */
+int	g_crt_curve = 2;	/* CRT screen curvature amount, 0-100 (0=flat) */
+int	g_crt_mask = 8;	/* CRT phosphor-mask strength, 0-100 (0=off, subtle) */
 char	*g_cfg_ssdir = "";	/* screenshot output dir ("" = current dir) */
 
 Cfg_menu g_cfg_disk_menu[] = {
@@ -361,6 +364,9 @@ Cfg_menu g_cfg_video_menu[] = {
 { "High DPI (restart required),0,No,1,Yes", &g_highdpi, "highdpi", 0, CFGTYPE_INT },
 { "Force Software Renderer (restart required),0,No,1,Yes", &g_nohwaccel, "nohwaccel", 0, CFGTYPE_INT },
 { "Scanline Simulator 0-100", &g_scanline_simulator, "scanline", 0, CFGTYPE_INT },
+{ "CRT Effect (curve+mask+glow),0,Off,1,On", &g_crt, "crt", 0, CFGTYPE_INT },
+{ "CRT Curvature 0-100", &g_crt_curve, "crtcurve", 0, CFGTYPE_INT },
+{ "CRT Phosphor Mask 0-100", &g_crt_mask, "crtmask", 0, CFGTYPE_INT },
 { "Screenshot Directory", &g_cfg_ssdir, "ssdir", 0, CFGTYPE_STR },
 { "", 0, 0, 0, 0 },
 { "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
@@ -1065,10 +1071,12 @@ cfg_int_update(int *iptr, int new_val)
 	//  where it's value may need special handling
 
 	old_val = *iptr;
-	if(iptr == &g_scanline_simulator) {
-		// Scanline intensity is a 0-100 percentage (0=off, 100=max).
-		// Clamp here so it can't go negative or above 100 from any
-		// path: typed edits, +/- arrows, or a hand-edited config file.
+	if((iptr == &g_scanline_simulator) || (iptr == &g_crt_curve) ||
+						(iptr == &g_crt_mask)) {
+		// Scanline intensity, CRT curvature and phosphor-mask strength are
+		// 0-100 percentages (0=off/flat, 100=max). Clamp here so they can't
+		// go negative or above 100 from any path: typed edits, +/- arrows,
+		// or a hand-edited config file.
 		if(new_val < 0) {
 			new_val = 0;
 		} else if(new_val > 100) {
