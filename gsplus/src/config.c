@@ -114,7 +114,10 @@ int	g_cfg_curs_mousetext = 0;
 int	g_cfg_screen_changed = 0;
 byte	g_cfg_screen[24][80];
 
-#if defined(MAC) || defined(_WIN32)
+// Note: the SDL build compiles the core without -DMAC, so guard on
+//  __APPLE__ too to keep case-insensitive matching on macOS (default
+//  APFS/HFS+ volumes are case-insensitive).
+#if defined(MAC) || defined(__APPLE__) || defined(_WIN32)
 int	g_cfg_ignorecase = 1;		// Ignore case in filenames
 #else
 int	g_cfg_ignorecase = 0;
