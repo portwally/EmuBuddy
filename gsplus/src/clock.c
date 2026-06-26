@@ -218,10 +218,12 @@ update_cur_time()
 	secs = mktime(tm_ptr);
 
 	secs2 = secs2 - secs;		// this is the timezone offset
-#ifdef MAC
+#if defined(MAC) || defined(__APPLE__)
 	/* Mac OS X's mktime function modifies the tm_ptr passed in for */
 	/*  the CDT timezone and breaks this algorithm.  So on a Mac, we */
 	/*  will use the tm_ptr->gmtoff member to correct the time */
+	/* Note: the SDL build compiles the core without -DMAC, so guard on */
+	/*  __APPLE__ too to keep correct clock behavior on macOS. */
 	secs = secs + tm_ptr->tm_gmtoff;
 #else
 	secs = cur_time - secs2;
