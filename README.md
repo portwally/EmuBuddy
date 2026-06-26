@@ -1,3 +1,5 @@
+![GSplus - cross-platform Apple IIgs emulator](gsplus-social.png)
+
 # GSplus
 
 An accessible, cross-platform build of [KEGS](http://kegs.sourceforge.net) - 
