@@ -18,6 +18,9 @@ Effort: **S** small · **M** medium · **L** large. Priority: High / Med / Low.
 - **F2 — Scanline simulator**: `-scanline <0-100>`, Shift+F11 toggle.
 - **F3 — Drag-and-drop**: drop a disk image on the window to mount it (slot
   guessed from file size).
+- **Curved CRT effect**: `-crt 1` + `-crtcurve <0-100>` + `-crtmask <0-100>`,
+  Ctrl+F11 toggle. Curvature (RenderGeometry mesh) + RGB phosphor mask + bloom +
+  vignette, composes with `-scanline`. All on the 2D renderer, no extra libraries.
 
 ---
 
