@@ -530,6 +530,9 @@ fixup_ramwrt()
 		}
 
 		shadow = 0;
+		if(i) {
+			shadow = BANK_SHADOW;		// For VOC SHR in bank 0
+		}
 		if(ramwrt && (((g_c035_shadow_reg & 0x08) == 0) || i)) {
 			/* shr shadowing */
 			shadow = BANK_SHADOW2;
