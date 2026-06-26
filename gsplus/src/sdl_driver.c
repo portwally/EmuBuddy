@@ -381,6 +381,11 @@ sdl_video_init(void)
 	video_set_red_mask(0xff0000);
 	video_set_green_mask(0x00ff00);
 	video_set_blue_mask(0x0000ff);
+	/* Mark framebuffer pixels opaque (alpha 0xff), like the mac driver does.
+	 * Without this every pixel has alpha 0, which makes the CRT glow pass
+	 * (SDL_BLENDMODE_ADD scales source RGB by source alpha) contribute
+	 * nothing, silently disabling the bloom half of the CRT effect. */
+	video_set_alpha_mask(0xff000000);
 	video_set_palette();
 
 	g_mainwin_info.kimage_ptr = km;
@@ -1013,8 +1018,11 @@ sdl_update_display(Window_info *win)
 		win->pixels_per_line = w;
 		video_update_scale(win->kimage_ptr, w, h, 1);
 		SDL_SetWindowSize(win->window, w, h);
+		/* Honor -noaspect here too, matching init and the CRT path; otherwise
+		 * a stretched view reverts to letterbox after the first mode change. */
 		SDL_SetRenderLogicalPresentation(win->renderer, w, h,
-					SDL_LOGICAL_PRESENTATION_LETTERBOX);
+			g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
+				   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
 		sdl_create_texture(win, w, h);
 		/* The new texture starts out blank, so ask the core to re-emit
 		 * the whole screen rather than just the next frame's deltas. */
