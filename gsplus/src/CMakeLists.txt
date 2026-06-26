@@ -240,6 +240,13 @@ add_executable(gsplus-sdl
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
 
+if(APPLE)
+    # macOS-only: retune SDL's default menu bar so ⌘ combos pass through to the
+    # emulated IIgs and GSplus quits on ⌥⌘Q. The Objective-C source needs Cocoa.
+    target_sources(gsplus-sdl PRIVATE sdl_mac_menu.m)
+    target_link_libraries(gsplus-sdl PRIVATE "-framework Cocoa")
+endif()
+
 if(WIN32)
     # The core uses Winsock (scc serial-over-TCP) and Win32 multimedia timers,
     # which the native Win build links explicitly. SDL3 links its own deps.
