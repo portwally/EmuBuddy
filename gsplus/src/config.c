@@ -170,6 +170,7 @@ int	g_crt = 0;		/* curved CRT effect (curvature+mask+glow+vignette) */
 int	g_crt_curve = 2;	/* CRT screen curvature amount, 0-100 (0=flat) */
 int	g_crt_mask = 8;	/* CRT phosphor-mask strength, 0-100 (0=off, subtle) */
 int	g_hblur = 0;		/* horizontal linear blur, 0-100 (0=off, sharp) */
+int	g_hide_mouse = 1;	/* hide host cursor over the window / in fullscreen */
 char	*g_cfg_ssdir = "";	/* screenshot output dir ("" = current dir) */
 
 Cfg_menu g_cfg_disk_menu[] = {
@@ -372,6 +373,7 @@ Cfg_menu g_cfg_video_menu[] = {
 { "CRT Curvature 0-100", &g_crt_curve, "crtcurve", 0, CFGTYPE_INT },
 { "CRT Phosphor Mask 0-100", &g_crt_mask, "crtmask", 0, CFGTYPE_INT },
 { "Horizontal Blur 0-100", &g_hblur, "hblur", 0, CFGTYPE_INT },
+{ "Hide Mouse Cursor,0,No,1,Yes", &g_hide_mouse, "hidemouse", 0, CFGTYPE_INT },
 { "Screenshot Directory", &g_cfg_ssdir, "ssdir", 0, CFGTYPE_STR },
 { "", 0, 0, 0, 0 },
 { "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },

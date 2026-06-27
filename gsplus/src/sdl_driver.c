@@ -78,11 +78,14 @@ extern int g_crt;			/* curved CRT effect on/off */
 extern int g_crt_curve;			/* CRT screen curvature, 0-100 */
 extern int g_crt_mask;			/* CRT phosphor-mask strength, 0-100 */
 extern int g_hblur;			/* horizontal linear blur, 0-100 */
+extern int g_hide_mouse;		/* hide host cursor over window / in fullscreen */
 extern int g_mainwin_xpos, g_mainwin_ypos;	/* window position (KEGS config vars) */
 extern char *g_cfg_ssdir;		/* screenshot output dir ("" = current dir) */
 extern int g_halt_sim;			/* nonzero while the debugger has the CPU halted */
 
 static int g_is_fullscreen = 0;		/* current fullscreen state (F11 toggles) */
+static int g_mouse_over_window = 0;	/* cursor is inside our window (ENTER/LEAVE) */
+static int g_cursor_hidden = 0;		/* current SDL cursor state we last set */
 static int g_scanline_saved = 50;	/* intensity to restore when toggled back on */
 static int g_screenshot_requested = 0;	/* set by Shift+F12, serviced at frame end */
 
@@ -736,6 +739,30 @@ sdl_sync_fullscreen(Window_info *win)
 	}
 }
 
+/* Hide the host OS cursor while it is over our content -- always in fullscreen,
+ * and over the window in windowed mode -- unless the user turned it off via the
+ * "Hide Mouse Cursor" config option (g_hide_mouse). SDL cursor visibility is
+ * app-wide but only manifests over our window, so when the pointer leaves a
+ * windowed-mode window we restore it for the rest of the desktop. The early-out
+ * keeps this cheap to call every frame, so it also picks up g_hide_mouse and
+ * fullscreen changes made from the F4 config menu. */
+static void
+sdl_update_cursor_visibility(void)
+{
+	int	want_hidden = g_hide_mouse &&
+				(g_is_fullscreen || g_mouse_over_window);
+
+	if(want_hidden == g_cursor_hidden) {
+		return;
+	}
+	g_cursor_hidden = want_hidden;
+	if(want_hidden) {
+		SDL_HideCursor();
+	} else {
+		SDL_ShowCursor();
+	}
+}
+
 static void
 sdl_poll_events(void)
 {
@@ -743,8 +770,9 @@ sdl_poll_events(void)
 	Window_info *win = &g_mainwin_info;
 	int	mask, mx, my;
 
-	/* Pick up fullscreen changes made from the F4 config menu. */
+	/* Pick up fullscreen / hide-cursor changes made from the F4 config menu. */
 	sdl_sync_fullscreen(win);
+	sdl_update_cursor_visibility();
 
 	while(SDL_PollEvent(&ev)) {
 		switch(ev.type) {
@@ -758,6 +786,14 @@ sdl_poll_events(void)
 		case SDL_EVENT_WINDOW_RESTORED:
 			/* Repaint the whole screen when the window (re)appears or resizes. */
 			video_set_x_refresh_needed(g_mainwin_info.kimage_ptr, 1);
+			break;
+		case SDL_EVENT_WINDOW_MOUSE_ENTER:
+			g_mouse_over_window = 1;
+			sdl_update_cursor_visibility();
+			break;
+		case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+			g_mouse_over_window = 0;
+			sdl_update_cursor_visibility();
 			break;
 		case SDL_EVENT_DROP_FILE:
 			/* Drop a disk image on the window to mount it (slot guessed
@@ -821,6 +857,12 @@ sdl_poll_events(void)
 			mx = video_scale_mouse_x(win->kimage_ptr, (int)ev.motion.x, 0);
 			my = video_scale_mouse_y(win->kimage_ptr, (int)ev.motion.y, 0);
 			adb_update_mouse(win->kimage_ptr, mx, my, 0, 0);
+			/* Motion means the pointer is over us; covers the case where
+			 * the window opened under the cursor with no ENTER event. */
+			if(!g_mouse_over_window) {
+				g_mouse_over_window = 1;
+				sdl_update_cursor_visibility();
+			}
 			break;
 		case SDL_EVENT_MOUSE_BUTTON_DOWN:
 		case SDL_EVENT_MOUSE_BUTTON_UP:
