@@ -169,6 +169,7 @@ int	g_scanline_simulator = 0; /* CRT scanline overlay intensity, 0-100 (0=off) *
 int	g_crt = 0;		/* curved CRT effect (curvature+mask+glow+vignette) */
 int	g_crt_curve = 2;	/* CRT screen curvature amount, 0-100 (0=flat) */
 int	g_crt_mask = 8;	/* CRT phosphor-mask strength, 0-100 (0=off, subtle) */
+int	g_hblur = 0;		/* horizontal linear blur, 0-100 (0=off, sharp) */
 char	*g_cfg_ssdir = "";	/* screenshot output dir ("" = current dir) */
 
 Cfg_menu g_cfg_disk_menu[] = {
@@ -370,6 +371,7 @@ Cfg_menu g_cfg_video_menu[] = {
 { "CRT Effect (curve+mask+glow),0,Off,1,On", &g_crt, "crt", 0, CFGTYPE_INT },
 { "CRT Curvature 0-100", &g_crt_curve, "crtcurve", 0, CFGTYPE_INT },
 { "CRT Phosphor Mask 0-100", &g_crt_mask, "crtmask", 0, CFGTYPE_INT },
+{ "Horizontal Blur 0-100", &g_hblur, "hblur", 0, CFGTYPE_INT },
 { "Screenshot Directory", &g_cfg_ssdir, "ssdir", 0, CFGTYPE_STR },
 { "", 0, 0, 0, 0 },
 { "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
@@ -1075,8 +1077,9 @@ cfg_int_update(int *iptr, int new_val)
 
 	old_val = *iptr;
 	if((iptr == &g_scanline_simulator) || (iptr == &g_crt_curve) ||
-						(iptr == &g_crt_mask)) {
-		// Scanline intensity, CRT curvature and phosphor-mask strength are
+				(iptr == &g_crt_mask) || (iptr == &g_hblur)) {
+		// Scanline intensity, CRT curvature, phosphor-mask strength and
+		// horizontal blur are
 		// 0-100 percentages (0=off/flat, 100=max). Clamp here so they can't
 		// go negative or above 100 from any path: typed edits, +/- arrows,
 		// or a hand-edited config file.
