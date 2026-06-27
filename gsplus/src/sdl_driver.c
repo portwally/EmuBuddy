@@ -77,6 +77,7 @@ extern int g_scanline_simulator;	/* CRT scanline overlay intensity, 0-100 */
 extern int g_crt;			/* curved CRT effect on/off */
 extern int g_crt_curve;			/* CRT screen curvature, 0-100 */
 extern int g_crt_mask;			/* CRT phosphor-mask strength, 0-100 */
+extern int g_hblur;			/* horizontal linear blur, 0-100 */
 extern int g_mainwin_xpos, g_mainwin_ypos;	/* window position (KEGS config vars) */
 extern char *g_cfg_ssdir;		/* screenshot output dir ("" = current dir) */
 extern int g_halt_sim;			/* nonzero while the debugger has the CPU halted */
@@ -111,6 +112,7 @@ static int g_quit_requested = 0;
 static void sdl_create_crt(Window_info *win, int w, int h);
 static void sdl_build_crt_mesh(Window_info *win, int w, int h);
 static void sdl_render_crt(Window_info *win);
+static void sdl_render_framebuffer(Window_info *win, int w, int h);
 
 /* (Re)create the streaming texture at the given size. ARGB8888 matches what
  * video_out_data() writes when mdepth == 32. */
@@ -935,6 +937,87 @@ sdl_save_screenshot(Window_info *win)
 	}
 }
 
+/* Horizontal linear blur. g_hblur is 0-100 and maps to a blur radius of up to
+ * HBLUR_MAX_RADIUS source pixels (so 100 spreads each pixel into ~2.5 of its
+ * horizontal neighbours, simulating composite-video softness). The kernel is a
+ * normalized triangle (tent) of integer-offset taps; a box would look flatter
+ * and a gaussian needs more taps for no visible gain at this radius. */
+#define HBLUR_MAX_RADIUS	2.5f	/* source-pixel blur radius at g_hblur==100 */
+#define HBLUR_MAX_HALF		3	/* max taps per side (ceil of MAX_RADIUS) */
+
+/* Draw win->texture into the current render target, filling the w x h logical
+ * area, with the horizontal blur applied when g_hblur > 0. The taps are summed
+ * with additive blending and their weights sum to 1, so the result is a weighted
+ * average -- which requires the target to already be cleared to black (both call
+ * sites do). With g_hblur == 0 this is just the normal crisp 1:1 copy. */
+static void
+sdl_render_framebuffer(Window_info *win, int w, int h)
+{
+	SDL_Renderer	*r = win->renderer;
+	SDL_FRect	dst;
+	float		radius, base, weight[2 * HBLUR_MAX_HALF + 1], sum;
+	int		k, half, idx, mod;
+	SDL_BlendMode	add;
+
+	if(g_hblur <= 0) {
+		/* No blur: opaque nearest-neighbour copy, as before. */
+		SDL_RenderTexture(r, win->texture, NULL, NULL);
+		return;
+	}
+
+	radius = (float)g_hblur / 100.0f * HBLUR_MAX_RADIUS;
+	half = (int)radius;
+	if(radius > (float)half) { half++; }		/* ceil */
+	if(half > HBLUR_MAX_HALF) { half = HBLUR_MAX_HALF; }
+	base = radius + 1.0f;				/* tent half-base; radius 0 => identity */
+
+	/* Triangle weights over taps -half..+half, then a normalization pass so the
+	 * additive accumulation averages rather than brightens. */
+	sum = 0.0f;
+	for(k = -half; k <= half; k++) {
+		float wt = 1.0f - (float)(k < 0 ? -k : k) / base;
+		if(wt < 0.0f) { wt = 0.0f; }
+		weight[k + half] = wt;
+		sum += wt;
+	}
+
+	/* Accumulate the weighted, horizontally-shifted taps additively. We can't use
+	 * SDL_BLENDMODE_ADD here: it scales the source by its alpha (dstRGB =
+	 * srcRGB*srcA + dstRGB), and the framebuffer texture's alpha reaches the
+	 * blender as 0, which zeroes every tap and leaves a black screen. This custom
+	 * mode adds the colour-modulated source RGB directly (factor ONE, source alpha
+	 * ignored) and leaves the destination alpha untouched, so an offscreen target
+	 * stays opaque for any later sampling (e.g. the CRT glow pass).
+	 *
+	 * Keep the texture at NEAREST: the taps are whole-source-pixel shifts, so the
+	 * blur comes entirely from summing the shifted copies. Switching to LINEAR
+	 * would also let the upscale-to-window bilinear-filter the image in BOTH
+	 * directions, turning this into an all-over mush instead of a horizontal-only
+	 * blur. The shift k is in source pixels (dst is the same logical space the
+	 * plain copy fills). */
+	add = SDL_ComposeCustomBlendMode(
+			SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE,
+			SDL_BLENDOPERATION_ADD,
+			SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE,
+			SDL_BLENDOPERATION_ADD);
+	SDL_SetTextureBlendMode(win->texture, add);
+	dst.y = 0.0f;
+	dst.w = (float)w;
+	dst.h = (float)h;
+	for(k = -half; k <= half; k++) {
+		idx = k + half;
+		mod = (int)(weight[idx] / sum * 255.0f + 0.5f);
+		SDL_SetTextureColorMod(win->texture, (Uint8)mod, (Uint8)mod,
+					(Uint8)mod);
+		dst.x = (float)k;
+		SDL_RenderTexture(r, win->texture, NULL, &dst);
+	}
+
+	/* Restore the texture's normal state for any later/non-blur use. */
+	SDL_SetTextureColorMod(win->texture, 255, 255, 255);
+	SDL_SetTextureBlendMode(win->texture, SDL_BLENDMODE_NONE);
+}
+
 /* Render the framebuffer with the full curved-CRT effect. Assumes the changed
  * rectangles have already been uploaded into win->texture. Three passes:
  *   1. composite framebuffer + scanlines + mask into crt_target (no curvature),
@@ -961,7 +1044,16 @@ sdl_render_crt(Window_info *win)
 	SDL_SetRenderLogicalPresentation(r, 0, 0,
 				SDL_LOGICAL_PRESENTATION_DISABLED);
 	SDL_SetRenderTarget(r, win->crt_target);
-	SDL_RenderTexture(r, win->texture, NULL, NULL);
+	/* Clear to transparent black first: the blur path accumulates additively, so
+	 * it needs a cleared target. Crucially the alpha is 0, not 255: without blur,
+	 * crt_target is a plain (NONE) copy of the framebuffer texture, whose alpha is
+	 * 0 -- which leaves the later glow pass (it ADD-blends scaled by source alpha)
+	 * dormant. Clearing to opaque here would instead switch the glow on only when
+	 * blur is enabled, washing the picture out. Matching alpha 0 keeps the CRT look
+	 * identical with blur on or off. */
+	SDL_SetRenderDrawColor(r, 0, 0, 0, 0);
+	SDL_RenderClear(r);
+	sdl_render_framebuffer(win, w, h);
 	if((g_scanline_simulator > 0) && win->overlay) {
 		if(win->overlay_for != g_scanline_simulator) {
 			sdl_fill_overlay(win, g_scanline_simulator);
@@ -1056,10 +1148,12 @@ sdl_update_display(Window_info *win)
 		/* Full curved-CRT path (curvature + mask + glow + vignette). */
 		sdl_render_crt(win);
 	} else {
-		/* Plain path: framebuffer straight to the window, optional flat
-		 * scanline overlay on top. */
+		/* Plain path: framebuffer straight to the window (with optional
+		 * horizontal blur), optional flat scanline overlay on top. Clear to
+		 * black explicitly since the blur path accumulates additively. */
+		SDL_SetRenderDrawColor(win->renderer, 0, 0, 0, 255);
 		SDL_RenderClear(win->renderer);
-		SDL_RenderTexture(win->renderer, win->texture, NULL, NULL);
+		sdl_render_framebuffer(win, win->width_req, win->main_height);
 		if((g_scanline_simulator > 0) && win->overlay) {
 			if(win->overlay_for != g_scanline_simulator) {
 				sdl_fill_overlay(win, g_scanline_simulator);
