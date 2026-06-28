@@ -84,20 +84,32 @@ Everything below is part of the SDL3 build and isn't in stock KEGS:
 
 ## Controls
 
-GSplus adds these host hotkeys on top of the standard IIgs keyboard. They're
-intercepted by the app and not sent to the emulated machine.
+**GSplus host hotkeys** — handled by the app (the SDL build), not sent to the
+emulated IIgs:
 
 | Key | Action |
 |---|---|
-| **F4** | Open the configuration menu (mount disks, pick a ROM, settings) |
 | **F11** | Toggle fullscreen |
 | **Shift + F11** | Toggle the CRT scanline simulator |
 | **Ctrl + F11** | Toggle the curved CRT effect |
 | **Shift + F12** | Save a screenshot |
 | **Drag & drop** | Drop a disk image on the window to mount it (slot guessed from size) |
 
-Plain function keys (F1, F2, F12, …) still pass through to the IIgs. On macOS,
-⌘ key combos are also forwarded to the emulated machine.
+**Emulator hotkeys** — inherited from KEGS and handled by the emulator core:
+
+| Key | Action |
+|---|---|
+| **F4** | Open the configuration menu (mount disks, pick a ROM, settings) |
+| **F5** | Toggle the status line |
+| **F6** | Cycle emulation speed (1 MHz / 2.8 MHz / fast) |
+| **F7** | Toggle the debugger · **Shift + F7** toggles fast disk emulation |
+| **F8** | Grab / release the mouse (warp + hide pointer) |
+| **F9** | Invert paddles · **Shift + F9** swap paddles · **Ctrl + F9** copy screen text |
+| **Ctrl + F12** | Reset the IIgs (Ctrl-Reset) |
+
+On keyboards without Apple keys, **F1** acts as Open-Apple (⌘), **F2** as
+Option/Closed-Apple, and **F3** as Escape. On macOS, ⌘ key combos are forwarded
+to the emulated machine.
 
 ## Building from source
 
