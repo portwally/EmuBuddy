@@ -152,20 +152,23 @@ pacman -S git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
 
 ## A note from Dagen
 
-I've tried to reboot GSplus more than once over the past few years and each time 
-I'd sink weeks into build and packaging a new release, and then life would pull 
-me away for months, sometimes years, and momentum would die. This project does 
-leverage AI to allow me to provide some form of the emulator offering made when 
-I had time to write it 100% myself.
+I've tried to reboot GSplus _many times_ over the past few years and each time 
+I'd sink weeks into building and packaging a new release, and then life would 
+pull me away for months, sometimes years, and momentum would die. I made the 
+decision to use AI to allow me to provide the emulator I wanted to have, which
+is controversial even for me.  But then again, this isn't any different than 
+what I see in every modern development shop.  Things have changed dramatically
+over the past few years.  But I want to be clear about AI usage, and that I
+feel comfortable using it as a tool that needs a lot of oversight. 
 
 KEGS is a brilliant piece of pure C, and is living proof that you don't need
 AI to write great software. Kent Dickey did the hard, beautiful work. The AI 
 here is just a pragmatic crutch to keep *my* reboot alive between the demands 
 of real life.
 
-So what does GSplus actually add? Two honest things: **accessible, prebuilt
-packages** so anyone can download and run an Apple IIgs without compiling
-anything, and a handful of **features I want for myself**. If you want the
-canonical emulator, go straight to KEGS.  It's great!
+So what does GSplus actually add? Two things: **accessible, prebuilt packages**
+so anyone can download and run an Apple IIgs without compiling anything, and
+a handful of **features I want for myself**. If you want the canonical 
+emulator, go straight to KEGS.  It's great!
 
 - Dagen
