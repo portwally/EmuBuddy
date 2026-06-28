@@ -151,6 +151,8 @@ const char *g_kegs_default_paths[] = { "", "./", "${HOME}/",
 
 
 extern Cfg_menu g_cfg_main_menu[];
+extern Cfg_menu g_cfg_video_menu[];
+extern Cfg_menu g_cfg_sdl_video_menu[];
 
 #define KNMP(a)		&a, #a, 0
 #define KNM(a)		&a, #a
@@ -350,6 +352,7 @@ Cfg_menu g_cfg_modem_menu[] = {
 
 
 Cfg_menu g_cfg_video_menu[] = {
+{ "Video Settings", g_cfg_video_menu, 0, 0, CFGTYPE_MENU },
 { "Force X-windows display depth", KNMP(g_force_depth), CFGTYPE_INT },
 { "Enable VOC,0,Disabled,1,Enabled", KNMP(g_voc_enable), CFGTYPE_INT },
 { "Default Main Window width", KNMP(g_mainwin_width), CFGTYPE_INT },
@@ -361,9 +364,20 @@ Cfg_menu g_cfg_video_menu[] = {
 		KNMP(g_video_line_update_interval), CFGTYPE_INT },
 { "Dump text screen to file", (void *)cfg_text_screen_dump, 0, 0, CFGTYPE_FUNC},
 { "", 0, 0, 0, 0 },
-/* name_str (the CLI flag / config.kegs key) has no "g_" prefix -- that's just
- * our C convention for globals, not something users should type. */
-{ "--GSplus/SDL options--", 0, 0, 0, 0 },
+{ "Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_MENU },
+{ "", 0, 0, 0, 0 },
+{ "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
+{ 0, 0, 0, 0, 0 },
+};
+
+/* SDL-only display options, split out of Video Settings so each page fits the
+ * 24-line control panel. Not present in upstream KEGS: the SDL driver reads
+ * them; the X11 and native macOS drivers ignore them. Each is also settable
+ * via config.kegs and the command line (KEGS style, e.g. "-fullscreen 1").
+ * The name_str (the CLI flag / config.kegs key) has no "g_" prefix -- that's
+ * just our C convention for globals, not something users should type. */
+Cfg_menu g_cfg_sdl_video_menu[] = {
+{ "Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_MENU },
 { "Fullscreen,0,No,1,Yes", &g_fullscreen, "fullscreen", 0, CFGTYPE_INT },
 { "Borderless Window (restart required),0,No,1,Yes", &g_borderless, "borderless", 0, CFGTYPE_INT },
 { "Ignore Aspect Ratio (restart required),0,No,1,Yes", &g_noaspect, "noaspect", 0, CFGTYPE_INT },
@@ -378,7 +392,7 @@ Cfg_menu g_cfg_video_menu[] = {
 { "Hide Mouse Cursor,0,No,1,Yes", &g_hide_mouse, "hidemouse", 0, CFGTYPE_INT },
 { "Screenshot Directory", &g_cfg_ssdir, "ssdir", 0, CFGTYPE_STR },
 { "", 0, 0, 0, 0 },
-{ "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
+{ "Back to Video Settings", g_cfg_video_menu, 0, 0, CFGTYPE_MENU },
 { 0, 0, 0, 0, 0 },
 };
 
