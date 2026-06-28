@@ -78,6 +78,7 @@ extern int g_crt;			/* curved CRT effect on/off */
 extern int g_crt_curve;			/* CRT screen curvature, 0-100 */
 extern int g_crt_mask;			/* CRT phosphor-mask strength, 0-100 */
 extern int g_hblur;			/* horizontal linear blur, 0-100 */
+extern int g_vblur;			/* vertical linear blur, 0-100 */
 extern int g_hide_mouse;		/* hide host cursor over window / in fullscreen */
 extern int g_mainwin_xpos, g_mainwin_ypos;	/* window position (KEGS config vars) */
 extern char *g_cfg_ssdir;		/* screenshot output dir ("" = current dir) */
@@ -979,42 +980,34 @@ sdl_save_screenshot(Window_info *win)
 	}
 }
 
-/* Horizontal linear blur. g_hblur is 0-100 and maps to a blur radius of up to
- * HBLUR_MAX_RADIUS source pixels (so 100 spreads each pixel into ~2.5 of its
- * horizontal neighbours, simulating composite-video softness). The kernel is a
- * normalized triangle (tent) of integer-offset taps; a box would look flatter
- * and a gaussian needs more taps for no visible gain at this radius. */
-#define HBLUR_MAX_RADIUS	2.5f	/* source-pixel blur radius at g_hblur==100 */
-#define HBLUR_MAX_HALF		3	/* max taps per side (ceil of MAX_RADIUS) */
+/* Linear blur, horizontal (g_hblur) and/or vertical (g_vblur). Each is 0-100 and
+ * maps to a blur radius of up to BLUR_MAX_RADIUS source pixels (so 100 spreads
+ * each pixel into ~2.5 of its neighbours along that axis, simulating composite-
+ * video softness). The kernel is a normalized triangle (tent) of integer-offset
+ * taps; a box would look flatter and a gaussian needs more taps for no visible
+ * gain at this radius. */
+#define BLUR_MAX_RADIUS		2.5f	/* source-pixel blur radius at blur==100 */
+#define BLUR_MAX_HALF		3	/* max taps per side (ceil of MAX_RADIUS) */
 
-/* Draw win->texture into the current render target, filling the w x h logical
- * area, with the horizontal blur applied when g_hblur > 0. The taps are summed
- * with additive blending and their weights sum to 1, so the result is a weighted
- * average -- which requires the target to already be cleared to black (both call
- * sites do). With g_hblur == 0 this is just the normal crisp 1:1 copy. */
-static void
-sdl_render_framebuffer(Window_info *win, int w, int h)
+/* Build a normalized 1D tent kernel for a 0-100 blur amount. Fills
+ * weight[0..2*half] over offsets -half..+half so the taps sum to 1, and returns
+ * half (0 when blur is off, i.e. a single implied centre tap of weight 1). */
+static int
+sdl_blur_kernel(int blur, float *weight)
 {
-	SDL_Renderer	*r = win->renderer;
-	SDL_FRect	dst;
-	float		radius, base, weight[2 * HBLUR_MAX_HALF + 1], sum;
-	int		k, half, idx, mod;
-	SDL_BlendMode	add;
+	float	radius, base, sum;
+	int	k, half;
 
-	if(g_hblur <= 0) {
-		/* No blur: opaque nearest-neighbour copy, as before. */
-		SDL_RenderTexture(r, win->texture, NULL, NULL);
-		return;
+	if(blur <= 0) {
+		weight[0] = 1.0f;
+		return 0;
 	}
-
-	radius = (float)g_hblur / 100.0f * HBLUR_MAX_RADIUS;
+	radius = (float)blur / 100.0f * BLUR_MAX_RADIUS;
 	half = (int)radius;
 	if(radius > (float)half) { half++; }		/* ceil */
-	if(half > HBLUR_MAX_HALF) { half = HBLUR_MAX_HALF; }
+	if(half > BLUR_MAX_HALF) { half = BLUR_MAX_HALF; }
 	base = radius + 1.0f;				/* tent half-base; radius 0 => identity */
 
-	/* Triangle weights over taps -half..+half, then a normalization pass so the
-	 * additive accumulation averages rather than brightens. */
 	sum = 0.0f;
 	for(k = -half; k <= half; k++) {
 		float wt = 1.0f - (float)(k < 0 ? -k : k) / base;
@@ -1022,8 +1015,36 @@ sdl_render_framebuffer(Window_info *win, int w, int h)
 		weight[k + half] = wt;
 		sum += wt;
 	}
+	for(k = 0; k <= 2 * half; k++) { weight[k] /= sum; }	/* normalize to sum 1 */
+	return half;
+}
 
-	/* Accumulate the weighted, horizontally-shifted taps additively. We can't use
+/* Draw win->texture into the current render target, filling the w x h logical
+ * area, with the horizontal/vertical blur applied when g_hblur/g_vblur > 0. The
+ * taps are summed with additive blending and their weights sum to 1, so the
+ * result is a weighted average -- which requires the target to already be cleared
+ * to black (both call sites do). With both blurs == 0 this is just the normal
+ * crisp 1:1 copy. */
+static void
+sdl_render_framebuffer(Window_info *win, int w, int h)
+{
+	SDL_Renderer	*r = win->renderer;
+	SDL_FRect	dst;
+	float		hweight[2 * BLUR_MAX_HALF + 1];
+	float		vweight[2 * BLUR_MAX_HALF + 1];
+	int		kx, ky, hhalf, vhalf, mod;
+	SDL_BlendMode	add;
+
+	hhalf = sdl_blur_kernel(g_hblur, hweight);
+	vhalf = sdl_blur_kernel(g_vblur, vweight);
+
+	if((hhalf == 0) && (vhalf == 0)) {
+		/* No blur: opaque nearest-neighbour copy, as before. */
+		SDL_RenderTexture(r, win->texture, NULL, NULL);
+		return;
+	}
+
+	/* Accumulate the weighted, shifted taps additively. We can't use
 	 * SDL_BLENDMODE_ADD here: it scales the source by its alpha (dstRGB =
 	 * srcRGB*srcA + dstRGB), and the framebuffer texture's alpha reaches the
 	 * blender as 0, which zeroes every tap and leaves a black screen. This custom
@@ -1033,26 +1054,32 @@ sdl_render_framebuffer(Window_info *win, int w, int h)
 	 *
 	 * Keep the texture at NEAREST: the taps are whole-source-pixel shifts, so the
 	 * blur comes entirely from summing the shifted copies. Switching to LINEAR
-	 * would also let the upscale-to-window bilinear-filter the image in BOTH
-	 * directions, turning this into an all-over mush instead of a horizontal-only
-	 * blur. The shift k is in source pixels (dst is the same logical space the
-	 * plain copy fills). */
+	 * would also let the upscale-to-window bilinear-filter the image, mushing it
+	 * in both axes regardless of which blur is on. The shifts kx/ky are in source
+	 * pixels (dst is the same logical space the plain copy fills). */
 	add = SDL_ComposeCustomBlendMode(
 			SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE,
 			SDL_BLENDOPERATION_ADD,
 			SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE,
 			SDL_BLENDOPERATION_ADD);
 	SDL_SetTextureBlendMode(win->texture, add);
-	dst.y = 0.0f;
 	dst.w = (float)w;
 	dst.h = (float)h;
-	for(k = -half; k <= half; k++) {
-		idx = k + half;
-		mod = (int)(weight[idx] / sum * 255.0f + 0.5f);
-		SDL_SetTextureColorMod(win->texture, (Uint8)mod, (Uint8)mod,
-					(Uint8)mod);
-		dst.x = (float)k;
-		SDL_RenderTexture(r, win->texture, NULL, &dst);
+
+	/* Separable 2D tent done in a single accumulation step: each (kx,ky) tap gets
+	 * weight hweight[kx]*vweight[ky]. Whichever axis is off has half==0 and one
+	 * unit-weight centre tap, so a one-axis blur costs exactly what it did before
+	 * and enabling both gives the outer product of the two 1D kernels. */
+	for(ky = -vhalf; ky <= vhalf; ky++) {
+		float vw = vweight[ky + vhalf];
+		dst.y = (float)ky;
+		for(kx = -hhalf; kx <= hhalf; kx++) {
+			mod = (int)(hweight[kx + hhalf] * vw * 255.0f + 0.5f);
+			SDL_SetTextureColorMod(win->texture, (Uint8)mod, (Uint8)mod,
+						(Uint8)mod);
+			dst.x = (float)kx;
+			SDL_RenderTexture(r, win->texture, NULL, &dst);
+		}
 	}
 
 	/* Restore the texture's normal state for any later/non-blur use. */
