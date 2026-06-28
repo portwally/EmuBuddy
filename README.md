@@ -69,7 +69,7 @@ Everything below is part of the SDL3 build and isn't in stock KEGS:
 - **Window & display options** - `-fullscreen`, `-borderless`, `-noaspect`,
   `-highdpi`, `-novsync`, `-nohwaccel`, plus window position; F11 toggles
   fullscreen.
-- **Screenshot capture** - Shift+F12 grabs the framebuffer.
+- **Screenshot capture** - F10 grabs the framebuffer.
 - **Gamepad support** - cross-platform SDL_Gamepad mapped to the IIgs joystick.
 - **Terminal debugger** - a REPL for the built-in 65816 debugger from the
   controlling terminal.
@@ -92,7 +92,7 @@ emulated IIgs:
 | **F11** | Toggle fullscreen |
 | **Shift + F11** | Toggle the CRT scanline simulator |
 | **Ctrl + F11** | Toggle the curved CRT effect |
-| **Shift + F12** | Save a screenshot |
+| **F10** | Save a screenshot |
 | **Drag & drop** | Drop a disk image on the window to mount it (slot guessed from size) |
 
 **Emulator hotkeys** — inherited from KEGS and handled by the emulator core:
