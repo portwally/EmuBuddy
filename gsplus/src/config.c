@@ -353,7 +353,12 @@ Cfg_menu g_cfg_modem_menu[] = {
 
 Cfg_menu g_cfg_video_menu[] = {
 { "Video Settings", g_cfg_video_menu, 0, 0, CFGTYPE_MENU },
+/* Only the X11 driver (xdriver.c) reads g_force_depth; it's a dead no-op on
+ * the SDL builds (mac/windows/linux), the native macOS app, and legacy
+ * Windows, so only show it on the legacy X11/Linux build. */
+#if !defined(MAC) && !defined(SDL_INPUT) && !defined(_WIN32)
 { "Force X-windows display depth", KNMP(g_force_depth), CFGTYPE_INT },
+#endif
 { "Enable VOC,0,Disabled,1,Enabled", KNMP(g_voc_enable), CFGTYPE_INT },
 { "Default Main Window width", KNMP(g_mainwin_width), CFGTYPE_INT },
 { "Default Main Window height", KNMP(g_mainwin_height), CFGTYPE_INT },
