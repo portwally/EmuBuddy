@@ -170,7 +170,8 @@ int	g_nohwaccel = 0;	/* force the software renderer */
 int	g_scanline_simulator = 0; /* CRT scanline overlay intensity, 0-100 (0=off) */
 int	g_crt = 0;		/* curved CRT effect (curvature+mask+glow+vignette) */
 int	g_crt_curve = 2;	/* CRT screen curvature amount, 0-100 (0=flat) */
-int	g_crt_mask = 8;	/* CRT phosphor-mask strength, 0-100 (0=off, subtle) */
+int	g_crt_mask = 5;	/* CRT phosphor-mask strength, 0-100 (0=off, subtle) */
+int	g_crt_vignette = 5;	/* CRT corner darkening, 0-100 (0=off, flat brightness) */
 int	g_hblur = 0;		/* horizontal linear blur, 0-100 (0=off, sharp) */
 int	g_vblur = 0;		/* vertical linear blur, 0-100 (0=off, sharp) */
 int	g_hide_mouse = 1;	/* hide host cursor over the window / in fullscreen */
@@ -359,6 +360,7 @@ Cfg_menu g_cfg_video_menu[] = {
 #if !defined(MAC) && !defined(SDL_INPUT) && !defined(_WIN32)
 { "Force X-windows display depth", KNMP(g_force_depth), CFGTYPE_INT },
 #endif
+{ "GSplus Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_MENU },
 { "Enable VOC,0,Disabled,1,Enabled", KNMP(g_voc_enable), CFGTYPE_INT },
 { "Default Main Window width", KNMP(g_mainwin_width), CFGTYPE_INT },
 { "Default Main Window height", KNMP(g_mainwin_height), CFGTYPE_INT },
@@ -369,7 +371,6 @@ Cfg_menu g_cfg_video_menu[] = {
 		KNMP(g_video_line_update_interval), CFGTYPE_INT },
 { "Dump text screen to file", (void *)cfg_text_screen_dump, 0, 0, CFGTYPE_FUNC},
 { "", 0, 0, 0, 0 },
-{ "Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_MENU },
 { "", 0, 0, 0, 0 },
 { "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
 { 0, 0, 0, 0, 0 },
@@ -382,7 +383,7 @@ Cfg_menu g_cfg_video_menu[] = {
  * The name_str (the CLI flag / config.kegs key) has no "g_" prefix -- that's
  * just our C convention for globals, not something users should type. */
 Cfg_menu g_cfg_sdl_video_menu[] = {
-{ "Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_MENU },
+{ "GSplus Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_MENU },
 { "Fullscreen,0,No,1,Yes", &g_fullscreen, "fullscreen", 0, CFGTYPE_INT },
 { "Borderless Window (restart required),0,No,1,Yes", &g_borderless, "borderless", 0, CFGTYPE_INT },
 { "Ignore Aspect Ratio (restart required),0,No,1,Yes", &g_noaspect, "noaspect", 0, CFGTYPE_INT },
@@ -392,6 +393,7 @@ Cfg_menu g_cfg_sdl_video_menu[] = {
 { "CRT Effect (curve+mask+glow),0,Off,1,On", &g_crt, "crt", 0, CFGTYPE_INT },
 { "CRT Curvature 0-100", &g_crt_curve, "crtcurve", 0, CFGTYPE_INT },
 { "CRT Phosphor Mask 0-100", &g_crt_mask, "crtmask", 0, CFGTYPE_INT },
+{ "CRT Vignette 0-100", &g_crt_vignette, "crtvignette", 0, CFGTYPE_INT },
 { "Horizontal Blur 0-100", &g_hblur, "hblur", 0, CFGTYPE_INT },
 { "Vertical Blur 0-100", &g_vblur, "vblur", 0, CFGTYPE_INT },
 { "Hide Mouse Cursor,0,No,1,Yes", &g_hide_mouse, "hidemouse", 0, CFGTYPE_INT },
@@ -1100,10 +1102,10 @@ cfg_int_update(int *iptr, int new_val)
 
 	old_val = *iptr;
 	if((iptr == &g_scanline_simulator) || (iptr == &g_crt_curve) ||
-				(iptr == &g_crt_mask) || (iptr == &g_hblur) ||
-				(iptr == &g_vblur)) {
-		// Scanline intensity, CRT curvature, phosphor-mask strength and
-		// horizontal/vertical blur are
+				(iptr == &g_crt_mask) || (iptr == &g_crt_vignette) ||
+				(iptr == &g_hblur) || (iptr == &g_vblur)) {
+		// Scanline intensity, CRT curvature, phosphor-mask strength,
+		// vignette and horizontal/vertical blur are
 		// 0-100 percentages (0=off/flat, 100=max). Clamp here so they can't
 		// go negative or above 100 from any path: typed edits, +/- arrows,
 		// or a hand-edited config file.
