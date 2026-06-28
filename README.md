@@ -64,12 +64,12 @@ are working on macOS, Linux, and Windows.
 
 ### What's been added in GSplus
 
-Everything below is part of the SDL3 build and isn't in stock KEGS:
+Some features that are a part of the SDL3 build:
 
 - **Window & display options** - `-fullscreen`, `-borderless`, `-noaspect`,
   `-highdpi`, `-novsync`, `-nohwaccel`, plus window position; F11 toggles
   fullscreen.
-- **Screenshot capture** - F10 grabs the framebuffer.
+- **Screenshot capture** - F10 writes the framebuffer to disk.
 - **Gamepad support** - cross-platform SDL_Gamepad mapped to the IIgs joystick.
 - **Terminal debugger** - a REPL for the built-in 65816 debugger from the
   controlling terminal.
@@ -178,9 +178,7 @@ AI to write great software. Kent Dickey did the hard, beautiful work. The AI
 here is just a pragmatic crutch to keep *my* reboot alive between the demands 
 of real life.
 
-So what does GSplus actually add? Two things: **accessible, prebuilt packages**
-so anyone can download and run an Apple IIgs without compiling anything, and
-a handful of **features I want for myself**. If you want the canonical 
-emulator, go straight to KEGS.  It's great!
+So what does GSplus actually add? A handful of **features I want for myself**.
+If you want the canonical emulator, go straight to KEGS.  It's great!
 
 - Dagen
