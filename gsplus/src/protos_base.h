@@ -162,6 +162,8 @@ void config_vbl_update(int doit_3_persec);
 void cfg_file_update_rom(const char *str);
 void cfg_file_update_ptr(char **strptr, const char *str, int need_update);
 void cfg_int_update(int *iptr, int new_val);
+int cfg_color_from_hex(const char *str, int defval);
+void cfg_normalize_hex_color(char *str);
 void cfg_load_charrom(void);
 void config_load_roms(void);
 void config_parse_config_kegs_file(void);

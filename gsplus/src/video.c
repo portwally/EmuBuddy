@@ -36,6 +36,8 @@ extern int g_line_ref_amt;
 
 extern word32 g_c034_val;
 extern int g_config_control_panel;
+extern char *g_cfg_menu_fg;
+extern char *g_cfg_menu_bg;
 extern int g_halt_sim;
 
 word32 g_slow_mem_changed[SLOW_MEM_CH_SIZE];
@@ -2809,6 +2811,7 @@ video_draw_a2_string(int line, const byte *bptr)
 	word32	*wptr;
 	word32	line_bytes;
 	int	start_line, pixels_per_line, offset;
+	int	bg_pixel, fg_pixel;
 	int	i;
 
 	start_line = line*8;
@@ -2817,10 +2820,12 @@ video_draw_a2_string(int line, const byte *bptr)
 					g_video_act_margin_left;
 	wptr = g_mainwin_kimage.wptr;
 	wptr += offset;
+	bg_pixel = cfg_color_from_hex(g_cfg_menu_bg, 0x001e2a56);
+	fg_pixel = cfg_color_from_hex(g_cfg_menu_fg, 0x00ffffff);
 	for(i = 0; i < 8; i++) {
 		line_bytes = ((start_line + i) << 16) | (40 << 8) | 0;
 		redraw_changed_string(bptr, line_bytes, -1L,
-			wptr, 0, 0x00ffffff, pixels_per_line, 1);
+			wptr, bg_pixel, fg_pixel, pixels_per_line, 1);
 	}
 	g_mainwin_kimage.x_refresh_needed = 1;
 }

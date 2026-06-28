@@ -176,6 +176,8 @@ int	g_hblur = 0;		/* horizontal linear blur, 0-100 (0=off, sharp) */
 int	g_vblur = 0;		/* vertical linear blur, 0-100 (0=off, sharp) */
 int	g_hide_mouse = 1;	/* hide host cursor over the window / in fullscreen */
 char	*g_cfg_ssdir = "";	/* screenshot output dir ("" = current dir) */
+char	*g_cfg_menu_fg = "FFFFFF"; /* config menu text color, RRGGBB hex */
+char	*g_cfg_menu_bg = "1E2A56"; /* config menu background, RRGGBB hex */
 
 Cfg_menu g_cfg_disk_menu[] = {
 { "Disk Configuration", g_cfg_disk_menu, 0, 0, CFGTYPE_MENU },
@@ -398,6 +400,9 @@ Cfg_menu g_cfg_sdl_video_menu[] = {
 { "Vertical Blur 0-100", &g_vblur, "vblur", 0, CFGTYPE_INT },
 { "Hide Mouse Cursor,0,No,1,Yes", &g_hide_mouse, "hidemouse", 0, CFGTYPE_INT },
 { "Screenshot Directory", &g_cfg_ssdir, "ssdir", 0, CFGTYPE_STR },
+{ "", 0, 0, 0, 0 },
+{ "Menu Text Color (RRGGBB hex)", &g_cfg_menu_fg, "menutextcolor", 0, CFGTYPE_STR },
+{ "Menu Background (RRGGBB hex)", &g_cfg_menu_bg, "menubgcolor", 0, CFGTYPE_STR },
 { "", 0, 0, 0, 0 },
 { "Back to Video Settings", g_cfg_video_menu, 0, 0, CFGTYPE_MENU },
 { 0, 0, 0, 0, 0 },
@@ -1089,6 +1094,53 @@ cfg_file_update_ptr(char **strptr, const char *str, int need_update)
 		g_config_kegs_update_needed = 1;
 		printf("Set g_config_kegs_update_needed = 1\n");
 	}
+}
+
+/* Parse an "RRGGBB" hex color string (optional leading '#') into a 0xRRGGBB
+ * pixel value.  Returns defval if the string is empty or malformed. */
+int
+cfg_color_from_hex(const char *str, int defval)
+{
+	char	*endptr;
+	long	val;
+	int	len;
+
+	if(!str) {
+		return defval;
+	}
+	if(*str == '#') {
+		str++;
+	}
+	if(*str == 0) {
+		return defval;
+	}
+	val = strtol(str, &endptr, 16);
+	len = (int)(endptr - str);
+	if((*endptr != 0) || (len < 1) || (len > 6) || (val < 0)) {
+		return defval;
+	}
+	return (int)(val & 0x00ffffff);
+}
+
+/* Normalize a hex color string in place: strip '#', spaces and tabs, and
+ * uppercase the hex digits, so it always displays tidily. */
+void
+cfg_normalize_hex_color(char *str)
+{
+	int	c, in, out;
+
+	in = 0;
+	out = 0;
+	while((c = str[in++]) != 0) {
+		if((c == '#') || (c == ' ') || (c == '\t')) {
+			continue;
+		}
+		if((c >= 'a') && (c <= 'f')) {
+			c = c - 'a' + 'A';
+		}
+		str[out++] = c;
+	}
+	str[out] = 0;
 }
 
 void
@@ -4572,6 +4624,10 @@ cfg_edit_mode_key(int key)
 	len = (int)strlen(&g_cfg_edit_buf[0]);
 	if(key == 0x0d) {		// Return
 		// Try to accept the change
+		if((g_cfg_edit_ptr == (void *)&g_cfg_menu_fg) ||
+				(g_cfg_edit_ptr == (void *)&g_cfg_menu_bg)) {
+			cfg_normalize_hex_color(&g_cfg_edit_buf[0]);
+		}
 		new_str = kegs_malloc_str(&g_cfg_edit_buf[0]);
 		if(g_cfg_edit_type == CFGTYPE_STR) {
 			cfg_file_update_ptr(g_cfg_edit_ptr, new_str, 1);
