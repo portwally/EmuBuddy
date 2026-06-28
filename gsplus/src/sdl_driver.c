@@ -813,10 +813,11 @@ sdl_poll_events(void)
 			}
 			break;
 		case SDL_EVENT_KEY_DOWN:
-			/* Shift+F12 saves a screenshot (gsplus convention); it is not
-			 * sent to the IIgs. Plain F12 still reaches the emulator. */
-			if(ev.key.scancode == SDL_SCANCODE_F12 &&
-					(SDL_GetModState() & SDL_KMOD_SHIFT)) {
+			/* F10 saves a screenshot (gsplus convention). F10 and F11 are
+			 * the only function keys KEGS leaves unused, so they're safe to
+			 * claim without shadowing an emulator hotkey (notably F12 =
+			 * reset). Not sent to the IIgs. */
+			if(ev.key.scancode == SDL_SCANCODE_F10) {
 				if(!ev.key.repeat) {
 					g_screenshot_requested = 1;
 				}
@@ -851,10 +852,9 @@ sdl_poll_events(void)
 			if(ev.key.scancode == SDL_SCANCODE_F11) {
 				break;
 			}
-			/* Swallow the matching Shift+F12 release so the IIgs never
-			 * sees a stray F12 key-up from a screenshot combo. */
-			if(ev.key.scancode == SDL_SCANCODE_F12 &&
-					(SDL_GetModState() & SDL_KMOD_SHIFT)) {
+			/* Swallow the matching F10 release so the IIgs never sees a
+			 * stray F10 key-up from a screenshot press. */
+			if(ev.key.scancode == SDL_SCANCODE_F10) {
 				break;
 			}
 			sdl_handle_key(win, ev.key.scancode, 1, 0);

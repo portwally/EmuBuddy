@@ -21,7 +21,24 @@ based on (currently 1.38).
 ## You'll need a ROM
 
 Like any IIgs emulator, GSplus needs an Apple IIgs ROM file to boot. Without one
-it starts into a configuration screen with nothing to run.
+it starts into a configuration screen with nothing to run. The ROM is Apple's
+copyrighted firmware, so GSplus can't ship it — you supply your own.
+
+**Which ROM:** the IIgs shipped with two ROM versions. **ROM 03** (256 KB, the
+later model) is the usual choice; **ROM 01** (128 KB) is also fully supported.
+GSplus does **not** support the early ROM 0.
+
+**Where to put it:** name the file `ROM`, `ROM.01`, or `ROM.03` and place it in
+your home directory, next to the app, or next to your `config.kegs`. GSplus picks
+it up automatically. You can also select one at runtime: press **F4 → ROM File
+Selection → ROM File** and browse to it. A handful of other common names
+(`APPLE2GS.ROM`, `APPLE2GS.ROM2`, `xgs.rom`, `342-0077-b`, …) are recognized too.
+
+**Getting one legally:** if you own a real Apple IIgs you can dump its ROM — the
+step-by-step BASIC program is in
+[`upstream/kegs/doc/README.ROM.files.txt`](upstream/kegs/doc/README.ROM.files.txt),
+which also documents which downloadable ROM files are known to work and how to
+convert MAME-format dumps.
 
 ## Downloads
 
@@ -47,11 +64,12 @@ are working on macOS, Linux, and Windows.
 
 ### What's been added in GSplus
 
-Everything below is part of the SDL3 build and isn't in stock KEGS:
+Some features that are a part of the SDL3 build:
 
 - **Window & display options** - `-fullscreen`, `-borderless`, `-noaspect`,
-  , plus window position; F11 toggles fullscreen.
-- **Screenshot capture** - Shift+F12 grabs the framebuffer.
+  `-highdpi`, `-novsync`, `-nohwaccel`, plus window position; F11 toggles
+  fullscreen.
+- **Screenshot capture** - F10 writes the framebuffer to disk.
 - **Gamepad support** - cross-platform SDL_Gamepad mapped to the IIgs joystick.
 - **Terminal debugger** - a REPL for the built-in 65816 debugger from the
   controlling terminal.
@@ -63,6 +81,35 @@ Everything below is part of the SDL3 build and isn't in stock KEGS:
   with the scanline simulator.
 - **One cross-platform build** - the same SDL3 app and CMake build on macOS,
   Linux, and Windows, with prebuilt downloads for each.
+
+## Controls
+
+**Additional GSplus hotkeys** — handled by the app (the SDL build), not sent to the
+emulated IIgs:
+
+| Key | Action |
+|---|---|
+| **F10** | Save a screenshot |
+| **F11** | Toggle fullscreen |
+| **Shift + F11** | Toggle the CRT scanline effect |
+| **Ctrl + F11** | Toggle the CRT curved screen effect |
+| **Drag & drop** | Drop a disk image on the window to mount it (slot guessed from size) |
+
+**Emulator hotkeys** — inherited from KEGS and handled by the emulator core:
+
+| Key | Action |
+|---|---|
+| **F4** | Open the configuration menu (mount disks, pick a ROM, settings) |
+| **F5** | Toggle the status line |
+| **F6** | Cycle emulation speed (1 MHz / 2.8 MHz / fast) |
+| **F7** | Toggle the debugger · **Shift + F7** toggles fast disk emulation |
+| **F8** | Grab / release the mouse (warp + hide pointer) |
+| **F9** | Invert paddles · **Shift + F9** swap paddles · **Ctrl + F9** copy screen text |
+| **Ctrl + F12** | Reset the IIgs (Ctrl-Reset) |
+
+On keyboards without Apple keys, **F1** acts as Open-Apple (⌘), **F2** as
+Option/Closed-Apple, and **F3** as Escape. On macOS, ⌘ key combos are forwarded
+to the emulated machine.
 
 ## Building from source
 
@@ -117,20 +164,21 @@ pacman -S git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
 
 ## A note from Dagen
 
-I've tried to reboot GSplus more than once over the past few years and each time 
-I'd sink weeks into build and packaging a new release, and then life would pull 
-me away for months, sometimes years, and momentum would die. This project does 
-leverage AI to allow me to provide some form of the emulator offering made when 
-I had time to write it 100% myself.
+I've tried to reboot GSplus _many times_ over the past few years and each time 
+I'd sink weeks into building and packaging a new release, and then life would 
+pull me away for months, sometimes years, and momentum would die. I made the 
+decision to use AI to allow me to provide the emulator I wanted to have, which
+is controversial even for me.  But then again, this isn't any different than 
+what I see in every modern development shop.  Things have changed dramatically
+over the past few years.  But I want to be clear about AI usage, and that I
+feel comfortable using it as a tool that needs a lot of oversight. 
 
 KEGS is a brilliant piece of pure C, and is living proof that you don't need
 AI to write great software. Kent Dickey did the hard, beautiful work. The AI 
 here is just a pragmatic crutch to keep *my* reboot alive between the demands 
 of real life.
 
-So what does GSplus actually add? Two honest things: **accessible, prebuilt
-packages** so anyone can download and run an Apple IIgs without compiling
-anything, and a handful of **features I want for myself**. If you want the
-canonical emulator, go straight to KEGS.  It's great!
+So what does GSplus actually add? A handful of **features I want for myself**.
+If you want the canonical emulator, go straight to KEGS.  It's great!
 
 - Dagen
