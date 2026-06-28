@@ -60,6 +60,7 @@ typedef struct {
 	int		crt_nverts;
 	int		crt_nidx;
 	int		crt_curve_for;		/* g_crt_curve the mesh was built for */
+	int		crt_vig_for;		/* g_crt_vignette the mesh was built for */
 	word32		*data;			/* dest buffer for video_out_data() */
 	int		active;
 	int		width_req;		/* current logical width  (pixels) */
@@ -77,6 +78,7 @@ extern int g_scanline_simulator;	/* CRT scanline overlay intensity, 0-100 */
 extern int g_crt;			/* curved CRT effect on/off */
 extern int g_crt_curve;			/* CRT screen curvature, 0-100 */
 extern int g_crt_mask;			/* CRT phosphor-mask strength, 0-100 */
+extern int g_crt_vignette;		/* CRT corner darkening, 0-100 */
 extern int g_hblur;			/* horizontal linear blur, 0-100 */
 extern int g_vblur;			/* vertical linear blur, 0-100 */
 extern int g_hide_mouse;		/* hide host cursor over window / in fullscreen */
@@ -94,7 +96,6 @@ static int g_screenshot_requested = 0;	/* set by Shift+F12, serviced at frame en
  * these bake the rest of the look so the user gets one "CRT Effect" toggle. */
 #define CRT_MESH_COLS	32		/* curvature mesh resolution (cells) */
 #define CRT_MESH_ROWS	24
-#define CRT_VIGNETTE	0.28f		/* corner darkening, 0..1 */
 #define CRT_MASK_MIN	60		/* off-channel level at full mask strength
 					 * (0-255); g_crt_mask scales 255 (off)
 					 * down toward this floor */
@@ -224,8 +225,8 @@ sdl_fill_mask(Window_info *win, int w, int h)
 static void
 sdl_build_crt_mesh(Window_info *win, int w, int h)
 {
-	int	i, j, nx, ny, n, idx;
-	float	curve, u, v, px, py, wx, wy, r2, vig;
+	int	i, j, nx, ny, n, idx, vig_strength;
+	float	curve, vignette, u, v, px, py, wx, wy, r2, vig;
 
 	nx = CRT_MESH_COLS + 1;
 	ny = CRT_MESH_ROWS + 1;
@@ -243,6 +244,12 @@ sdl_build_crt_mesh(Window_info *win, int w, int h)
 	/* 0-100 curvature knob -> a gentle 0..~0.30 distortion coefficient. */
 	curve = (float)g_crt_curve * 0.003f;
 
+	/* 0-100 vignette knob -> 0..1 corner-darkening amount (0 = flat). */
+	vig_strength = g_crt_vignette;
+	if(vig_strength < 0)   { vig_strength = 0; }
+	if(vig_strength > 100) { vig_strength = 100; }
+	vignette = (float)vig_strength * 0.01f;
+
 	n = 0;
 	for(j = 0; j < ny; j++) {
 		for(i = 0; i < nx; i++) {
@@ -259,7 +266,7 @@ sdl_build_crt_mesh(Window_info *win, int w, int h)
 			win->crt_verts[n].tex_coord.x = u;
 			win->crt_verts[n].tex_coord.y = v;
 			r2 = px * px + py * py;		/* 0 centre .. 2 corner */
-			vig = 1.0f - CRT_VIGNETTE * (r2 * 0.5f);
+			vig = 1.0f - vignette * (r2 * 0.5f);
 			if(vig < 0.0f) { vig = 0.0f; }
 			win->crt_verts[n].color.r = vig;
 			win->crt_verts[n].color.g = vig;
@@ -287,6 +294,7 @@ sdl_build_crt_mesh(Window_info *win, int w, int h)
 	}
 	win->crt_nidx = idx;
 	win->crt_curve_for = g_crt_curve;
+	win->crt_vig_for = g_crt_vignette;
 }
 
 /* (Re)create the offscreen targets + mask + mesh at the given logical size. */
@@ -1101,8 +1109,9 @@ sdl_render_crt(Window_info *win)
 	int	w = win->width_req;
 	int	h = win->main_height;
 
-	/* Rebuild the mesh if the curvature knob changed at runtime. */
-	if(win->crt_curve_for != g_crt_curve) {
+	/* Rebuild the mesh if the curvature or vignette knob changed at runtime. */
+	if((win->crt_curve_for != g_crt_curve) ||
+				(win->crt_vig_for != g_crt_vignette)) {
 		sdl_build_crt_mesh(win, w, h);
 		if(!win->crt_verts) {
 			return;
