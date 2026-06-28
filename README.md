@@ -84,15 +84,15 @@ Some features that are a part of the SDL3 build:
 
 ## Controls
 
-**GSplus host hotkeys** — handled by the app (the SDL build), not sent to the
+**Additional GSplus hotkeys** — handled by the app (the SDL build), not sent to the
 emulated IIgs:
 
 | Key | Action |
 |---|---|
-| **F11** | Toggle fullscreen |
-| **Shift + F11** | Toggle the CRT scanline simulator |
-| **Ctrl + F11** | Toggle the curved CRT effect |
 | **F10** | Save a screenshot |
+| **F11** | Toggle fullscreen |
+| **Shift + F11** | Toggle the CRT scanline effect |
+| **Ctrl + F11** | Toggle the CRT curved screen effect |
 | **Drag & drop** | Drop a disk image on the window to mount it (slot guessed from size) |
 
 **Emulator hotkeys** — inherited from KEGS and handled by the emulator core:
