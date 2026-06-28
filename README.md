@@ -21,7 +21,24 @@ based on (currently 1.38).
 ## You'll need a ROM
 
 Like any IIgs emulator, GSplus needs an Apple IIgs ROM file to boot. Without one
-it starts into a configuration screen with nothing to run.
+it starts into a configuration screen with nothing to run. The ROM is Apple's
+copyrighted firmware, so GSplus can't ship it — you supply your own.
+
+**Which ROM:** the IIgs shipped with two ROM versions. **ROM 03** (256 KB, the
+later model) is the usual choice; **ROM 01** (128 KB) is also fully supported.
+GSplus does **not** support the early ROM 0.
+
+**Where to put it:** name the file `ROM`, `ROM.01`, or `ROM.03` and place it in
+your home directory, next to the app, or next to your `config.kegs`. GSplus picks
+it up automatically. You can also select one at runtime: press **F4 → ROM File
+Selection → ROM File** and browse to it. A handful of other common names
+(`APPLE2GS.ROM`, `APPLE2GS.ROM2`, `xgs.rom`, `342-0077-b`, …) are recognized too.
+
+**Getting one legally:** if you own a real Apple IIgs you can dump its ROM — the
+step-by-step BASIC program is in
+[`upstream/kegs/doc/README.ROM.files.txt`](upstream/kegs/doc/README.ROM.files.txt),
+which also documents which downloadable ROM files are known to work and how to
+convert MAME-format dumps.
 
 ## Downloads
 
@@ -50,7 +67,8 @@ are working on macOS, Linux, and Windows.
 Everything below is part of the SDL3 build and isn't in stock KEGS:
 
 - **Window & display options** - `-fullscreen`, `-borderless`, `-noaspect`,
-  , plus window position; F11 toggles fullscreen.
+  `-highdpi`, `-novsync`, `-nohwaccel`, plus window position; F11 toggles
+  fullscreen.
 - **Screenshot capture** - Shift+F12 grabs the framebuffer.
 - **Gamepad support** - cross-platform SDL_Gamepad mapped to the IIgs joystick.
 - **Terminal debugger** - a REPL for the built-in 65816 debugger from the
@@ -63,6 +81,23 @@ Everything below is part of the SDL3 build and isn't in stock KEGS:
   with the scanline simulator.
 - **One cross-platform build** - the same SDL3 app and CMake build on macOS,
   Linux, and Windows, with prebuilt downloads for each.
+
+## Controls
+
+GSplus adds these host hotkeys on top of the standard IIgs keyboard. They're
+intercepted by the app and not sent to the emulated machine.
+
+| Key | Action |
+|---|---|
+| **F4** | Open the configuration menu (mount disks, pick a ROM, settings) |
+| **F11** | Toggle fullscreen |
+| **Shift + F11** | Toggle the CRT scanline simulator |
+| **Ctrl + F11** | Toggle the curved CRT effect |
+| **Shift + F12** | Save a screenshot |
+| **Drag & drop** | Drop a disk image on the window to mount it (slot guessed from size) |
+
+Plain function keys (F1, F2, F12, …) still pass through to the IIgs. On macOS,
+⌘ key combos are also forwarded to the emulated machine.
 
 ## Building from source
 

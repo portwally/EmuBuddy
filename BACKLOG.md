@@ -21,6 +21,11 @@ Effort: **S** small · **M** medium · **L** large. Priority: High / Med / Low.
 - **Curved CRT effect**: `-crt 1` + `-crtcurve <0-100>` + `-crtmask <0-100>`,
   Ctrl+F11 toggle. Curvature (RenderGeometry mesh) + RGB phosphor mask + bloom +
   vignette, composes with `-scanline`. All on the 2D renderer, no extra libraries.
+- **Gamepad/controller support**: SDL3 high-level Gamepad API → IIgs
+  joystick/paddles, with hotplug. Select "Native Joystick 1" in the F4 config
+  menu to route paddles to it.
+- **Screenshots**: Shift+F12 captures the framebuffer (`-ssdir` sets the output
+  directory).
 
 ---
 
@@ -28,14 +33,12 @@ Effort: **S** small · **M** medium · **L** large. Priority: High / Med / Low.
 
 | Item | Pri | Eff | Notes |
 |---|---|---|---|
-| **Screenshots** | Med | M | `-ssdir` + hotkey. BMP (no dep) or PNG (adds SDL3_image). |
 | **Clipboard** copy/paste | Med | M | Wire SDL clipboard to the core's copy/paste hooks **(core)**. |
 
 ## Input
 
 | Item | Pri | Eff | Notes |
 |---|---|---|---|
-| **Gamepad/controller** support | High | M | SDL3 gamepad → joystick/paddles **(core)**. SDL driver has none yet. |
 | **Mouse capture** toggle | Med | S | Grab/release the pointer via a hotkey. |
 | Configurable **key remapping** | Low | M | Currently a fixed scancode→ADB table. |
 
@@ -81,7 +84,7 @@ Effort: **S** small · **M** medium · **L** large. Priority: High / Med / Low.
 
 ## Suggested order
 
-Gamepad → Fast-forward → Screenshots → Clipboard.
+Fast-forward → Clipboard.
 
 ## Dagen's wishlist
 
