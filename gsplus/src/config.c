@@ -362,7 +362,7 @@ Cfg_menu g_cfg_video_menu[] = {
 #if !defined(MAC) && !defined(SDL_INPUT) && !defined(_WIN32)
 { "Force X-windows display depth", KNMP(g_force_depth), CFGTYPE_INT },
 #endif
-{ "GSplus Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_MENU },
+{ "GSplus Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_SUBMENU },
 { "Enable VOC,0,Disabled,1,Enabled", KNMP(g_voc_enable), CFGTYPE_INT },
 { "Default Main Window width", KNMP(g_mainwin_width), CFGTYPE_INT },
 { "Default Main Window height", KNMP(g_mainwin_height), CFGTYPE_INT },
@@ -410,13 +410,13 @@ Cfg_menu g_cfg_sdl_video_menu[] = {
 
 Cfg_menu g_cfg_main_menu[] = {
 { "KEGS Configuration", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
-{ "Disk Configuration", g_cfg_disk_menu, 0, 0, CFGTYPE_MENU },
-{ "Joystick Configuration", g_cfg_joystick_menu, 0, 0, CFGTYPE_MENU },
-{ "ROM File Selection", g_cfg_rom_menu, 0, 0, CFGTYPE_MENU },
-{ "Character ROM Selection", g_cfg_charrom_menu, 0, 0, CFGTYPE_MENU },
-{ "Serial Port Configuration", g_cfg_serial_menu, 0, 0, CFGTYPE_MENU },
-{ "Virtual Modem Configuration", g_cfg_modem_menu, 0, 0, CFGTYPE_MENU },
-{ "Video Settings", g_cfg_video_menu, 0, 0, CFGTYPE_MENU },
+{ "Disk Configuration", g_cfg_disk_menu, 0, 0, CFGTYPE_SUBMENU },
+{ "Joystick Configuration", g_cfg_joystick_menu, 0, 0, CFGTYPE_SUBMENU },
+{ "ROM File Selection", g_cfg_rom_menu, 0, 0, CFGTYPE_SUBMENU },
+{ "Character ROM Selection", g_cfg_charrom_menu, 0, 0, CFGTYPE_SUBMENU },
+{ "Serial Port Configuration", g_cfg_serial_menu, 0, 0, CFGTYPE_SUBMENU },
+{ "Virtual Modem Configuration", g_cfg_modem_menu, 0, 0, CFGTYPE_SUBMENU },
+{ "Video Settings", g_cfg_video_menu, 0, 0, CFGTYPE_SUBMENU },
 { "Auto-update config.kegs,0,Manual,1,Immediately",
 		KNMP(g_config_kegs_auto_update), CFGTYPE_INT },
 { "Speed,0,Unlimited,1,1.0MHz,2,2.8MHz,3,8.0MHz (Zip)",
@@ -682,7 +682,7 @@ config_init_menus(Cfg_menu *menuptr)
 				return;
 			}
 		}
-		if(type == CFGTYPE_MENU) {
+		if((type == CFGTYPE_MENU) || (type == CFGTYPE_SUBMENU)) {
 			config_init_menus((Cfg_menu *)voidptr);
 		}
 		pos++;
@@ -3093,12 +3093,22 @@ cfg_parse_menu(Cfg_menu *menuptr, int menu_pos, int highlight_pos, int change)
 		}
 	}
 
-	// If it's a menu, give it a special menu indicator
+	// If it's a menu, give it a special menu indicator.  '\t' toggles
+	//  MouseText, so the indicator glyphs sit between a pair of '\t's.
 	if(type == CFGTYPE_MENU) {
 		g_cfg_opt_buf[1] = '\t';
 		g_cfg_opt_buf[2] = 'M';		/* return-like symbol */
 		g_cfg_opt_buf[3] = '\t';
 		g_cfg_opt_buf[4] = ' ';
+	}
+
+	// A sub-menu descends into another menu; mark it with the two-char
+	//  MouseText folder glyph ('X'+'Y') instead of the return arrow.
+	if(type == CFGTYPE_SUBMENU) {
+		g_cfg_opt_buf[1] = '\t';
+		g_cfg_opt_buf[2] = 'X';		/* folder left half */
+		g_cfg_opt_buf[3] = 'Y';		/* folder right half */
+		g_cfg_opt_buf[4] = '\t';
 	}
 
 	if(type == CFGTYPE_DISK) {
@@ -4711,6 +4721,7 @@ cfg_control_panel_update1()
 			ptr = g_menuptr[g_menu_line].ptr;
 			switch(type & 0xf) {
 			case CFGTYPE_MENU:
+			case CFGTYPE_SUBMENU:
 				g_menuptr = (Cfg_menu *)ptr;
 				g_menu_line = 1;
 				break;
