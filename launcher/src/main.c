@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "profile.h"
 #include "library.h"
 #include "skins.h"
@@ -96,10 +97,56 @@ enum_cb(void *ud, const char *dirname, const char *fname)
 	return SDL_ENUM_CONTINUE;
 }
 
+static int	g_sort;			/* 0 A-Z, 1 favourites first, 2 last played, 3 most played */
+static int	g_favonly;
+static const char *g_sort_names[] = { "A-Z", "Favourites first", "Last played", "Most played" };
+
+static int
+is_fav(const Profile *p)
+{
+	return profile_get(p, "favorite")[0] == '1';
+}
+
 static int
 by_name(const void *a, const void *b)
 {
-	return SDL_strcasecmp(profile_name((const Profile *)a), profile_name((const Profile *)b));
+	const Profile *x = a, *y = b;
+	long	r = 0;
+
+	switch(g_sort) {
+	case 1:
+		r = (long)is_fav(y) - (long)is_fav(x);
+		break;
+	case 2:
+		r = atol(profile_get(y, "last_played")) - atol(profile_get(x, "last_played"));
+		break;
+	case 3:
+		r = atol(profile_get(y, "plays")) - atol(profile_get(x, "plays"));
+		break;
+	}
+	if(r) {
+		return r < 0 ? -1 : 1;
+	}
+	return SDL_strcasecmp(profile_name(x), profile_name(y));
+}
+
+/* sort again and keep the same game selected */
+static int	g_sel;
+static void
+resort_keep(void)
+{
+	char	keep[1100];
+
+	keep[0] = 0;
+	if(g_nprof && g_sel >= 0 && g_sel < g_nprof) {
+		snprintf(keep, sizeof(keep), "%s", g_prof[g_sel].path);
+	}
+	qsort(g_prof, (size_t)g_nprof, sizeof(Profile), by_name);
+	for(int i = 0; keep[0] && i < g_nprof; i++) {
+		if(!strcmp(g_prof[i].path, keep)) {
+			g_sel = i;
+		}
+	}
 }
 
 static void
@@ -122,6 +169,25 @@ load_profiles(void)
 	}
 	if(g) {
 		SDL_free(g);
+	}
+	if(g_favonly) {			/* only favourites; if there are none, show everything */
+		int k = 0;
+
+		for(int i = 0; i < g_nprof; i++) {
+			if(is_fav(&g_prof[i])) {
+				if(k != i) {
+					g_prof[k] = g_prof[i];
+				}
+				k++;
+			}
+		}
+		if(k > 0) {
+			g_nprof = k;
+		} else {
+			g_favonly = 0;
+			load_profiles();
+			return;
+		}
 	}
 	qsort(g_prof, (size_t)g_nprof, sizeof(Profile), by_name);
 	(void)enum_cb;
@@ -1142,7 +1208,21 @@ static void
 lib_play(void)
 {
 	if(g_nprof) {
-		play(&g_prof[g_sel], g_toast, sizeof(g_toast));
+		if(play(&g_prof[g_sel], g_toast, sizeof(g_toast)) == 0) {
+			Profile	*p = &g_prof[g_sel];
+			char	v[32];
+
+			snprintf(v, sizeof(v), "%ld", atol(profile_get(p, "plays")) + 1);
+			profile_set(p, "plays", v);
+			snprintf(v, sizeof(v), "%lld", (long long)time(NULL));
+			profile_set(p, "last_played", v);
+			if(p->path[0]) {
+				profile_save(p, p->path);
+			}
+			if(g_sort >= 2) {
+				resort_keep();
+			}
+		}
 		ui_message("%s", g_toast);
 	}
 }
@@ -1285,6 +1365,13 @@ settings_load(void)
 			snprintf(g_art_root, sizeof(g_art_root), "%s", line + 10);
 		} else if(!strncmp(line, "fullscreen = ", 13)) {
 			g_full = atoi(line + 13) != 0;
+		} else if(!strncmp(line, "sort = ", 7)) {
+			g_sort = atoi(line + 7);
+			if(g_sort < 0 || g_sort > 3) {
+				g_sort = 0;
+			}
+		} else if(!strncmp(line, "favonly = ", 10)) {
+			g_favonly = atoi(line + 10) != 0;
 		} else if(!strncmp(line, "sound = ", 8)) {
 			snd_enable(atoi(line + 8) != 0);
 		}
@@ -1306,8 +1393,8 @@ settings_save(void)
 	f = fopen(path, "w");
 	if(f) {
 		fprintf(f, "skin = %s\n", skin_get(g_skin)->name);
-		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\nsound = %d\n", g_wscale, g_full,
-			g_arcade ? "arcade" : "classic", g_art_root, snd_enabled());
+		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\nsound = %d\nsort = %d\nfavonly = %d\n", g_wscale, g_full,
+			g_arcade ? "arcade" : "classic", g_art_root, snd_enabled(), g_sort, g_favonly);
 		fclose(f);
 	}
 }
@@ -2137,7 +2224,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_SOUND = 78, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FAV = 85, C_SORT0 = 80, C_SORT1, C_SORT2, C_SORT3, C_FAVONLY = 84, C_SORT = 86, C_SOUND = 78, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -2165,11 +2252,18 @@ static const UiMenuItem m_view[] = {
 	{ "Full Screen", C_FULL, "F11", 0 },
 	{ "Sounds", C_SOUND, NULL, 0 },
 	{ "", 0, NULL, UI_MI_SEP },
+	{ "Sort: A-Z", C_SORT0, NULL, 0 },
+	{ "Sort: Favourites First", C_SORT1, NULL, 0 },
+	{ "Sort: Last Played", C_SORT2, NULL, 0 },
+	{ "Sort: Most Played", C_SORT3, NULL, 0 },
+	{ "Favourites Only", C_FAVONLY, NULL, 0 },
+	{ "", 0, NULL, UI_MI_SEP },
 	{ "Arcade View", C_VIEW, "Cmd-0", 0 },
 };
 static const UiMenuItem m_prof[] = {
 	{ "Play", C_PLAY, "Return", 0 },
 	{ "Edit...", C_EDIT, "Cmd-E", 0 },
+	{ "Favourite", C_FAV, "Cmd-D", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Library...", C_LIB, "Cmd-L", 0 },
 };
@@ -2178,7 +2272,7 @@ static const UiMenuItem m_help[] = {
 };
 static UiMenuItem m_skin[16];
 static const UiMenu g_menus[] = {
-	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "View", m_view, 11 },
+	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 5 }, { "View", m_view, 17 },
 	{ "Skin", m_skin, 0 }, { "Help", m_help, 1 },
 };
 static UiMenu g_menus_rw[6];
@@ -2410,8 +2504,8 @@ art_dir_choose(void)
 /* The menu of the Arcade view (Space): the same commands the menu bar has. */
 static UiWindow	g_ovl;
 
-static const struct { const char *label; int id; } g_ovl_items[] = {
-	{ "Play", C_PLAY }, { "Details", C_INFO }, { "Edit...", C_EDIT }, { "New Game...", C_NEW },
+static struct { const char *label; int id; } g_ovl_items[] = {
+	{ "Play", C_PLAY }, { "Details", C_INFO }, { "Favourite", C_FAV }, { "Sort", C_SORT }, { "Edit...", C_EDIT }, { "New Game...", C_NEW },
 	{ "Duplicate", C_DUP }, { "Delete...", C_DEL }, { "Disks and ROMs...", C_LIB },
 	{ "Set Picture...", C_SETPIC }, { "Remove Picture...", C_RMPIC },
 	{ "Artwork Folder...", C_ARTDIR }, { "Import from Attract-Mode...", C_IMPORT },
@@ -2425,7 +2519,7 @@ ovl_enabled(int i)
 {
 	int id = g_ovl_items[i].id;
 
-	return (id == C_PLAY || id == C_INFO || id == C_EDIT || id == C_DUP || id == C_DEL || id == C_SETPIC ||
+	return (id == C_PLAY || id == C_INFO || id == C_FAV || id == C_EDIT || id == C_DUP || id == C_DEL || id == C_SETPIC ||
 		id == C_RMPIC) ? g_nprof > 0 : 1;
 }
 
@@ -2495,6 +2589,19 @@ static void
 ovl_open(void)
 {
 	snprintf(g_ovl.title, sizeof(g_ovl.title), "Menu");
+	{
+		static char fav[48], sort[48];
+
+		snprintf(fav, sizeof(fav), "%s", g_nprof && is_fav(&g_prof[g_sel]) ? "Remove from Favourites" : "Add to Favourites");
+		snprintf(sort, sizeof(sort), "Sort: %s", g_sort_names[g_sort]);
+		for(int i = 0; i < (int)(sizeof(g_ovl_items) / sizeof(g_ovl_items[0])); i++) {
+			if(g_ovl_items[i].id == C_FAV) {
+				g_ovl_items[i].label = fav;
+			} else if(g_ovl_items[i].id == C_SORT) {
+				g_ovl_items[i].label = sort;
+			}
+		}
+	}
 	g_ovl.w = 330;
 	g_ovl.h = 20 + 8 + 30 * (int)(sizeof(g_ovl_items) / sizeof(g_ovl_items[0])) + 10;
 	g_ovl.modal = 1;
@@ -2541,6 +2648,46 @@ app_command(int id)
 		set_window_size(g_steps[id - C_SIZE1]);
 		break;
 	case C_FULL: toggle_fullscreen(); break;
+	case C_FAV:
+		if(g_nprof) {
+			Profile	*p = &g_prof[g_sel];
+
+			profile_set(p, "favorite", is_fav(p) ? "" : "1");
+			if(p->path[0]) {
+				profile_save(p, p->path);
+			}
+			snd_play(SND_SELECT);
+			if(g_favonly && !is_fav(p)) {
+				load_profiles();
+				g_sel = SDL_min(g_sel, g_nprof - 1);
+			} else if(g_sort == 1) {
+				resort_keep();
+			}
+			snprintf(g_toast, sizeof(g_toast), "%s", is_fav(&g_prof[g_sel]) ? "Added to Favourites" : "Removed from Favourites");
+		}
+		break;
+	case C_SORT0: case C_SORT1: case C_SORT2: case C_SORT3: case C_SORT:
+		g_sort = id == C_SORT ? (g_sort + 1) % 4 : id - C_SORT0;
+		resort_keep();
+		snd_play(SND_SELECT);
+		settings_save();
+		break;
+	case C_FAVONLY: {
+		char	keep[1100];
+
+		snprintf(keep, sizeof(keep), "%s", g_nprof ? g_prof[g_sel].path : "");
+		g_favonly = !g_favonly;
+		load_profiles();
+		for(int i = 0; i < g_nprof; i++) {
+			if(!strcmp(g_prof[i].path, keep)) {
+				g_sel = i;
+			}
+		}
+		g_sel = SDL_min(g_sel, SDL_max(g_nprof - 1, 0));
+		snd_play(SND_SELECT);
+		settings_save();
+		break;
+	}
 	case C_SOUND:
 		snd_enable(!snd_enabled());
 		snd_play(SND_SELECT);
@@ -2578,6 +2725,15 @@ app_state(int id)
 	}
 	if(id == C_SOUND) {
 		return snd_enabled() ? UI_MI_CHECKED : 0;
+	}
+	if(id >= C_SORT0 && id <= C_SORT3) {
+		return g_sort == id - C_SORT0 ? UI_MI_CHECKED : 0;
+	}
+	if(id == C_FAVONLY) {
+		return g_favonly ? UI_MI_CHECKED : 0;
+	}
+	if(id == C_FAV) {
+		return g_nprof && is_fav(&g_prof[g_sel]) ? UI_MI_CHECKED : 0;
 	}
 	return (id >= C_SKIN0 && id - C_SKIN0 == g_skin) ? UI_MI_CHECKED : 0;
 }
@@ -2758,6 +2914,7 @@ window(void)
 	SDL_SetRenderLogicalPresentation(g_ren, LW, LH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 	lfold_load();
 	settings_load();
+	load_profiles();		/* again: sort order and favourites filter come from the settings */
 	for(int i = 0; i < skin_count() && i < 16; i++) {
 		m_skin[i].label = skin_get(i)->name;
 		m_skin[i].id = C_SKIN0 + i;
@@ -2878,6 +3035,9 @@ window(void)
 					continue;
 				} else if(k == SDLK_E) {
 					app_command(C_EDIT);
+					continue;
+				} else if(k == SDLK_D) {
+					app_command(C_FAV);
 					continue;
 				} else if(k == SDLK_L) {
 					app_command(C_LIB);

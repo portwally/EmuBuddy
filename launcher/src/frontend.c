@@ -453,6 +453,36 @@ search_match(const char *name)
 	return !g_search[0] || strcasestr(name, g_search) != NULL;
 }
 
+/* a five-point star (the favourite mark) */
+static void
+star(float cx, float cy, float r, int alpha)
+{
+	SDL_Vertex v[12];
+	int	idx[30], k = 0;
+
+	v[0].position.x = cx;
+	v[0].position.y = cy;
+	for(int i = 0; i < 10; i++) {
+		float a = -1.5707963f + (float)i * 0.62831853f, rr = (i & 1) ? r * 0.42f : r;
+
+		v[i + 1].position.x = cx + cosf(a) * rr;
+		v[i + 1].position.y = cy + sinf(a) * rr;
+	}
+	for(int i = 0; i < 11; i++) {
+		v[i].color.r = 1.0f;
+		v[i].color.g = i == 0 ? 0.9f : 0.78f;
+		v[i].color.b = 0.1f;
+		v[i].color.a = alpha / 255.0f;
+		v[i].tex_coord.x = v[i].tex_coord.y = 0;
+	}
+	for(int i = 0; i < 10; i++) {
+		idx[k++] = 0;
+		idx[k++] = 1 + i;
+		idx[k++] = 1 + (i + 1) % 10;
+	}
+	SDL_RenderGeometry(g_r, NULL, v, 11, idx, 30);
+}
+
 static void
 draw_tile(const Profile *p, float x, float y, float w, float h, float sel, int alpha)
 {
@@ -473,6 +503,9 @@ draw_tile(const Profile *p, float x, float y, float w, float h, float sel, int a
 		fill(x, y, w, h, c, alpha);
 		vgrad(x, y, w, h, 0x000000, 0, (int)(alpha * 0.5f));
 		text(g_big, (int)(x + w / 2 - text_w(g_big, ini) / 2), (int)(y + h / 2 - 30), ini, 0xFFFFFF, (int)(alpha * 0.9f));
+	}
+	if(profile_get(p, "favorite")[0] == '1') {
+		star(x + w - 22 * (h / 230.0f), y + 22 * (h / 230.0f), 13 * (h / 230.0f), alpha);
 	}
 	if(sel > 0.5f) {			/* a bright frame on the selected one */
 		rgba(0xFFFFFF, (int)(alpha * 0.9f * sel));

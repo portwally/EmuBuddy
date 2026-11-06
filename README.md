@@ -218,6 +218,9 @@ the window); **Return** starts EmuBuddy with the matching command line (see [Com
 
 - **Game controller:** D-pad or left stick move, A plays, B goes back, X shows the details, Y or Start opens the
   menu, the shoulder buttons jump five games. The hints at the bottom switch to the controller buttons when you use it.
+- **Favourites and sorting:** Space > Add to Favourites (or Cmd/Ctrl-D) puts a star on a game. The View menu sorts by
+  A-Z, favourites first, last played or most played, and can show only the favourites. The launcher counts how often
+  and when you played a game (stored in the profile file as `plays` and `last_played`).
 - **Sounds:** short soft interface sounds when you move, choose, open the menu and start a game. Switch them off under
   View > Sounds (or in the Space menu).
 - **Simple editor:** Edit and New Game show a small window with the name, the picture, a main disk and a floppy, and

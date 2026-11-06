@@ -124,6 +124,8 @@ Set/Remove Picture.
 
 **Simple editor (done):** Edit and New Game open a small window: name, picture (choose or drop), a main disk and a floppy (Library, Choose, clear), and switches for Sound card, Internet, Printer, Fast, Full screen and Curved screen. "More settings..." opens the full editor with the same values.
 
-**Not done yet:** idle slideshow; portrait layout; favourites and sorting; German texts;
+**Favourites and sorting (done):** star on favourites, sort by A-Z / favourites first / last played / most played, favourites-only filter; play count and last played are stored in the profile (`plays`, `last_played`, `favorite`).
+
+**Not done yet:** idle slideshow; portrait layout; German texts;
 automatic snapshot when EmuBuddy quits;
 JPG pictures (PNG and BMP load now).
