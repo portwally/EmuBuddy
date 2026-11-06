@@ -540,6 +540,12 @@ ui_handle_event(SDL_Event *ev)
 		if(ev->key.scancode == SDL_SCANCODE_F4) {
 			return 1;		/* the old text config panel is gone */
 		}
+		if(g_app->hotkey && !ui_is_modal() &&
+				g_app->hotkey(ev->key.scancode,
+				ev->type == SDL_EVENT_KEY_DOWN ?
+				(ev->key.repeat ? -1 : (int)ev->key.mod) : -2)) {
+			return 1;
+		}
 		if(ev->type == SDL_EVENT_KEY_UP) {
 			return ui_is_modal();
 		}
@@ -1098,6 +1104,9 @@ draw_status_bar(void)
 	ui_draw_text(8, y + 3, l, UI_BLACK);
 	ui_draw_text((g_lw - ui_text_width(c)) / 2, y + 3, c, UI_BLACK);
 	ui_draw_text(g_lw - 8 - ui_text_width(r), y + 3, r, UI_BLACK);
+	if(g_app->status_draw) {
+		g_app->status_draw(0, y, g_lw - 16 - ui_text_width(r), UI_BAR_H);
+	}
 }
 
 void

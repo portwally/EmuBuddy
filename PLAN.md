@@ -103,7 +103,8 @@ IP by DHCP and loads a page. Headless (no UI work needed). This is the riskiest
 part, so it goes first.
 
 ### Phase 1: UI toolkit and main window (L)
-**Status, slice 1 done:** toolkit core (windows, menu bar, status bar, button, checkbox, list, file browser), embedded Shaston font with own TrueType reader, File/Machine/Speed/View/Help menus, pause, reset, speed incl. Unlimited, About. **Still open in Phase 1:** toolbar strip, drive lights in the status bar, paste/copy text, debugger menu, keyboard shortcuts, Open Recent.
+**Status, slice 2 done:** Edit menu (Paste Text types the Mac clipboard into the IIgs, Copy Screen Text), hotkeys F2 Drives / F3 Pause / F4 Slots, F7 debugger blocked, activity lights for 3.5 / 5.25 / HD in the status bar. Toolbar strip dropped for now (menus cover it).
+**Slice 1:** toolkit core (windows, menu bar, status bar, button, checkbox, list, file browser), embedded Shaston font with own TrueType reader, File/Machine/Speed/View/Help menus, pause, reset, speed incl. Unlimited, About. **Still open in Phase 1:** toolbar strip, drive lights in the status bar, paste/copy text, debugger menu, keyboard shortcuts, Open Recent.
 - Toolkit core: draw primitives, glyph atlas, event routing, window manager,
   widgets above. Unit-testable layout code kept separate from SDL calls.
 - **Menu bar** (File, Machine, Disks, View, Window, Help): Open Disk…, Recent

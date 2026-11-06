@@ -15,6 +15,8 @@ extern double	g_eff_mhz;
 extern int	g_fullscreen;
 extern int	g_crt;
 extern int	g_status_enable;
+extern dword64	g_cur_dfcyc;
+char		*cfg_text_screen_str(void);
 extern int	g_scanline_simulator;
 extern int	g_ui_pause;
 extern int	g_rom_version;
@@ -41,6 +43,7 @@ enum {
 	CMD_SPEED_1 = 20, CMD_SPEED_28, CMD_ZIP_8, CMD_ZIP_16, CMD_ZIP_32,
 	CMD_ZIP_64, CMD_ZIP_128, CMD_UNLIMITED,
 	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT, CMD_CORE_STATUS,
+	CMD_PASTE = 45, CMD_COPY_SCREEN,
 	CMD_ABOUT = 40,
 	CMD_RECENT0 = 60,		/* 60..69 */
 };
@@ -48,7 +51,7 @@ enum {
 
 #define DISKS_FIXED	5
 static UiMenuItem disks_items[DISKS_FIXED + 2 + N_RECENT] = {
-	{ "Drives Window", CMD_DRIVES, NULL, 0 },
+	{ "Drives Window", CMD_DRIVES, "F2", 0 },
 	{ "Open Disk Image...", CMD_OPEN_DISK, NULL, 0 },
 	{ "Share a Folder...", CMD_SHARE, NULL, 0 },
 	{ "Disk Browser", CMD_BROWSER, NULL, 0 },
@@ -60,10 +63,10 @@ static const UiMenuItem file_items[] = {
 	{ "Quit EmuBuddy", CMD_QUIT, NULL, 0 },
 };
 static const UiMenuItem machine_items[] = {
-	{ "Reset", CMD_RESET, NULL, 0 },
-	{ "Pause", CMD_PAUSE, NULL, 0 },
+	{ "Reset", CMD_RESET, "Ctrl-F12", 0 },
+	{ "Pause", CMD_PAUSE, "F3", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
-	{ "Slots...", CMD_SLOTS, NULL, 0 },
+	{ "Slots...", CMD_SLOTS, "F4", 0 },
 	{ "Printer", CMD_PRINTER, NULL, 0 },
 };
 static const UiMenuItem speed_items[] = {
@@ -86,6 +89,10 @@ static const UiMenuItem view_items[] = {
 	{ "Save Screenshot", CMD_SCREENSHOT, "F10", 0 },
 	{ "Core Debug Lines", CMD_CORE_STATUS, NULL, 0 },
 };
+static const UiMenuItem edit_items[] = {
+	{ "Paste Text", CMD_PASTE, NULL, 0 },
+	{ "Copy Screen Text", CMD_COPY_SCREEN, NULL, 0 },
+};
 static const UiMenuItem help_items[] = {
 	{ "About EmuBuddy", CMD_ABOUT, NULL, 0 },
 };
@@ -93,6 +100,7 @@ static const UiMenuItem help_items[] = {
 #define N(a)	((int)(sizeof(a) / sizeof((a)[0])))
 static UiMenu g_menus[] = {
 	{ "File", file_items, N(file_items) },
+	{ "Edit", edit_items, N(edit_items) },
 	{ "Disks", disks_items, DISKS_FIXED },
 	{ "Machine", machine_items, N(machine_items) },
 	{ "Speed", speed_items, N(speed_items) },
@@ -478,6 +486,32 @@ set_limit(int limit, int zip_mhz)
 	}
 }
 
+/* Type the host clipboard into the IIgs keyboard. */
+static void
+paste_text(void)
+{
+	char	*t = SDL_GetClipboardText(), *p;
+	int	n = 0;
+
+	if(!t || !*t) {
+		ui_message("The clipboard has no text");
+		SDL_free(t);
+		return;
+	}
+	for(p = t; *p; p++) {
+		unsigned char c = (unsigned char)*p;
+
+		if(c == '\t') {
+			c = ' ';
+		}
+		if(c < 0x80 && adb_paste_add_buf(c) == 0) {
+			n++;
+		}
+	}
+	SDL_free(t);
+	ui_message("Pasting %d characters", n);
+}
+
 static void
 app_command(int id)
 {
@@ -515,6 +549,11 @@ app_command(int id)
 	case CMD_SCREENSHOT: sdl_request_screenshot(); break;
 	case CMD_CORE_STATUS: g_status_enable = !g_status_enable; break;
 	case CMD_ABOUT: about_open(); break;
+	case CMD_PASTE: paste_text(); break;
+	case CMD_COPY_SCREEN:
+		SDL_SetClipboardText(cfg_text_screen_str());
+		ui_message("Screen text copied");
+		break;
 	default:
 		if(id >= CMD_RECENT0 && id < CMD_RECENT0 + N_RECENT) {
 			ui_recent_activate(id - CMD_RECENT0);
@@ -597,7 +636,7 @@ menu_rebuild_recent(void)
 		disks_items[k].shortcut = NULL;
 		disks_items[k].flags = 0;
 	}
-	g_menus[1].n_items = k;
+	g_menus[2].n_items = k;
 }
 
 static void
@@ -632,6 +671,58 @@ app_tick(void)
 	}
 }
 
+/* F2 Drives, F3 Pause, F4 Slots; F7 (terminal debugger) is blocked. */
+static int
+app_hotkey(int sc, int mods)
+{
+	int	cmd = 0;
+	(void)mods;
+
+	switch(sc) {
+	case SDL_SCANCODE_F2: cmd = CMD_DRIVES; break;
+	case SDL_SCANCODE_F3: cmd = CMD_PAUSE; break;
+	case SDL_SCANCODE_F4: cmd = CMD_SLOTS; break;
+	case SDL_SCANCODE_F7: return 1;
+	default: return 0;
+	}
+	if(mods >= 0) {				/* key down, not a repeat */
+		app_command(cmd);
+	}
+	return 1;
+}
+
+/* Disk activity lights: 3.5, 5.25 and hard disk, lit for a moment after
+ * the drive is read or written. */
+static void
+app_status_draw(int x, int y, int w, int h)
+{
+	static const char *names[3] = { "3.5", "5.25", "HD" };
+	int	k, d, nd, lx, active;
+	dword64	window = (dword64)300000 << 16;	/* ~0.3 s of IIgs time */
+
+	(void)x;
+	lx = w - 3 * 52;
+	for(k = 0; k < 3; k++) {
+		int slot = 5 + k;
+
+		active = 0;
+		nd = (slot == 7) ? MAX_C7_DISKS : 2;
+		for(d = 0; d < nd; d++) {
+			Disk *dsk = iwm_get_dsk_from_slot_drive(slot, d);
+
+			if(dsk->fd >= 0 && dsk->dfcyc_last_read &&
+				g_cur_dfcyc - dsk->dfcyc_last_read < window) {
+				active = 1;
+			}
+		}
+		ui_fill(lx, y + 6, 9, 9, active ? UI_GOOD : UI_WHITE);
+		ui_frame(lx, y + 6, 9, 9, UI_BLACK);
+		ui_draw_text(lx + 13, y + 3, names[k], UI_BLACK);
+		lx += 52;
+	}
+	(void)h;
+}
+
 static int
 app_cover_picture(void)
 {
@@ -640,7 +731,7 @@ app_cover_picture(void)
 
 static const UiApp g_app = {
 	g_menus, N(g_menus), app_item_state, app_command, app_status,
-	app_tick, app_cover_picture
+	app_tick, app_cover_picture, app_hotkey, app_status_draw
 };
 
 void

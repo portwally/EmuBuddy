@@ -535,6 +535,7 @@ do_read_c7(int unit_num, word32 buf, word32 blk)
 	}
 
 	dsk = &(g_iwm.smartport[unit_num]);
+	dsk->dfcyc_last_read = g_cur_dfcyc;	// EmuBuddy: activity light
 	fd = dsk->fd;
 	dimage_start = dsk->dimage_start;
 	dimage_size = dsk->dimage_size;
@@ -614,6 +615,7 @@ do_write_c7(int unit_num, word32 buf, word32 blk)
 	}
 
 	dsk = &(g_iwm.smartport[unit_num]);
+	dsk->dfcyc_last_read = g_cur_dfcyc;	// EmuBuddy: activity light
 	fd = dsk->fd;
 	dimage_start = dsk->dimage_start;
 	dimage_size = dsk->dimage_size;

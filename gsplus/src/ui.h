@@ -69,6 +69,10 @@ typedef struct {
 	void		(*tick)(void);
 	/* Return 1 to blank the emulator picture (e.g. no ROM loaded). */
 	int		(*cover_picture)(void);
+	/* Hotkey before the emulator sees it; return 1 if used. */
+	int		(*hotkey)(int scancode, int mods);
+	/* Extra drawing in the status bar (x, y, w, h of the bar). */
+	void		(*status_draw)(int x, int y, int w, int h);
 } UiApp;
 
 void	ui_init(SDL_Window *w, SDL_Renderer *r, const UiApp *app);
