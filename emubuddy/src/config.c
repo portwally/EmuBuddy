@@ -168,6 +168,7 @@ extern Cfg_menu g_cfg_sdl_video_menu[];
  * the main menu table so they are saved in config.kegs. */
 int	g_slot4_mockingboard = 0;	/* slot 4: 1 Mockingboard, 0 empty */
 extern char *g_bridge_root;		/* bridge.c: the bridge folder */
+int	g_skin = 0;				/* 0 = IIgs look, 1 = System (macOS menu bar, native choosers) */
 int	g_window_scale = 1;		/* EmuBuddy window size: 1x..4x */
 int	g_slot7_scsi = 1;		/* slot 7: 1 SCSI card (7 hard drives), 0 empty */
 int	g_uthernet2_slot = 4;		/* slot of the Uthernet II card, 0 = none */
@@ -441,6 +442,7 @@ Cfg_menu g_cfg_main_menu[] = {
 { "Slot 7 SCSI card,0,Empty,1,SCSI card", KNMP(g_slot7_scsi), CFGTYPE_INT },
 { "Window size,1,1x,2,2x,3,3x,4,4x", KNMP(g_window_scale), CFGTYPE_INT },
 { "Bridge folder", KNMP(g_bridge_root), CFGTYPE_STR },
+{ "Skin,0,IIgs,1,System", KNMP(g_skin), CFGTYPE_INT },
 { "Uthernet II slot,0,None,3,Slot 3,4,Slot 4", KNMP(g_uthernet2_slot),
 		CFGTYPE_INT },
 { "Speed,0,Unlimited,1,1.0MHz,2,2.8MHz,3,8.0MHz (Zip)",

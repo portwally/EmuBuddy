@@ -18,6 +18,8 @@ int		rec_active(void);
 void		ui_drop_dest_toggle(void);
 void		ui_show_shared_folder(void);
 void		ui_bridge_choose(void);
+extern int	g_skin;
+void		sdl_set_skin(int skin);
 void		ui_bridge_off(void);
 int		ui_bridge_is_on(void);
 double		rec_seconds(void);
@@ -58,7 +60,7 @@ enum {
 	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT, CMD_CORE_STATUS,
 	CMD_PASTE = 45, CMD_COPY_SCREEN,
 	CMD_SIZE_1 = 50, CMD_SIZE_2, CMD_SIZE_3, CMD_SIZE_4,
-	CMD_SHOT_WIN = 55, CMD_RECORD, CMD_DROPDEST, CMD_SHOWSHARE, CMD_BRIDGE, CMD_BRIDGE_OFF,
+	CMD_SHOT_WIN = 55, CMD_RECORD, CMD_DROPDEST, CMD_SHOWSHARE, CMD_BRIDGE, CMD_BRIDGE_OFF, CMD_SKIN_IIGS, CMD_SKIN_SYS,
 	CMD_ABOUT = 40,
 	CMD_RECENT0 = 60,		/* 60..69 */
 };
@@ -116,6 +118,11 @@ static const UiMenuItem view_items[] = {
 	{ "Scanlines", CMD_SCANLINES, "Shift-F11", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Core Debug Lines", CMD_CORE_STATUS, NULL, 0 },
+#ifdef __APPLE__
+	{ "", 0, NULL, UI_MI_SEP },
+	{ "Skin: IIgs Style", CMD_SKIN_IIGS, NULL, 0 },
+	{ "Skin: System (macOS menus)", CMD_SKIN_SYS, NULL, 0 },
+#endif
 };
 static const UiMenuItem edit_items[] = {
 	{ "Paste Text", CMD_PASTE, NULL, 0 },
@@ -355,9 +362,80 @@ fb_draw(UiWindow *win, int cx, int cy)
 	}
 }
 
+/* ---- System skin: the system's own file and folder choosers ---- */
+
+extern int	g_skin;
+SDL_Window	*ui_window(void);
+
+static void	(*g_native_pick)(const char *);	/* the chooser that is open */
+static char	g_native_path[1100];
+static SDL_AtomicInt g_native_ready;
+
+/* May run on another thread: hand the result to app_tick(). */
+static void SDLCALL
+native_chooser_cb(void *ud, const char * const *list, int filter)
+{
+	(void)ud;
+	(void)filter;
+	if(list && list[0] && g_native_pick) {
+		snprintf(g_native_path, sizeof(g_native_path), "%s", list[0]);
+		SDL_SetAtomicInt(&g_native_ready, 1);
+	} else {
+		g_native_pick = NULL;		/* cancelled */
+	}
+}
+
+static void
+native_chooser_tick(void)
+{
+	if(SDL_GetAtomicInt(&g_native_ready)) {
+		void (*pick)(const char *) = g_native_pick;
+		char	path[1100];
+
+		snprintf(path, sizeof(path), "%s", g_native_path);
+		g_native_pick = NULL;
+		SDL_SetAtomicInt(&g_native_ready, 0);
+		if(pick) {
+			pick(path);
+		}
+	}
+}
+
+static int
+native_chooser_open(const char *title, int folder, void (*pick)(const char *))
+{
+	SDL_PropertiesID props;
+
+	if(g_skin != 1 || g_native_pick) {
+		return g_skin == 1;		/* a chooser is open already: ignore */
+	}
+	props = SDL_CreateProperties();
+	SDL_SetPointerProperty(props, SDL_PROP_FILE_DIALOG_WINDOW_POINTER, ui_window());
+	SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_TITLE_STRING, title);
+	if(g_fb_last_dir[0]) {
+		SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_LOCATION_STRING,
+							g_fb_last_dir);
+	}
+	g_native_pick = pick;
+	if(getenv("EMUBUDDY_PICK")) {		/* test aid: answer without a dialog */
+		const char *fake[2] = { getenv("EMUBUDDY_PICK"), NULL };
+
+		native_chooser_cb(NULL, fake, 0);
+		SDL_DestroyProperties(props);
+		return 1;
+	}
+	SDL_ShowFileDialogWithProperties(folder ? SDL_FILEDIALOG_OPENFOLDER :
+				SDL_FILEDIALOG_OPENFILE, native_chooser_cb, NULL, props);
+	SDL_DestroyProperties(props);
+	return 1;
+}
+
 void
 ui_folder_browser_open(const char *title, void (*pick)(const char *))
 {
+	if(native_chooser_open(title, 1, pick)) {
+		return;
+	}
 	g_fb_folder_mode = 1;
 	ui_file_browser_open(title, pick);
 	g_fb_folder_mode = 1;		/* (cleared by the plain opener) */
@@ -389,6 +467,9 @@ ui_file_browser_open(const char *title, void (*pick)(const char *))
 {
 	const char	*h;
 
+	if(g_fb_folder_mode == 0 && native_chooser_open(title, 0, pick)) {
+		return;
+	}
 	g_fb_folder_mode = 0;
 	snprintf(g_fb_win.title, sizeof(g_fb_win.title), "%s", title);
 	g_fb_win.w = 440;
@@ -587,6 +668,8 @@ app_command(int id)
 	case CMD_DROPDEST: ui_drop_dest_toggle(); break;
 	case CMD_SHOWSHARE: ui_show_shared_folder(); break;
 	case CMD_BRIDGE: ui_bridge_choose(); break;
+	case CMD_SKIN_IIGS: sdl_set_skin(0); break;
+	case CMD_SKIN_SYS: sdl_set_skin(1); break;
 	case CMD_BRIDGE_OFF: ui_bridge_off(); break;
 	case CMD_CORE_STATUS: g_status_enable = !g_status_enable; break;
 	case CMD_ABOUT: about_open(); break;
@@ -627,6 +710,8 @@ app_item_state(int id)
 		return (g_window_scale == n && !g_fullscreen ? UI_MI_CHECKED : 0) |
 			(sdl_scale_fits(n) ? 0 : UI_MI_DISABLED);
 	}
+	case CMD_SKIN_IIGS: return g_skin == 0 ? UI_MI_CHECKED : 0;
+	case CMD_SKIN_SYS: return g_skin == 1 ? UI_MI_CHECKED : 0;
 	case CMD_BRIDGE: return ui_bridge_is_on() ? UI_MI_CHECKED : 0;
 	case CMD_BRIDGE_OFF: return ui_bridge_is_on() ? 0 : UI_MI_DISABLED;
 	case CMD_RECORD: return rec_active() ? UI_MI_CHECKED : 0;
@@ -698,6 +783,7 @@ menu_rebuild_recent(void)
 static void
 app_tick(void)
 {
+	native_chooser_tick();
 	menu_rebuild_recent();
 	ui_drives_tick();
 	if(rom_missing()) {

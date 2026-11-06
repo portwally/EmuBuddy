@@ -69,6 +69,7 @@ usage(void)
 "  -hard1 <img> ... -hard7 <img>  SCSI hard disks (slot 7, drive 1-7)\n"
 "  -share <folder>                Mac/PC folder as a ProDOS volume\n"
 "  -bridge <folder>               folder IIgs programs may read/write (host bridge)\n"
+"  -skin iigs | system            look: IIgs style, or the macOS menu bar (macOS only)\n"
 "  <img or folder>                put in the first free fitting drive\n"
 "\n"
 "Slots (-slN <card>):\n"
@@ -272,7 +273,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 		/* options with a value from here on */
 		if(!v && (is(o, "-flop1") || is(o, "-flop2") || is(o, "-flop3") ||
 				is(o, "-flop4") || !strncasecmp(o, "-hard", 5) ||
-				!strncasecmp(o, "-sl", 3) || is(o, "-share") || is(o, "-bridge") ||
+				!strncasecmp(o, "-sl", 3) || is(o, "-share") || is(o, "-bridge") || is(o, "-skin") ||
 				is(o, "-mhz") || is(o, "-ramsize") ||
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines"))) {
@@ -300,6 +301,15 @@ emubuddy_cli(int *pargc, char ***pargv)
 			later(v);
 		} else if(is(o, "-bridge")) {
 			emit2("-g_bridge_root", v);
+		} else if(is(o, "-skin")) {
+			if(is(v, "system")) {
+				emit2("-g_skin", "1");
+			} else if(is(v, "iigs")) {
+				emit2("-g_skin", "0");
+			} else {
+				fprintf(stderr, "EmuBuddy: -skin iigs or system\n");
+				return -1;
+			}
 		} else if(is(o, "-mhz")) {
 			if(mhz_option(v) != 0) {
 				return -1;

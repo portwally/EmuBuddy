@@ -10,6 +10,8 @@
 #include <SDL3/SDL.h>
 
 #define UI_BAR_H	20		/* menu bar and status bar height */
+extern int	g_ui_top_h;		/* drawn menu bar height: 20, or 0 with the native menu bar */
+#define UI_TOP_H	g_ui_top_h
 #define UI_FONT_H	16
 #define UI_MAX_WINDOWS	16
 

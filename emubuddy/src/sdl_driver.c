@@ -105,6 +105,10 @@ static int g_mouse_over_window = 0;	/* cursor is inside our window (ENTER/LEAVE)
 static int g_cursor_hidden = 0;		/* current SDL cursor state we last set */
 static int g_scanline_saved = 50;	/* intensity to restore when toggled back on */
 extern int g_ui_pause;
+extern int g_skin;
+#ifdef __APPLE__
+void mac_native_menu_enable(int on);
+#endif
 extern int g_cur_a2_stat;
 static int g_screenshot_window_requested = 0;
 static int g_rec_toggle_requested = 0;
@@ -451,11 +455,11 @@ sdl_logical_on(Window_info *win)
 
 	SDL_SetRenderViewport(win->renderer, NULL);
 	SDL_SetRenderLogicalPresentation(win->renderer, win->width_req,
-		win->main_height + 2 * UI_BAR_H,
+		win->main_height + UI_TOP_H + UI_BAR_H,
 		g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
 			   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
 	vp.x = 0;
-	vp.y = UI_BAR_H;
+	vp.y = UI_TOP_H;
 	vp.w = win->width_req;
 	vp.h = win->main_height;
 	SDL_SetRenderViewport(win->renderer, &vp);
@@ -554,8 +558,13 @@ sdl_video_init(void)
 	if(g_borderless) { flags |= SDL_WINDOW_BORDERLESS; }
 	if(g_fullscreen) { flags |= SDL_WINDOW_FULLSCREEN; g_is_fullscreen = 1; }
 
+#ifdef __APPLE__
+	g_ui_top_h = (g_skin == 1) ? 0 : UI_BAR_H;	/* System skin: the macOS menu bar */
+#else
+	g_skin = 0;
+#endif
 	g_mainwin_info.window = SDL_CreateWindow("EmuBuddy",
-				w, h + 2 * UI_BAR_H, flags);
+				w, h + UI_TOP_H + UI_BAR_H, flags);
 	if(!g_mainwin_info.window) {
 		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
 		exit(1);
@@ -622,6 +631,39 @@ sdl_video_init(void)
 	 * off its items so combos like ⌘W/⌘Q reach the emulated IIgs (which uses
 	 * ⌘ as Open-Apple), and move GSplus's own Quit to ⌥⌘Q. */
 	sdl_mac_fix_menu();
+	if(g_skin == 1) {
+		mac_native_menu_enable(1);
+	}
+#endif
+}
+
+void	sdl_set_window_scale(int s);
+extern int	g_window_scale;
+
+/* View > Skin: the IIgs look (drawn menu bar) or the System look (macOS menu
+ * bar). The window gets 20 points shorter or taller. */
+void
+sdl_set_skin(int skin)
+{
+#ifdef __APPLE__
+	Window_info	*win = &g_mainwin_info;
+
+	skin = skin ? 1 : 0;
+	if(skin == g_skin) {
+		return;
+	}
+	g_skin = skin;
+	g_ui_top_h = skin ? 0 : UI_BAR_H;
+	mac_native_menu_enable(skin);
+	if(g_fullscreen) {
+		sdl_logical_on(win);
+	} else {
+		sdl_set_window_scale(g_window_scale);
+		sdl_logical_on(win);
+	}
+	video_set_x_refresh_needed(win->kimage_ptr, 1);
+#else
+	(void)skin;
 #endif
 }
 
@@ -1225,7 +1267,7 @@ sdl_poll_events(void)
 			SDL_ConvertEventToRenderCoordinates(win->renderer, &ev);
 			mx = video_scale_mouse_x(win->kimage_ptr, (int)ev.motion.x, 0);
 			my = video_scale_mouse_y(win->kimage_ptr,
-				(int)ev.motion.y - UI_BAR_H, 0);
+				(int)ev.motion.y - UI_TOP_H, 0);
 			adb_update_mouse(win->kimage_ptr, mx, my, 0, 0);
 			/* Motion means the pointer is over us; covers the case where
 			 * the window opened under the cursor with no ENTER event. */
@@ -1240,7 +1282,7 @@ sdl_poll_events(void)
 			mask = sdl_button_mask(ev.button.button);
 			mx = video_scale_mouse_x(win->kimage_ptr, (int)ev.button.x, 0);
 			my = video_scale_mouse_y(win->kimage_ptr,
-				(int)ev.button.y - UI_BAR_H, 0);
+				(int)ev.button.y - UI_TOP_H, 0);
 			adb_update_mouse(win->kimage_ptr, mx, my,
 				(ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN) ? mask : 0,
 				mask & 7);
@@ -1509,7 +1551,7 @@ sdl_dev_snapshot(Window_info *win)
 	frames++;
 	if(frames == 2 && getenv("EMUBUDDY_DROPS")) {
 		printf("EMUBUDDY logical %dx%d\n", win->width_req,
-					win->main_height + 2 * UI_BAR_H);
+					win->main_height + UI_TOP_H + UI_BAR_H);
 	}
 	sdl_dev_drops(win, frames);
 	{	/* EMUBUDDY_REC="a:b" toggles recording at frames a and b;
@@ -1552,6 +1594,14 @@ sdl_dev_snapshot(Window_info *win)
 				fclose(f);
 			}
 			printf("RAM dumped to %s.fast/.slow\n", dp);
+		}
+	}
+	{	/* EMUBUDDY_SKINAT="frame:skin" switches the skin at that frame */
+		const char *sk = getenv("EMUBUDDY_SKINAT");
+		int sf, sv;
+
+		if(sk && sscanf(sk, "%d:%d", &sf, &sv) == 2 && sf == frames) {
+			sdl_set_skin(sv);
 		}
 	}
 	sdl_dev_mouse(win, frames);
@@ -1641,12 +1691,12 @@ sdl_fit_scale(Window_info *win, int want)
 	if(getenv("EMUBUDDY_USABLE") &&		/* test aid: "WxH" pretends this screen */
 			sscanf(getenv("EMUBUDDY_USABLE"), "%dx%d", &r.w, &r.h) == 2) {
 		while(s > 1 && (win->width_req * s > r.w ||
-			(win->main_height + 2 * UI_BAR_H) * s + 40 > r.h)) {
+			(win->main_height + UI_TOP_H + UI_BAR_H) * s + 40 > r.h)) {
 			s--;
 		}
 	} else if(SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(win->window), &r)) {
 		while(s > 1 && (win->width_req * s > r.w ||
-			(win->main_height + 2 * UI_BAR_H) * s + 40 > r.h)) {
+			(win->main_height + UI_TOP_H + UI_BAR_H) * s + 40 > r.h)) {
 			s--;
 		}
 	}
@@ -1673,7 +1723,7 @@ sdl_set_window_scale(int s)
 		sdl_sync_fullscreen(win);
 	}
 	SDL_SetWindowSize(win->window, win->width_req * g_window_scale,
-			(win->main_height + 2 * UI_BAR_H) * g_window_scale);
+			(win->main_height + UI_TOP_H + UI_BAR_H) * g_window_scale);
 }
 
 static void
@@ -1699,7 +1749,7 @@ sdl_apply_cli(void)
 		}
 		g_window_scale = scale;
 		SDL_SetWindowSize(win->window, win->width_req * scale,
-				(win->main_height + 2 * UI_BAR_H) * scale);
+				(win->main_height + UI_TOP_H + UI_BAR_H) * scale);
 	}
 	if(w > 0 && h > 0) {
 		g_cli_fixed_size = 1;
@@ -1724,10 +1774,10 @@ sdl_grab_picture(Window_info *win, int whole)
 	SDL_FRect	lr;
 
 	if(!whole && SDL_GetRenderLogicalPresentationRect(win->renderer, &lr)) {
-		float th = (float)(win->main_height + 2 * UI_BAR_H);
+		float th = (float)(win->main_height + UI_TOP_H + UI_BAR_H);
 
 		pic.x = (int)lr.x;
-		pic.y = (int)(lr.y + lr.h * UI_BAR_H / th);
+		pic.y = (int)(lr.y + lr.h * UI_TOP_H / th);
 		pic.w = (int)lr.w;
 		pic.h = (int)(lr.h * win->main_height / th);
 		shot = SDL_RenderReadPixels(win->renderer, &pic);
@@ -2059,7 +2109,7 @@ sdl_update_display(Window_info *win)
 			int sc = sdl_fit_scale(win, g_window_scale);
 
 			SDL_SetWindowSize(win->window, w * sc,
-					(h + 2 * UI_BAR_H) * sc);
+					(h + UI_TOP_H + UI_BAR_H) * sc);
 		}
 		/* Honor -noaspect here too, matching init and the CRT path; otherwise
 		 * a stretched view reverts to letterbox after the first mode change. */
@@ -2123,7 +2173,7 @@ sdl_update_display(Window_info *win)
 		sdl_record_frame(win);
 	}
 
-	ui_draw(win->width_req, win->main_height + 2 * UI_BAR_H);
+	ui_draw(win->width_req, win->main_height + UI_TOP_H + UI_BAR_H);
 	if(g_screenshot_window_requested) {
 		g_screenshot_window_requested = 0;
 		sdl_save_screenshot(win, 1);

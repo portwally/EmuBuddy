@@ -1,6 +1,8 @@
 /* EmuBuddy UI toolkit core: window manager, input routing, menu bar, status
  * bar and widgets, in the white Apple IIgs GS/OS look. See ui.h. */
 #include "ui.h"
+
+int	g_ui_top_h = UI_BAR_H;
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,6 +87,40 @@ text_centered(int x, int y, int w, int h, const char *s, Uint32 rgb)
 
 /* ------------------------------------------------------------------ */
 /* init / lifecycle */
+
+const UiApp *
+ui_get_app(void)
+{
+	return g_app;
+}
+
+/* Commands chosen in the system menu bar run on the next frame. */
+#define POST_MAX	32
+static int	g_posted[POST_MAX];
+static int	g_npost;
+
+void
+ui_post_command(int id)
+{
+	if(g_npost < POST_MAX) {
+		g_posted[g_npost++] = id;
+	}
+}
+
+static void
+run_posted(void)
+{
+	int	i, n = g_npost;
+	int	ids[POST_MAX];
+
+	memcpy(ids, g_posted, sizeof(int) * (size_t)n);
+	g_npost = 0;
+	for(i = 0; i < n; i++) {
+		if(g_app->command && ids[i]) {
+			g_app->command(ids[i]);
+		}
+	}
+}
 
 void
 ui_init(SDL_Window *w, SDL_Renderer *r, const UiApp *app)
@@ -174,9 +210,9 @@ ui_window_center(UiWindow *w)
 	int	lh = g_lh ? g_lh : 440;
 
 	w->x = (lw - w->w) / 2;
-	w->y = UI_BAR_H + (lh - 2 * UI_BAR_H - w->h) / 2;
-	if(w->y < UI_BAR_H) {
-		w->y = UI_BAR_H;
+	w->y = UI_TOP_H + (lh - UI_TOP_H - UI_BAR_H - w->h) / 2;
+	if(w->y < UI_TOP_H) {
+		w->y = UI_TOP_H;
 	}
 }
 
@@ -331,7 +367,7 @@ menu_title_at(float px, float py)
 {
 	int	i;
 
-	if(py < 0 || py >= UI_BAR_H) {
+	if(py < 0 || py >= UI_TOP_H) {
 		return -1;
 	}
 	for(i = 0; i < g_app->n_menus; i++) {
@@ -361,7 +397,7 @@ menu_dropdown_hit(float px, float py)
 static int
 over_ui(float px, float py)
 {
-	if(py < UI_BAR_H || py >= g_lh - UI_BAR_H) {
+	if(py < UI_TOP_H || py >= g_lh - UI_BAR_H) {
 		return 1;
 	}
 	if(menu_dropdown_hit(px, py)) {
@@ -400,7 +436,7 @@ handle_mouse(SDL_Event *ev)
 
 			if(nx < 40 - g_cap_win->w) nx = 40 - g_cap_win->w;
 			if(nx > g_lw - 40) nx = g_lw - 40;
-			if(ny < UI_BAR_H) ny = UI_BAR_H;
+			if(ny < UI_TOP_H) ny = UI_TOP_H;
 			if(ny > g_lh - UI_BAR_H - UI_TITLE_H)
 				ny = g_lh - UI_BAR_H - UI_TITLE_H;
 			g_cap_win->x = nx;
@@ -1012,6 +1048,9 @@ draw_menu_bar(void)
 {
 	int	i, x, tw;
 
+	if(UI_TOP_H == 0) {
+		return;			/* the system's menu bar is used */
+	}
 	ui_fill(0, 0, g_lw, UI_BAR_H, UI_WHITE);
 	ui_hline(0, UI_BAR_H - 1, g_lw, UI_BLACK);
 	draw_logo(10, 4);
@@ -1124,8 +1163,9 @@ ui_draw(int lw, int lh)
 	if(g_app->tick) {
 		g_app->tick();
 	}
+	run_posted();
 	if(g_app->cover_picture && g_app->cover_picture()) {
-		ui_fill(0, UI_BAR_H, lw, lh - 2 * UI_BAR_H, UI_BLACK);
+		ui_fill(0, UI_TOP_H, lw, lh - UI_TOP_H - UI_BAR_H, UI_BLACK);
 	}
 	{
 		UiWindow *snap[UI_MAX_WINDOWS];
