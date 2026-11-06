@@ -253,9 +253,9 @@ if(WIN32)
     # script. Bake the absolute .ico path into the .rc so windres always finds it.
     enable_language(RC)
     set(GSPLUS_ICO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../lib/emubuddyicon.ico")
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/gsplus.rc.in"
-                   "${CMAKE_CURRENT_BINARY_DIR}/gsplus.rc" @ONLY)
-    target_sources(gsplus-sdl PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gsplus.rc")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/emubuddy.rc.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/emubuddy.rc" @ONLY)
+    target_sources(gsplus-sdl PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/emubuddy.rc")
 endif()
 
 # On macOS, build gsplus-sdl as a proper .app bundle with an icon. On Linux and

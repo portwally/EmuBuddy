@@ -36,7 +36,7 @@ gsplus: $(OBJECTS) $(OBJECTS1) compile_time.o $(SWIFTOBJS)
 		-L/usr/lib/swift
 	mkdir -p ../GSplus.app/Contents/MacOS
 	mkdir -p ../GSplus.app/Contents/Frameworks
-	$(PERL) cp_gsplus_libs gsplus /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/macosx ../GSplus.app/Contents/Frameworks
+	$(PERL) cp_emubuddy_libs gsplus /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/macosx ../GSplus.app/Contents/Frameworks
 	mv gsplus ../GSplus.app/Contents/MacOS/GSplus
 	echo "APPL????" > ../GSplus.app/Contents/PkgInfo
 	cp -f Info.plist ../GSplus.app/Contents/

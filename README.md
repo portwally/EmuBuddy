@@ -1,4 +1,4 @@
-![GSplus - cross-platform Apple IIgs emulator](gsplus-social.png)
+![GSplus - cross-platform Apple IIgs emulator](emubuddy-social.png)
 
 # GSplus
 
@@ -16,12 +16,12 @@ based on (currently 1.38).
 
 <table>
   <tr>
-    <td><a href="screenshots/gsplus-mac-wolf3d.png"><img src="screenshots/gsplus-mac-wolf3d.png" alt="Wolfenstein 3D running in GSplus" width="400"></a></td>
-    <td><a href="screenshots/gsplus-mac-arkanoid2.png"><img src="screenshots/gsplus-mac-arkanoid2.png" alt="Arkanoid II running in GSplus" width="400"></a></td>
+    <td><a href="screenshots/emubuddy-mac-wolf3d.png"><img src="screenshots/emubuddy-mac-wolf3d.png" alt="Wolfenstein 3D running in GSplus" width="400"></a></td>
+    <td><a href="screenshots/emubuddy-mac-arkanoid2.png"><img src="screenshots/emubuddy-mac-arkanoid2.png" alt="Arkanoid II running in GSplus" width="400"></a></td>
   </tr>
   <tr>
-    <td><a href="screenshots/gsplus-mac-animasia3d.png"><img src="screenshots/gsplus-mac-animasia3d.png" alt="Animasia 3D running in GSplus" width="400"></a></td>
-    <td><a href="screenshots/gsplus-mac-3200-image.png"><img src="screenshots/gsplus-mac-3200-image.png" alt="3200-color image displayed in GSplus" width="400"></a></td>
+    <td><a href="screenshots/emubuddy-mac-animasia3d.png"><img src="screenshots/emubuddy-mac-animasia3d.png" alt="Animasia 3D running in GSplus" width="400"></a></td>
+    <td><a href="screenshots/emubuddy-mac-3200-image.png"><img src="screenshots/emubuddy-mac-3200-image.png" alt="3200-color image displayed in GSplus" width="400"></a></td>
   </tr>
 </table>
 
