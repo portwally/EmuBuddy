@@ -500,7 +500,7 @@ about_draw(UiWindow *win, int cx, int cy)
 		"EmuBuddy " EMUBUDDY_VERSION,
 		"Apple IIgs emulator",
 		"",
-		"Created by Wally (portwally)",
+		"2026, Walter Tengler",
 		"",
 		"Based on KEGS by Kent Dickey",
 		"and GSplus by Dagen Brock.",
