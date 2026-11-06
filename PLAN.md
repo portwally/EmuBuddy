@@ -86,6 +86,7 @@ no command queue.
 ## Phases
 
 ### Phase 0: Repo and foundation (S)
+**Status: done except the TODO.md fixes. Repo, rename, F4 text panel replaced by a "ROM Required" window and a Choose ROM File menu item.**
 - Clone gsplus → `~/Documents/EmuBuddy`. Rename app, bundle ID, icon, window title.
 - Remove the F4 key path, the Swift target and command-line flag parsing. The
   debugger stays reachable from a hidden menu only.
@@ -102,6 +103,7 @@ IP by DHCP and loads a page. Headless (no UI work needed). This is the riskiest
 part, so it goes first.
 
 ### Phase 1: UI toolkit and main window (L)
+**Status, slice 1 done:** toolkit core (windows, menu bar, status bar, button, checkbox, list, file browser), embedded Shaston font with own TrueType reader, File/Machine/Speed/View/Help menus, pause, reset, speed incl. Unlimited, About. **Still open in Phase 1:** toolbar strip, drive lights in the status bar, paste/copy text, debugger menu, keyboard shortcuts, Open Recent.
 - Toolkit core: draw primitives, glyph atlas, event routing, window manager,
   widgets above. Unit-testable layout code kept separate from SDL calls.
 - **Menu bar** (File, Machine, Disks, View, Window, Help): Open Disk…, Recent

@@ -183,6 +183,10 @@ add_executable(gsplus-sdl
     sdl_driver.c
     sdl_snd_driver.c
     png_write.c
+    ui.c
+    ui_font.c
+    ui_font_data.c
+    ui_app.c
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
 

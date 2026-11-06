@@ -1043,6 +1043,8 @@ double	g_cur_sim_dtime = 0.0;
 double	g_projected_pmhz = 1.0;
 double	g_zip_pmhz = 8.0;
 double	g_sim_mhz = 100.0;
+double	g_eff_mhz = 0.0;		// achieved emulated MHz (for the UI)
+int	g_ui_pause = 0;			// set by the EmuBuddy UI
 int	g_line_ref_amt = 1;
 int	g_video_line_update_interval = 0;
 dword64	g_video_pixel_dcount = 0;
@@ -1109,6 +1111,8 @@ run_16ms()
 	} else {
 		if(g_halt_sim) {
 			ret = debugger_run_16ms();
+		} else if(g_ui_pause) {
+			ret = 0;		// paused from the UI menu
 		} else {
 			ret = run_a2_one_vbl();
 		}
@@ -1512,6 +1516,8 @@ update_60hz(dword64 dfcyc, double dtime_now)
 		if(dtime_diff_1sec < (1.0/250.0)) {
 			total_mhz_ptr = "???";
 		} else {
+			g_eff_mhz = (dadj_cycles_1sec / dtime_diff_1sec) /
+								(1000000.0);
 			snprintf(total_mhz_buf, sizeof(total_mhz_buf), "%6.2f",
 				(dadj_cycles_1sec / dtime_diff_1sec) /
 								(1000000.0));

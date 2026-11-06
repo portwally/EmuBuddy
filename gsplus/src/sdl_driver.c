@@ -25,6 +25,9 @@
 #include <time.h>
 
 #include "defc.h"
+#include "ui.h"
+extern int g_rom_version;
+void cfg_file_update_rom(const char *str);
 #include "protos_sdl.h"
 #ifndef __APPLE__
 # include "gsplus_icon.h"	/* embedded RGBA window icon (see below) */
@@ -429,6 +432,35 @@ sdl_mask_scale(Window_info *win)
  * scaled, so the effects land on actual screen pixels. Logical presentation is
  * turned off for the draw and restored right after (mouse-coordinate mapping
  * needs it). */
+/* The window is the IIgs picture plus a menu bar above and a status bar
+ * below (UI_BAR_H each). The renderer's logical size covers all three; the
+ * viewport confines the emulator picture (and the CRT effects) to the middle.
+ * "off" is for passes that draw in host-pixel space. */
+static void
+sdl_logical_on(Window_info *win)
+{
+	SDL_Rect	vp;
+
+	SDL_SetRenderViewport(win->renderer, NULL);
+	SDL_SetRenderLogicalPresentation(win->renderer, win->width_req,
+		win->main_height + 2 * UI_BAR_H,
+		g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
+			   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	vp.x = 0;
+	vp.y = UI_BAR_H;
+	vp.w = win->width_req;
+	vp.h = win->main_height;
+	SDL_SetRenderViewport(win->renderer, &vp);
+}
+
+static void
+sdl_logical_off(Window_info *win)
+{
+	SDL_SetRenderViewport(win->renderer, NULL);
+	SDL_SetRenderLogicalPresentation(win->renderer, 0, 0,
+				SDL_LOGICAL_PRESENTATION_DISABLED);
+}
+
 static void
 sdl_render_overlays(Window_info *win)
 {
@@ -441,8 +473,7 @@ sdl_render_overlays(Window_info *win)
 	if(!want_mask && !want_scan) {
 		return;
 	}
-	SDL_SetRenderLogicalPresentation(r, 0, 0,
-				SDL_LOGICAL_PRESENTATION_DISABLED);
+	sdl_logical_off(win);
 	if(SDL_GetRenderOutputSize(r, &ow, &oh)) {
 		dst.x = 0.0f;
 		dst.y = 0.0f;
@@ -464,9 +495,7 @@ sdl_render_overlays(Window_info *win)
 			SDL_RenderTextureTiled(r, win->overlay, NULL, 1.0f, &dst);
 		}
 	}
-	SDL_SetRenderLogicalPresentation(r, win->width_req, win->main_height,
-		g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
-			   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	sdl_logical_on(win);
 }
 
 static void
@@ -518,7 +547,7 @@ sdl_video_init(void)
 	if(g_fullscreen) { flags |= SDL_WINDOW_FULLSCREEN; g_is_fullscreen = 1; }
 
 	g_mainwin_info.window = SDL_CreateWindow("EmuBuddy",
-				w, h, flags);
+				w, h + 2 * UI_BAR_H, flags);
 	if(!g_mainwin_info.window) {
 		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
 		exit(1);
@@ -562,11 +591,10 @@ sdl_video_init(void)
 		SDL_GetRendererName(g_mainwin_info.renderer));
 
 	/* Keep the IIgs aspect ratio (letterbox) unless -noaspect stretches to fill. */
-	SDL_SetRenderLogicalPresentation(g_mainwin_info.renderer, w, h,
-		g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
-			   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	sdl_logical_on(&g_mainwin_info);
 
 	sdl_create_texture(&g_mainwin_info, w, h);
+	ui_app_init(g_mainwin_info.window, g_mainwin_info.renderer);
 
 	/* Mark this window active so the core renders into it. The X11 and Win32
 	 * drivers do this in their window-create routines; without it kimage->active
@@ -862,7 +890,8 @@ static void
 sdl_update_cursor_visibility(void)
 {
 	int	want_hidden = g_hide_mouse &&
-				(g_is_fullscreen || g_mouse_over_window);
+				(g_is_fullscreen || g_mouse_over_window) &&
+				!ui_pointer_over_ui();
 
 	if(want_hidden == g_cursor_hidden) {
 		return;
@@ -887,6 +916,9 @@ sdl_poll_events(void)
 	sdl_update_cursor_visibility();
 
 	while(SDL_PollEvent(&ev)) {
+		if(ui_handle_event(&ev)) {
+			continue;		/* menu bar / window / status bar */
+		}
 		switch(ev.type) {
 		case SDL_EVENT_QUIT:
 			g_quit_requested = 1;
@@ -910,7 +942,11 @@ sdl_poll_events(void)
 		case SDL_EVENT_DROP_FILE:
 			/* Drop a disk image on the window to mount it (slot guessed
 			 * from the file size). ev.drop.data is owned by SDL. */
-			if(ev.drop.data) {
+			if(ev.drop.data && g_rom_version < 0) {
+				/* no ROM yet: a dropped file is the ROM */
+				cfg_file_update_rom(ev.drop.data);
+				video_set_x_refresh_needed(win->kimage_ptr, 1);
+			} else if(ev.drop.data) {
 				cfg_inspect_maybe_insert_file(ev.drop.data);
 				video_set_x_refresh_needed(win->kimage_ptr, 1);
 			}
@@ -967,7 +1003,8 @@ sdl_poll_events(void)
 			 * presentation, then into the IIgs framebuffer. */
 			SDL_ConvertEventToRenderCoordinates(win->renderer, &ev);
 			mx = video_scale_mouse_x(win->kimage_ptr, (int)ev.motion.x, 0);
-			my = video_scale_mouse_y(win->kimage_ptr, (int)ev.motion.y, 0);
+			my = video_scale_mouse_y(win->kimage_ptr,
+				(int)ev.motion.y - UI_BAR_H, 0);
 			adb_update_mouse(win->kimage_ptr, mx, my, 0, 0);
 			/* Motion means the pointer is over us; covers the case where
 			 * the window opened under the cursor with no ENTER event. */
@@ -981,7 +1018,8 @@ sdl_poll_events(void)
 			SDL_ConvertEventToRenderCoordinates(win->renderer, &ev);
 			mask = sdl_button_mask(ev.button.button);
 			mx = video_scale_mouse_x(win->kimage_ptr, (int)ev.button.x, 0);
-			my = video_scale_mouse_y(win->kimage_ptr, (int)ev.button.y, 0);
+			my = video_scale_mouse_y(win->kimage_ptr,
+				(int)ev.button.y - UI_BAR_H, 0);
 			adb_update_mouse(win->kimage_ptr, mx, my,
 				(ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN) ? mask : 0,
 				mask & 7);
@@ -1034,6 +1072,78 @@ sdl_build_screenshot_path(char *buf, size_t buflen)
 /* Grab the currently-rendered frame (post-scaling, including any scanline
  * overlay and letterbox borders) and write it to a PNG. Called after the frame
  * is drawn but before SDL_RenderPresent, so the back buffer is still valid. */
+void
+sdl_request_screenshot(void)
+{
+	g_screenshot_requested = 1;
+}
+
+/* Developer aids (headless UI checks):
+ *   EMUBUDDY_CLICKS="frame:x:y;frame:x:y"  inject a left click at logical x,y
+ *   EMUBUDDY_SNAPSHOT=<file.bmp>           write the whole window, then quit
+ *   EMUBUDDY_SNAPFRAME=<n>                 frame for the snapshot (default 45) */
+static void
+sdl_push_click(Window_info *win, float lx, float ly)
+{
+	SDL_Event	e;
+	float		wx, wy;
+
+	SDL_RenderCoordinatesToWindow(win->renderer, lx, ly, &wx, &wy);
+	SDL_zero(e);
+	e.type = SDL_EVENT_MOUSE_MOTION;
+	e.motion.x = wx;
+	e.motion.y = wy;
+	SDL_PushEvent(&e);
+	SDL_zero(e);
+	e.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+	e.button.button = SDL_BUTTON_LEFT;
+	e.button.down = 1;
+	e.button.clicks = 1;
+	e.button.x = wx;
+	e.button.y = wy;
+	SDL_PushEvent(&e);
+	e.type = SDL_EVENT_MOUSE_BUTTON_UP;
+	e.button.down = 0;
+	SDL_PushEvent(&e);
+}
+
+static void
+sdl_dev_snapshot(Window_info *win)
+{
+	static int	frames = 0;
+	const char	*path = getenv("EMUBUDDY_SNAPSHOT");
+	const char	*clicks = getenv("EMUBUDDY_CLICKS");
+	const char	*sf = getenv("EMUBUDDY_SNAPFRAME");
+	SDL_Surface	*shot;
+	int		f, x, y, n;
+
+	frames++;
+	if(clicks) {
+		const char *p = clicks;
+
+		while(sscanf(p, "%d:%d:%d%n", &f, &x, &y, &n) == 3) {
+			if(f == frames) {
+				sdl_push_click(win, (float)x, (float)y);
+			}
+			p += n;
+			if(*p == ';') {
+				p++;
+			} else {
+				break;
+			}
+		}
+	}
+	if(!path || frames != (sf ? atoi(sf) : 45)) {
+		return;
+	}
+	shot = SDL_RenderReadPixels(win->renderer, NULL);
+	if(shot) {
+		SDL_SaveBMP(shot, path);
+		SDL_DestroySurface(shot);
+	}
+	g_quit_requested = 1;
+}
+
 static void
 sdl_save_screenshot(Window_info *win)
 {
@@ -1043,7 +1153,21 @@ sdl_save_screenshot(Window_info *win)
 	size_t	rowbytes;
 	int	w, h, y, rc;
 
-	shot = SDL_RenderReadPixels(win->renderer, NULL);
+	SDL_Rect	pic;
+	SDL_FRect	lr;
+
+	/* Crop to the emulator picture (below the menu bar, above the status bar). */
+	if(SDL_GetRenderLogicalPresentationRect(win->renderer, &lr)) {
+		float th = (float)(win->main_height + 2 * UI_BAR_H);
+
+		pic.x = (int)lr.x;
+		pic.y = (int)(lr.y + lr.h * UI_BAR_H / th);
+		pic.w = (int)lr.w;
+		pic.h = (int)(lr.h * win->main_height / th);
+		shot = SDL_RenderReadPixels(win->renderer, &pic);
+	} else {
+		shot = SDL_RenderReadPixels(win->renderer, NULL);
+	}
 	if(!shot) {
 		printf("Screenshot failed: SDL_RenderReadPixels: %s\n",
 			SDL_GetError());
@@ -1225,8 +1349,7 @@ sdl_render_crt(Window_info *win)
 	}
 
 	/* --- Pass 1: copy into crt_target (1:1, no logical scaling). --- */
-	SDL_SetRenderLogicalPresentation(r, 0, 0,
-				SDL_LOGICAL_PRESENTATION_DISABLED);
+	sdl_logical_off(win);
 	SDL_SetRenderTarget(r, win->crt_target);
 	/* Clear to black first: the blur path accumulates additively, so it
 	 * needs a cleared target. The alpha value doesn't matter -- the glow
@@ -1244,9 +1367,7 @@ sdl_render_crt(Window_info *win)
 
 	/* --- Pass 3: warp onto the curve in the window, then add the glow. --- */
 	SDL_SetRenderTarget(r, NULL);
-	SDL_SetRenderLogicalPresentation(r, w, h,
-		g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
-			   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	sdl_logical_on(win);
 	SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
 	SDL_RenderClear(r);
 
@@ -1305,12 +1426,10 @@ sdl_update_display(Window_info *win)
 		win->main_height = h;
 		win->pixels_per_line = w;
 		video_update_scale(win->kimage_ptr, w, h, 1);
-		SDL_SetWindowSize(win->window, w, h);
+		SDL_SetWindowSize(win->window, w, h + 2 * UI_BAR_H);
 		/* Honor -noaspect here too, matching init and the CRT path; otherwise
 		 * a stretched view reverts to letterbox after the first mode change. */
-		SDL_SetRenderLogicalPresentation(win->renderer, w, h,
-			g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
-				   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
+		sdl_logical_on(win);
 		sdl_create_texture(win, w, h);
 		/* The new texture starts out blank, so ask the core to re-emit
 		 * the whole screen rather than just the next frame's deltas. */
@@ -1333,6 +1452,7 @@ sdl_update_display(Window_info *win)
 				win->pixels_per_line * (int)sizeof(word32));
 	}
 
+	sdl_logical_on(win);
 	if(g_crt && win->crt_target && win->glow_target && win->crt_verts) {
 		/* Full curved-CRT path (curvature + mask + glow + vignette). */
 		sdl_render_crt(win);
@@ -1353,6 +1473,8 @@ sdl_update_display(Window_info *win)
 		g_screenshot_requested = 0;
 	}
 
+	ui_draw(win->width_req, win->main_height + 2 * UI_BAR_H);
+	sdl_dev_snapshot(win);
 	SDL_RenderPresent(win->renderer);
 }
 
