@@ -18,8 +18,14 @@ static const UiTheme g_skins[] = {
 		0x6666CC, W, 0x6F8FB3, UI_TITLE_PLATINUM, 0 },
 	{ "Terminal Amber", 0x0A0600, 0xFFB000, 0x8A5F00, 0x5C4000, 0xFFB000, 0xFFD060,
 		0xFF6030, 0xFFB000, 0x0A0600, K, UI_TITLE_TERMINAL, 0 },
-	{ "Apple II", 0x001400, 0x33FF33, 0x1E9E1E, 0x0E5A0E, 0x33FF33, 0xCCFF33, 0xFF5533,
-		0x33FF33, 0x001400, K, UI_TITLE_TERMINAL, 0 },
+	{ "Apple II", K, 0x33FF66, 0x1FA040, 0x0E5A22, 0x33FF66, 0xCCFF66, W,
+		0x33FF66, K, K, UI_TITLE_TERMINAL, 0 },
+	{ "Commodore 64", 0x40318D, 0x9C90E8, 0x7A6DC8, 0x30266E, 0x9AD284, 0xC9D487, 0xCB7E75,
+		0x9C90E8, 0x40318D, 0x9C90E8, UI_TITLE_FLAT, 0 },
+	{ "ZX Spectrum", 0xCDCDCD, K, 0x5A5A5A, 0x9A9A9A, 0x008A00, 0x9C6A00, 0xCD0000,
+		0x0000CD, W, 0xCDCDCD, UI_TITLE_FLAT, 0 },
+	{ "Amstrad CPC", 0x000080, 0xFFFF00, 0x00C8C8, 0x0040A0, 0x00FF00, 0xFF8000, 0xFF5050,
+		0xFFFF00, 0x000080, 0x000040, UI_TITLE_FLAT, 0 },
 	{ "NeXT", 0xAAAAAA, K, 0x555555, 0x888888, 0x006600, 0x884400, 0x990000, 0x333333, W,
 		0x707070, UI_TITLE_FLAT, 0 },
 	{ "BeOS", 0xE8E8E8, K, 0x666666, 0xB0B0B0, 0x007700, 0xCC6600, 0xCC0000, 0xFFCB00, K,
@@ -58,6 +64,31 @@ int
 skin_desktop(int i)
 {
 	return !strcmp(skin_get(i)->name, "Retro Neon") ? SKIN_DESK_NEON : SKIN_DESK_PLAIN;
+}
+
+/* The font file (in the fonts folder) and pixel size each skin uses; NULL is
+ * the built-in Shaston 640. Fonts from Wally's Manager and EmuBuddy. */
+const char *
+skin_font(int i, int *ppem)
+{
+	const char *n = skin_get(i)->name;
+
+	*ppem = 16;
+	if(!strcmp(n, "Apple II")) {
+		return "PRNumber3.ttf";
+	} else if(!strcmp(n, "Terminal Amber")) {
+		*ppem = 13;
+		return "PrintChar21.ttf";
+	} else if(!strcmp(n, "Commodore 64") || !strcmp(n, "Retro Neon")) {
+		return "PetMe642Y.ttf";
+	} else if(!strcmp(n, "ZX Spectrum")) {
+		*ppem = 12;
+		return "zx_spectrum-7.ttf";
+	} else if(!strcmp(n, "Amstrad CPC")) {
+		*ppem = 12;
+		return "amstrad_cpc464.ttf";
+	}
+	return NULL;
 }
 
 int

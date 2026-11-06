@@ -49,7 +49,10 @@ set(EB_UI ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/src)
 set(LAUNCHER_SOURCES src/main.c src/skins.c ${EB_UI}/ui.c ${EB_UI}/ui_font.c ${EB_UI}/ui_font_data.c)
 set(LAUNCHER_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/lib)
 
+file(GLOB LAUNCHER_FONT_FILES ${CMAKE_CURRENT_SOURCE_DIR}/fonts/*.ttf)
 if(APPLE)
+    list(APPEND LAUNCHER_SOURCES ${LAUNCHER_FONT_FILES})
+    set_source_files_properties(${LAUNCHER_FONT_FILES} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/fonts)
     set(LAUNCHER_ICON ${LAUNCHER_LIB}/launchericon.icns)
     list(APPEND LAUNCHER_SOURCES ${LAUNCHER_ICON})
     set_source_files_properties(${LAUNCHER_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
@@ -103,4 +106,9 @@ else()
             COMMAND_EXPAND_LISTS)
         install(FILES $<TARGET_RUNTIME_DLLS:emubuddy-launcher> DESTINATION .)
     endif()
+    # The skin fonts live in a fonts folder next to the program.
+    add_custom_command(TARGET emubuddy-launcher POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/fonts
+            $<TARGET_FILE_DIR:emubuddy-launcher>/fonts)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/fonts DESTINATION .)
 endif()

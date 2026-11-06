@@ -10,6 +10,7 @@ const UiTheme	*skin_get(int i);
 int		skin_find(const char *name);	/* -1 if there is none */
 enum { SKIN_LAYOUT_LIST, SKIN_LAYOUT_SHELF, SKIN_LAYOUT_FLOW };
 enum { SKIN_DESK_PLAIN, SKIN_DESK_NEON };
+const char	*skin_font(int i, int *ppem);
 int		skin_layout(int i);
 int		skin_desktop(int i);
 /* Make skin i the current one. */

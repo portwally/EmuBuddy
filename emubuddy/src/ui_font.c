@@ -12,7 +12,8 @@
 extern const unsigned char g_ui_font_ttf[];
 extern const unsigned int g_ui_font_ttf_len;
 
-#define PPEM		16
+static int	g_ppem = 16;
+#define PPEM		g_ppem
 #define SS		4			/* vertical/horizontal subsamples */
 #define ATLAS_W		512
 #define ATLAS_H		256
@@ -506,13 +507,12 @@ get_glyph(int gid)
 	return g;
 }
 
-int
-ui_font_init(SDL_Renderer *r)
+/* Parse the font in g_ttf/g_len and (re)build the glyph cache and atlas. */
+static int
+font_setup(void)
 {
 	unsigned	head, hhea, maxp, cmap, n, i, o, sub;
 
-	g_ren = r;
-	g_len = g_ui_font_ttf_len;
 	head = find_table("head");
 	hhea = find_table("hhea");
 	maxp = find_table("maxp");
@@ -543,10 +543,13 @@ ui_font_init(SDL_Renderer *r)
 	if(!g_upem || !g_nglyphs || !g_nhm || !g_cmap4) {
 		return -1;
 	}
+	free(g_cache);
 	g_cache = calloc((size_t)g_nglyphs, sizeof(Glyph));
-	g_atlas = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888,
-			SDL_TEXTUREACCESS_STATIC, ATLAS_W, ATLAS_H);
 	if(!g_atlas) {
+		g_atlas = SDL_CreateTexture(g_ren, SDL_PIXELFORMAT_ARGB8888,
+				SDL_TEXTUREACCESS_STATIC, ATLAS_W, ATLAS_H);
+	}
+	if(!g_atlas || !g_cache) {
 		return -1;
 	}
 	{
@@ -554,8 +557,58 @@ ui_font_init(SDL_Renderer *r)
 		SDL_UpdateTexture(g_atlas, NULL, clear, ATLAS_W * 4);
 		free(clear);
 	}
+	g_pack_x = g_pack_y = g_pack_rowh = 0;
 	SDL_SetTextureBlendMode(g_atlas, SDL_BLENDMODE_BLEND);
 	SDL_SetTextureScaleMode(g_atlas, SDL_SCALEMODE_NEAREST);
+	return 0;
+}
+
+int
+ui_font_init(SDL_Renderer *r)
+{
+	g_ren = r;
+	g_ttf = g_ui_font_ttf;
+	g_len = g_ui_font_ttf_len;
+	return font_setup();
+}
+
+static unsigned char	*g_owned;		/* a font loaded from a file */
+
+/* Use the TrueType font in a file at ppem pixels (NULL path = the built-in
+ * Shaston 640 at 16). Returns 0, or -1 and keeps the font that was in use. */
+int
+ui_font_load_file(const char *path, int ppem)
+{
+	const unsigned char	*old_ttf = g_ttf;
+	size_t			old_len = g_len;
+	int			old_ppem = g_ppem;
+	unsigned char		*buf = NULL;
+	size_t			n = 0;
+
+	if(path && path[0]) {
+		buf = (unsigned char *)SDL_LoadFile(path, &n);
+		if(!buf || n < 64) {
+			SDL_free(buf);
+			return -1;
+		}
+		g_ttf = buf;
+		g_len = n;
+		g_ppem = ppem > 4 ? ppem : 16;
+	} else {
+		g_ttf = g_ui_font_ttf;
+		g_len = g_ui_font_ttf_len;
+		g_ppem = 16;
+	}
+	if(font_setup() != 0) {
+		g_ttf = old_ttf;
+		g_len = old_len;
+		g_ppem = old_ppem;
+		SDL_free(buf);
+		font_setup();
+		return -1;
+	}
+	SDL_free(g_owned);
+	g_owned = buf;
 	return 0;
 }
 
@@ -568,6 +621,8 @@ ui_font_shutdown(void)
 	}
 	free(g_cache);
 	g_cache = NULL;
+	SDL_free(g_owned);
+	g_owned = NULL;
 	free(g_edges);
 	g_edges = NULL;
 	g_nedges = g_capedges = 0;

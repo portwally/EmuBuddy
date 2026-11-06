@@ -462,60 +462,109 @@ edit_save(void)
 	}
 }
 
+/* A button that is wide enough for its text (some skin fonts are wide). */
+static int
+fit_button(UiWindow *win, int cx, int cy, int *x, int y, int minw, int h, const char *label, int enabled)
+{
+	int	w = ui_text_width(label) + 20, r;
+
+	if(w < minw) {
+		w = minw;
+	}
+	r = ui_button(win, cx, cy, *x, y, w, h, label, enabled);
+	*x += w + 6;
+	return r;
+}
+
+static int
+text_w(const char *s, int min)
+{
+	int	w = ui_text_width(s) + 16;
+
+	return w > min ? w : min;
+}
+
 static void
 edit_draw(UiWindow *win, int cx, int cy)
 {
-	int	y = 8, i;
-	char	lab[40];
+	int	y = 8, i, lc = 110, bw_lib, bw_choose, xlib, xch, xclr, fend_file, fend_dir;
+	static const char *names[] = { "Memory", "Speed (MHz)", "Slot 1 printer", "Slot 2 modem",
+		"Slot 3", "Slot 4", "Slot 7", "Window size" };
+
+	/* the label column is as wide as the widest label in the skin's font */
+	for(i = 0; i < NPF; i++) {
+		lc = SDL_max(lc, ui_text_width(g_pf[i].label) + 18);
+	}
+	for(i = 0; i < NCH; i++) {
+		lc = SDL_max(lc, ui_text_width(names[i]) + 18);
+	}
+	lc = SDL_max(lc, ui_text_width("Extra options") + 18);
+	bw_lib = text_w("Library", 74);
+	bw_choose = text_w("Choose...", 74);
+	xclr = win->w - 2 - 40;
+	xch = xclr - 4 - bw_choose;
+	xlib = xch - 4 - bw_lib;
+	fend_file = xlib - 6;
+	fend_dir = xch - 6;
 
 	ui_draw_text(cx + 10, cy + y + 1, "Name", UI_BLACK);
-	field(win, cx, cy, 110, y, 220, g_e.name, sizeof(g_e.name));
-	ui_draw_text(cx + 346, cy + y + 1, "Description", UI_BLACK);
-	field(win, cx, cy, 440, y, 230, g_e.desc, sizeof(g_e.desc));
+	field(win, cx, cy, lc, y, 200, g_e.name, sizeof(g_e.name));
+	{
+		int dx = lc + 200 + 14, dl = ui_text_width("Description") + 8;
+
+		ui_draw_text(cx + dx, cy + y + 1, "Description", UI_BLACK);
+		field(win, cx, cy, dx + dl, y, win->w - 2 - 10 - dx - dl, g_e.desc, sizeof(g_e.desc));
+	}
 	y += 30;
 	for(i = 0; i < NPF; i++) {
 		PathField *f = &g_pf[i];
+		int end = (f->folder || i >= 6) ? fend_dir : fend_file;
 
 		ui_draw_text(cx + 10, cy + y + 1, f->label, UI_BLACK);
-		field(win, cx, cy, 110, y, (f->folder || i >= 6) ? 460 : 390, f->buf, sizeof(f->buf));
-		if(!f->folder && i < 6 && ui_button(win, cx, cy, 504, y - 1, 70, 20, "Library", 1)) {
+		field(win, cx, cy, lc, y, end - lc, f->buf, sizeof(f->buf));
+		if(!f->folder && i < 6 && ui_button(win, cx, cy, xlib, y - 1, bw_lib, 20, "Library", 1)) {
 			lib_open(i == 0 ? LIB_ROM : LIB_DISK, f->buf, (int)sizeof(f->buf));
 		}
-		if(ui_button(win, cx, cy, 578, y - 1, 60, 20, "Choose...", 1)) {
+		if(ui_button(win, cx, cy, xch, y - 1, bw_choose, 20, "Choose...", 1)) {
 			choose(f);
 		}
-		if(ui_button(win, cx, cy, 642, y - 1, 30, 20, "X", f->buf[0] != 0)) {
+		if(ui_button(win, cx, cy, xclr, y - 1, 30, 20, "X", f->buf[0] != 0)) {
 			f->buf[0] = 0;
 		}
 		y += 24;
 	}
 	y += 6;
-	ui_hline(cx + 10, cy + y, 660, UI_LGREY);
+	ui_hline(cx + 10, cy + y, win->w - 22, UI_LGREY);
 	y += 8;
-	static const char *names[] = { "Memory", "Speed (MHz)", "Slot 1 printer", "Slot 2 modem",
-		"Slot 3", "Slot 4", "Slot 7", "Window size" };
 	for(i = 0; i < NCH; i++) {
 		Choice *c = &g_ch[i];
+		int	cw = 0, k;
 
+		for(k = 0; k < c->n; k++) {
+			cw = SDL_max(cw, ui_text_width(c->labels[k]) + 16);
+		}
 		ui_draw_text(cx + 10, cy + y + 2, names[i], UI_BLACK);
-		ui_segment(win, cx, cy, 130, y, c->n * (c->n <= 4 ? 106 : 64), 20, c->labels, c->n, &c->sel,
+		ui_segment(win, cx, cy, lc, y, c->n * cw, 20, c->labels, c->n, &c->sel,
 						(1u << c->n) - 1);
 		y += 24;
 	}
 	ui_checkbox(win, cx, cy, 10, y, "Curved CRT look", &g_e.crt);
-	ui_checkbox(win, cx, cy, 200, y, "Full screen", &g_e.full);
+	ui_checkbox(win, cx, cy, 30 + ui_text_width("Curved CRT look") + 20, y, "Full screen", &g_e.full);
 	y += 24;
 	ui_draw_text(cx + 10, cy + y + 1, "Extra options", UI_BLACK);
-	field(win, cx, cy, 110, y, 560, g_e.extra, sizeof(g_e.extra));
+	field(win, cx, cy, lc, y, win->w - 2 - 10 - lc, g_e.extra, sizeof(g_e.extra));
 	y += 34;
-	snprintf(lab, sizeof(lab), "Drop disks and folders here");
-	ui_draw_text(cx + 10, cy + y + 4, lab, UI_GREY);
-	if(ui_button(win, cx, cy, 500, y, 80, 24, "Cancel", 1)) {
-		focus_clear();
-		ui_window_close(win);
-	}
-	if(ui_button(win, cx, cy, 590, y, 80, 24, "Save", g_e.name[0] != 0)) {
-		edit_save();
+	ui_draw_text(cx + 10, cy + y + 4, "Drop disks and folders here", UI_GREY);
+	{
+		int wc = text_w("Cancel", 80), ws = text_w("Save", 80), xs = win->w - 2 - 10 - ws;
+
+		if(ui_button(win, cx, cy, xs - 8 - wc, y, wc, 24, "Cancel", 1)) {
+			focus_clear();
+			ui_window_close(win);
+		}
+		if(ui_button(win, cx, cy, xs, y, ws, 24, "Save", g_e.name[0] != 0)) {
+			edit_save();
+		}
 	}
 }
 
@@ -561,7 +610,7 @@ edit_open(const Profile *src, int is_new)
 	edit_load(src, is_new);
 	focus_clear();
 	snprintf(g_edit_win.title, sizeof(g_edit_win.title), is_new ? "New Profile" : "Edit Profile");
-	g_edit_win.w = 690;
+	g_edit_win.w = 740;
 	g_edit_win.h = 590;
 	g_edit_win.modal = 1;
 	g_edit_win.closable = 1;
@@ -662,6 +711,31 @@ lib_play(void)
 	}
 }
 
+/* ---- fonts: each skin has its own (files in the fonts folder) ---- */
+
+static void
+skin_switch(int i)
+{
+	int		ppem = 16;
+	const char	*file = skin_font(i, &ppem);
+	char		path[1400];
+	const char	*dir = getenv("LAUNCHER_FONTS"), *base = SDL_GetBasePath();
+
+	skin_apply(i);
+	if(!file) {
+		ui_font_load_file(NULL, 16);
+		return;
+	}
+	if(dir && dir[0]) {
+		snprintf(path, sizeof(path), "%s/%s", dir, file);
+	} else {
+		snprintf(path, sizeof(path), "%sfonts/%s", base ? base : "", file);
+	}
+	if(ui_font_load_file(path, ppem) != 0) {
+		ui_font_load_file(NULL, 16);	/* font file missing: the built-in one */
+	}
+}
+
 /* ---- settings and covers ---- */
 
 static void
@@ -681,6 +755,7 @@ settings_load(void)
 	if(f) {
 		fclose(f);
 	}
+	/* the font is applied after ui_init (see window()) */
 	skin_apply(g_skin);
 }
 
@@ -1010,13 +1085,22 @@ lib_draw(UiWindow *win, int cx, int cy)
 		y += 26;
 		ui_draw_text(cx + 404, cy + y + 4, profile_get(p, "description"), UI_GREY);
 		y = 112;
+		int vx = 380;
+
+		for(i = 0; keys[i][0]; i++) {	/* the value column follows the widest label */
+			int lw = 270 + ui_text_width(keys[i][1]) + 14;
+
+			if(lw > vx) {
+				vx = lw;
+			}
+		}
 		for(i = 0; keys[i][0]; i++) {
 			const char *v = profile_get(p, keys[i][0]);
 
 			if(v[0]) {
 				const char *t = v;
 
-				while(*t && ui_text_width(t) > 360) {
+				while(*t && ui_text_width(t) > 740 - vx) {
 					t++;
 				}
 				int	is_path = !strcmp(keys[i][0], "rom") || !strncmp(keys[i][0], "hard", 4) ||
@@ -1031,9 +1115,9 @@ lib_draw(UiWindow *win, int cx, int cy)
 					missing = !SDL_GetPathInfo(full, &pi);
 				}
 				ui_draw_text(cx + 270, cy + y, keys[i][1], UI_GREY);
-				ui_draw_text(cx + 380, cy + y, t, missing ? UI_BAD : UI_BLACK);
+				ui_draw_text(cx + vx, cy + y, t, missing ? UI_BAD : UI_BLACK);
 				if(missing) {
-					ui_draw_text(cx + 380 + ui_text_width(t) + 8, cy + y, "(missing)", UI_BAD);
+					ui_draw_text(cx + vx + ui_text_width(t) + 8, cy + y, "(missing)", UI_BAD);
 				}
 				y += 18;
 			}
@@ -1069,23 +1153,30 @@ lib_draw(UiWindow *win, int cx, int cy)
 		}
 	}
 	}
-	if(ui_button(win, cx, cy, 10, 490, 70, 28, "New", 1)) {
-		new_profile();
-	}
-	if(ui_button(win, cx, cy, 86, 490, 80, 28, "Duplicate", g_nprof > 0)) {
-		duplicate_profile();
-	}
-	if(ui_button(win, cx, cy, 172, 490, 78, 28, "Delete", g_nprof > 0)) {
-		delete_profile();
-	}
-	if(ui_button(win, cx, cy, 300, 490, 100, 28, "Library...", 1)) {
-		lib_open(LIB_DISK, NULL, 0);
-	}
-	if(ui_button(win, cx, cy, 540, 490, 100, 28, "Edit...", g_nprof > 0)) {
-		edit_open(&g_prof[g_sel], 0);
-	}
-	if(ui_button(win, cx, cy, 650, 490, 100, 28, "Play", g_nprof > 0)) {
-		lib_play();
+	{
+		int x = 10, rx;
+		int we = text_w("Edit...", 100), wp = text_w("Play", 100);
+
+		if(fit_button(win, cx, cy, &x, 490, 70, 28, "New", 1)) {
+			new_profile();
+		}
+		if(fit_button(win, cx, cy, &x, 490, 80, 28, "Duplicate", g_nprof > 0)) {
+			duplicate_profile();
+		}
+		if(fit_button(win, cx, cy, &x, 490, 78, 28, "Delete", g_nprof > 0)) {
+			delete_profile();
+		}
+		x += 20;
+		if(fit_button(win, cx, cy, &x, 490, 100, 28, "Library...", 1)) {
+			lib_open(LIB_DISK, NULL, 0);
+		}
+		rx = win->w - 2 - 10 - wp;
+		if(ui_button(win, cx, cy, rx - 6 - we, 490, we, 28, "Edit...", g_nprof > 0)) {
+			edit_open(&g_prof[g_sel], 0);
+		}
+		if(ui_button(win, cx, cy, rx, 490, wp, 28, "Play", g_nprof > 0)) {
+			lib_play();
+		}
 	}
 }
 
@@ -1462,8 +1553,9 @@ about_draw(UiWindow *win, int cx, int cy)
 		"Starts EmuBuddy with the command line",
 		"of the profile you choose.",
 		"",
-		"GPL v3. UI font: Shaston 640 by",
-		"Kreative Software.",
+		"GPL v3. Skin fonts by Kreative Software,",
+		"Wesley Clarke and Sizenko Alexander",
+		"(see fonts/CREDITS.md).",
 	};
 	int	i, cw = win->w - 2;
 
@@ -1496,7 +1588,7 @@ about_open(void)
 {
 	snprintf(g_about.title, sizeof(g_about.title), "About EmuBuddy Launcher");
 	g_about.w = 340;
-	g_about.h = 356;
+	g_about.h = 374;
 	g_about.closable = 1;
 	g_about.modal = 1;
 	g_about.draw = about_draw;
@@ -1537,7 +1629,7 @@ app_command(int id)
 {
 	if(id >= C_SKIN0 && id < C_SKIN0 + skin_count()) {
 		g_skin = id - C_SKIN0;
-		skin_apply(g_skin);
+		skin_switch(g_skin);
 		settings_save();
 		return;
 	}
@@ -1624,6 +1716,7 @@ window(void)
 		}
 	}
 	ui_init(g_win, g_ren, &g_app);
+	skin_switch(g_skin);
 	snprintf(g_lib.title, sizeof(g_lib.title), "Profiles");
 	g_lib.x = 10;
 	g_lib.y = UI_BAR_H + 10;
@@ -1793,7 +1886,7 @@ window(void)
 			}
 			if(frame == 3 && getenv("LAUNCHER_SKIN") && skin_find(getenv("LAUNCHER_SKIN")) >= 0) {
 				g_skin = skin_find(getenv("LAUNCHER_SKIN"));
-				skin_apply(g_skin);
+				skin_switch(g_skin);
 			}
 			if(frame == 4 && getenv("LAUNCHER_RESIZE")) {		/* test aid: WxH */
 				int rw = 0, rh = 0;

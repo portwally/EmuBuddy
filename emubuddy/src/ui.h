@@ -17,6 +17,8 @@ extern int	g_ui_top_h;		/* drawn menu bar height: 20, or 0 with the native menu 
 
 /* ---- font (ui_font.c) ---- */
 int	ui_font_init(SDL_Renderer *r);
+/* Switch to a TrueType file at ppem pixels; NULL = the built-in font. */
+int	ui_font_load_file(const char *path, int ppem);
 void	ui_font_shutdown(void);
 int	ui_text_width(const char *s);
 void	ui_draw_text(int x, int y, const char *s, Uint32 rgb);
