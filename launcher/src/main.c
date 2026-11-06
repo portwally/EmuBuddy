@@ -269,29 +269,111 @@ static char		g_toast[200];
 static char		*g_focus;
 static int		g_focus_cap;
 
+static int	g_caret;		/* byte offset of the cursor in the focused field */
+
+static int
+utf8_prev(const char *t, int i)
+{
+	if(i > 0) {
+		i--;
+	}
+	while(i > 0 && ((unsigned char)t[i] & 0xC0) == 0x80) {
+		i--;
+	}
+	return i;
+}
+
+static int
+utf8_next(const char *t, int i)
+{
+	if(t[i]) {
+		i++;
+	}
+	while(t[i] && ((unsigned char)t[i] & 0xC0) == 0x80) {
+		i++;
+	}
+	return i;
+}
+
+/* width of t[from..to) */
+static int
+span_w(const char *t, int from, int to)
+{
+	char	tmp[700];
+	int	n = to - from;
+
+	if(n <= 0) {
+		return 0;
+	}
+	if(n > (int)sizeof(tmp) - 1) {
+		n = (int)sizeof(tmp) - 1;
+	}
+	memcpy(tmp, t + from, (size_t)n);
+	tmp[n] = 0;
+	return ui_text_width(tmp);
+}
+
 static int
 field(UiWindow *win, int cx, int cy, int x, int y, int w, char *buf, int cap)
 {
-	int	focused = g_focus == buf, n;
-	const char *t = buf;
+	int	focused = g_focus == buf, len = (int)strlen(buf), caret, s = 0, e;
+	char	vis[700];
 
+	if(focused && g_caret > len) {
+		g_caret = len;
+	}
+	caret = focused ? g_caret : len;
 	ui_fill(cx + x, cy + y, w, 18, UI_WHITE);
 	ui_frame(cx + x, cy + y, w, 18, focused ? 0x2040C0 : UI_BLACK);
-	while(*t && ui_text_width(t) > w - 10) {
-		t++;
+	/* scroll so that the cursor is visible */
+	while(s < caret && span_w(buf, s, caret) > w - 14) {
+		s = utf8_next(buf, s);
 	}
-	ui_draw_text(cx + x + 4, cy + y + 1, t, UI_BLACK);
+	e = s;
+	while(buf[e] && span_w(buf, s, utf8_next(buf, e)) <= w - 8 && utf8_next(buf, e) - s < (int)sizeof(vis) - 1) {
+		e = utf8_next(buf, e);
+	}
+	memcpy(vis, buf + s, (size_t)(e - s));
+	vis[e - s] = 0;
+	ui_draw_text(cx + x + 4, cy + y + 1, vis, UI_BLACK);
 	if(focused && (SDL_GetTicks() / 500) % 2 == 0) {
-		n = ui_text_width(t);
-		ui_fill(cx + x + 4 + n, cy + y + 3, 1, 12, UI_BLACK);
+		ui_fill(cx + x + 4 + span_w(buf, s, caret), cy + y + 3, 1, 12, UI_BLACK);
 	}
 	if(ui_hit(win, cx, cy, x, y, w, 18)) {
+		float	mx, my, lx = 0, ly = 0;
+		int	k = s, best = s;
+
+		SDL_GetMouseState(&mx, &my);
+		SDL_RenderCoordinatesFromWindow(g_ren, mx, my, &lx, &ly);
+		while(k < e) {			/* the character gap nearest to the click */
+			int nk = utf8_next(buf, k), mid = (span_w(buf, s, k) + span_w(buf, s, nk)) / 2;
+
+			if(lx - (cx + x + 4) >= mid) {
+				best = nk;
+			}
+			k = nk;
+		}
 		g_focus = buf;
 		g_focus_cap = cap;
+		g_caret = best;
 		SDL_StartTextInput(g_win);
 		return 1;
 	}
 	return 0;
+}
+
+/* Put text at the cursor of the focused field. */
+static void
+focus_insert(const char *text)
+{
+	int	len = (int)strlen(g_focus), m = (int)strlen(text);
+
+	if(len + m >= g_focus_cap) {
+		return;
+	}
+	memmove(g_focus + g_caret + m, g_focus + g_caret, (size_t)(len - g_caret + 1));
+	memcpy(g_focus + g_caret, text, (size_t)m);
+	g_caret += m;
 }
 
 static void
@@ -1732,46 +1814,63 @@ window(void)
 				g_running = 0;
 				continue;
 			}
-			SDL_ConvertEventToRenderCoordinates(g_ren, &e);
+			/* SDL converts mouse events for the logical size by itself */
 			if(g_focus && e.type == SDL_EVENT_TEXT_INPUT) {
-				size_t n = strlen(g_focus), m = strlen(e.text.text);
-
-				if(n + m < (size_t)g_focus_cap) {
-					memcpy(g_focus + n, e.text.text, m + 1);
-				}
+				focus_insert(e.text.text);
 				continue;
 			}
 			if(g_focus && e.type == SDL_EVENT_KEY_DOWN) {
 				SDL_Keycode k = e.key.key;
+				int len = (int)strlen(g_focus), cmd = (e.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL)) != 0;
 
+				if(g_caret > len) {
+					g_caret = len;
+				}
 				if(k == SDLK_BACKSPACE) {
-					size_t n = strlen(g_focus);
+					int p = utf8_prev(g_focus, g_caret);
 
-					while(n > 0 && ((unsigned char)g_focus[n - 1] & 0xC0) == 0x80) {
-						n--;
-					}
-					if(n > 0) {
-						n--;
-					}
-					g_focus[n] = 0;
+					memmove(g_focus + p, g_focus + g_caret, (size_t)(len - g_caret + 1));
+					g_caret = p;
+					continue;
+				} else if(k == SDLK_DELETE) {
+					int nx = utf8_next(g_focus, g_caret);
+
+					memmove(g_focus + g_caret, g_focus + nx, (size_t)(len - nx + 1));
+					continue;
+				} else if(k == SDLK_LEFT) {
+					g_caret = cmd ? 0 : utf8_prev(g_focus, g_caret);
+					continue;
+				} else if(k == SDLK_RIGHT) {
+					g_caret = cmd ? len : utf8_next(g_focus, g_caret);
+					continue;
+				} else if(k == SDLK_HOME) {
+					g_caret = 0;
+					continue;
+				} else if(k == SDLK_END) {
+					g_caret = len;
 					continue;
 				} else if(k == SDLK_RETURN || k == SDLK_TAB || k == SDLK_ESCAPE) {
 					focus_clear();
 					continue;
-				} else if((k == SDLK_V) && (e.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL))) {
+				} else if(k == SDLK_V && cmd) {
 					char *t = SDL_GetClipboardText();
 
 					if(t) {
-						size_t n = strlen(g_focus);
+						char clean[700];
+						int n = 0;
 
-						for(char *p = t; *p && n + 1 < (size_t)g_focus_cap; p++) {
-							if(*p >= 32) {
-								g_focus[n++] = *p;
+						for(char *q = t; *q && n < (int)sizeof(clean) - 1; q++) {
+							if((unsigned char)*q >= 32) {
+								clean[n++] = *q;
 							}
 						}
-						g_focus[n] = 0;
+						clean[n] = 0;
+						focus_insert(clean);
 						SDL_free(t);
 					}
+					continue;
+				} else if(k == SDLK_A && cmd) {
+					g_caret = len;		/* no selection: go to the end */
 					continue;
 				}
 			}
@@ -1895,10 +1994,60 @@ window(void)
 					SDL_SetWindowSize(g_win, rw, rh);
 				}
 			}
+			if(getenv("LAUNCHER_CLICK") && (frame == 38 || frame == 40 || frame == 42)) {	/* test aid: window x,y */
+				float wx = 0, wy = 0;
+
+				if(sscanf(getenv("LAUNCHER_CLICK"), "%f,%f", &wx, &wy) == 2) {
+					SDL_Event ce;
+					int ww, wh;
+					float lx, ly;
+
+					SDL_GetWindowSize(g_win, &ww, &wh);
+					SDL_RenderCoordinatesFromWindow(g_ren, wx, wy, &lx, &ly);
+					if(frame == 38) {
+						printf("window %dx%d, click %.0f,%.0f -> logical %.1f,%.1f\n", ww, wh, wx, wy, lx, ly);
+					}
+
+					SDL_zero(ce);
+					ce.type = frame == 38 ? SDL_EVENT_MOUSE_MOTION : frame == 40 ? SDL_EVENT_MOUSE_BUTTON_DOWN :
+							SDL_EVENT_MOUSE_BUTTON_UP;
+					ce.button.windowID = SDL_GetWindowID(g_win);
+					ce.button.button = SDL_BUTTON_LEFT;
+					ce.button.down = frame == 40;
+					ce.button.clicks = 1;
+					ce.button.x = wx;
+					ce.button.y = wy;
+					SDL_PushEvent(&ce);
+				}
+			}
+			if(getenv("LAUNCHER_FIELDTEST") && frame >= 10 && frame <= 20) {	/* test aid: click, Left, type X, Delete */
+				SDL_Event ce;
+
+				SDL_zero(ce);
+				ce.button.windowID = SDL_GetWindowID(g_win);
+				if(frame == 10 || frame == 11) {
+					ce.type = frame == 10 ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+					ce.button.button = SDL_BUTTON_LEFT;
+					ce.button.down = frame == 10;
+					ce.button.clicks = 1;
+					ce.button.x = 161;
+					ce.button.y = 60;
+					SDL_PushEvent(&ce);
+				} else if(frame == 14 || frame == 18) {
+					ce.type = SDL_EVENT_KEY_DOWN;
+					ce.key.key = frame == 14 ? SDLK_LEFT : SDLK_DELETE;
+					ce.key.down = true;
+					SDL_PushEvent(&ce);
+				} else if(frame == 16) {
+					ce.type = SDL_EVENT_TEXT_INPUT;
+					ce.text.text = "X";
+					SDL_PushEvent(&ce);
+				}
+			}
 			if(frame == 5 && getenv("LAUNCHER_ABOUT")) {
 				about_open();
 			}
-			if(frame == 20 && getenv("LAUNCHER_SHOT")) {
+			if(frame == (getenv("LAUNCHER_FIELDTEST") ? 30 : 60) && getenv("LAUNCHER_SHOT")) {
 				SDL_Surface *sf = SDL_RenderReadPixels(g_ren, NULL);
 
 				if(sf) {
