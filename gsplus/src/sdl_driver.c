@@ -27,6 +27,7 @@
 #include "defc.h"
 #include "ui.h"
 #include "uthernet2.h"
+#include "cli.h"
 extern int g_uthernet2_slot;
 void printer_vbl(void);
 extern int g_rom_version;
@@ -1321,6 +1322,55 @@ sdl_dev_snapshot(Window_info *win)
 	g_quit_requested = 1;
 }
 
+/* Window size and disks from the command line (cli.c), after start-up. */
+static int	g_cli_scale = 1;
+static int	g_cli_fixed_size = 0;
+
+/* Largest scale <= want whose window fits the screen's usable area. */
+static int
+sdl_fit_scale(Window_info *win, int want)
+{
+	SDL_Rect	r;
+	int		s = want;
+
+	if(SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(win->window), &r)) {
+		while(s > 1 && (win->width_req * s > r.w ||
+			(win->main_height + 2 * UI_BAR_H) * s + 40 > r.h)) {
+			s--;
+		}
+	}
+	return s;
+}
+
+static void
+sdl_apply_cli(void)
+{
+	Window_info	*win = &g_mainwin_info;
+	int		w, h, scale, i;
+
+	emubuddy_cli_window(&w, &h, &scale);
+	if(scale > 1) {
+		g_cli_scale = sdl_fit_scale(win, scale);
+		if(g_cli_scale < scale) {
+			printf("EmuBuddy: -scale %d doesn't fit the screen, using %d\n",
+							scale, g_cli_scale);
+		}
+		scale = g_cli_scale;
+		SDL_SetWindowSize(win->window, win->width_req * scale,
+				(win->main_height + 2 * UI_BAR_H) * scale);
+	}
+	if(w > 0 && h > 0) {
+		g_cli_fixed_size = 1;
+		SDL_SetWindowSize(win->window, w, h);
+	}
+	for(i = 0; i < emubuddy_cli_later_count(); i++) {
+		ui_insert_auto(emubuddy_cli_later(i));
+	}
+	if(g_config_session_only) {
+		ui_message("Command-line settings: changes in this run aren't saved");
+	}
+}
+
 static void
 sdl_save_screenshot(Window_info *win)
 {
@@ -1603,7 +1653,12 @@ sdl_update_display(Window_info *win)
 		win->main_height = h;
 		win->pixels_per_line = w;
 		video_update_scale(win->kimage_ptr, w, h, 1);
-		SDL_SetWindowSize(win->window, w, h + 2 * UI_BAR_H);
+		if(!g_cli_fixed_size) {
+			int sc = sdl_fit_scale(win, g_cli_scale);
+
+			SDL_SetWindowSize(win->window, w * sc,
+					(h + 2 * UI_BAR_H) * sc);
+		}
 		/* Honor -noaspect here too, matching init and the CRT path; otherwise
 		 * a stretched view reverts to letterbox after the first mode change. */
 		sdl_logical_on(win);
@@ -1789,6 +1844,9 @@ main(int argc, char **argv)
 
 	printf("EmuBuddy %s (SDL3, based on GSplus)\n", GSPLUS_VERSION_STR);
 
+	if(emubuddy_cli(&argc, &argv) != 0) {
+		exit(2);
+	}
 	ret = parse_argv(argc, argv, 1);
 	if(ret) {
 		printf("parse_argv ret: %d, stopping\n", ret);
@@ -1803,6 +1861,7 @@ main(int argc, char **argv)
 
 	sdl_video_init();
 	sdl_debugger_init();
+	sdl_apply_cli();
 
 	/* Main loop: run_16ms() runs one video frame's worth of CPU + video. */
 	uthernet2_reset();

@@ -1839,6 +1839,8 @@ config_generate_config_kegs_name(char *outstr, int maxlen, Disk *dsk,
 	snprintf(str, maxlen - (str - outstr), "%s", dsk->name_ptr);
 }
 
+extern int g_config_session_only;
+
 char *
 config_write_config_kegs_file(int get_status)
 {
@@ -1849,6 +1851,13 @@ config_write_config_kegs_file(int get_status)
 	char	*curstr, *defstr;
 	int	defval, curval, type, slot, drive;
 	int	i;
+
+	if(g_config_session_only) {
+		/* EmuBuddy: started with command-line settings; this run's
+		 * changes are not saved (use -save to keep them). */
+		g_config_kegs_update_needed = 0;
+		return 0;
+	}
 
 	if(get_status) {
 		return 0;

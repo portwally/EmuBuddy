@@ -247,6 +247,10 @@ helper or an entitlement Apple doesn't give normal apps (legacy GSplus and Ample
 both fell back to a root helper). slirp needs nothing and works on all three OSes.
 Sweet16 used it too.
 
+## Command line
+
+MAME apple2gs-style options (`-flop1..4`, `-hard1..7`, `-sl1..sl7 <card>`, `-share`, `-rom`, `-rompath`, `-ramsize`, `-mhz`, `-nothrottle`, `-window`/`-nowindow`, `-resolution`, `-scale`, `-crt`, `-scanlines`, `-save`). Session-only unless `-save`. Implemented in `cli.c`; reference in `docs/CLI.md`. (This replaces the earlier plan item "remove command-line flag parsing"; the GUI stays complete on its own.)
+
 ## Developer test hooks (environment variables, no effect in normal use)
 
 `EMUBUDDY_SNAPSHOT`/`SNAPFRAME`, `EMUBUDDY_SNAPS`+`SNAPDIR` (screenshots at frames), `EMUBUDDY_CLICKS`, `EMUBUDDY_MOUSE` (press/move/release), `EMUBUDDY_KEYS` (e.g. `cmd+o`), `EMUBUDDY_TYPE` (paste text), `EMUBUDDY_DROPS`, `EMUBUDDY_INSERT`, `EMUBUDDY_OPEN` (about/open/drives/slots/printer), `EMUBUDDY_MENU`, `EMUBUDDY_NETDEBUG`. Always run tests with `-cfg <scratch file>` so `~/config.kegs` is not touched, and on copies of disk images.
