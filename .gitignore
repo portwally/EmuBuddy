@@ -12,3 +12,5 @@ skills-lock.json
 
 # Absolute trash
 .DS_Store
+build/
+.DS_Store

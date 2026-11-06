@@ -133,86 +133,6 @@ message(STATUS "GSplus: configured core library (build type: ${CMAKE_BUILD_TYPE}
 
 
 # ============================================================================
-#  Phase 1, milestone 2: the macOS native app (GSplus.app)
-# ============================================================================
-#
-#  Goal: reproduce what the Makefile's `gsplus:` target does -- link the core
-#  library together with the Mac sound driver (macsnd_driver.c) and the two
-#  Swift/Cocoa files into a runnable GSplus.app. The Swift files own the app's
-#  entry point (AppDelegate has `@main` -> NSApplicationMain) and call into the
-#  C core through the bridging header (Kegs-Bridging-Header.h imports defc.h).
-#
-#  KEY IMPROVEMENT over the Makefile: the old `comp_swift` script hard-codes
-#  /Applications/Xcode.app paths and the Mac `vars` hard-codes an SDK path that
-#  doesn't even exist on a Command-Line-Tools-only machine. Here we let CMake's
-#  built-in Swift support discover the toolchain and -- crucially -- handle the
-#  Swift runtime linking / rpaths automatically, which is the fragile part the
-#  Makefile does by hand.
-# ----------------------------------------------------------------------------
-# CMake's Swift support can't build a universal (multi-arch) binary -- it errors
-# with "multiple values for CMAKE_OSX_ARCHITECTURES not supported with Swift".
-# The native Cocoa app is legacy/secondary and excluded from the default build,
-# so when a universal build is requested (the CI macos-universal job passes
-# arm64;x86_64) we simply skip it; the shipped SDL app (gsplus-sdl, plain C) has
-# no such restriction and still builds universal.
-list(LENGTH CMAKE_OSX_ARCHITECTURES _gsplus_narch)
-if(APPLE AND _gsplus_narch GREATER 1)
-    message(STATUS "GSplus: universal build -- skipping the Swift Cocoa app (Swift can't do multi-arch)")
-endif()
-
-if(APPLE AND _gsplus_narch LESS 2)
-    # Turn on CMake's Swift language support. This makes CMake able to compile
-    # .swift files and, when it links a target that contains Swift, pull in the
-    # Swift runtime and set rpaths for us.
-    enable_language(Swift)
-
-    # The macOS application. MACOSX_BUNDLE tells CMake to produce a .app bundle
-    # (Contents/MacOS, Info.plist, etc.) instead of a bare command-line binary.
-    # We feed it the two Swift files plus the Mac-only sound driver; the rest of
-    # the emulator comes in via the gsplus_core library we link below.
-    add_executable(gsplus MACOSX_BUNDLE EXCLUDE_FROM_ALL
-        AppDelegate.swift
-        MainView.swift
-        macsnd_driver.c
-    )
-
-    # The native Swift app is legacy/secondary -- "GSplus" is the SDL build. Name
-    # this one GSplus-Cocoa.app so it doesn't collide with GSplus.app, and exclude
-    # it from the default build (build it explicitly with: --target gsplus).
-    set_target_properties(gsplus PROPERTIES
-        OUTPUT_NAME "GSplus-Cocoa"
-        Swift_MODULE_NAME "Kegs"
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
-    )
-
-    # Swift-only compile flags (the genex applies them ONLY to .swift sources,
-    # not to macsnd_driver.c). These mirror the old comp_swift invocation:
-    #   -import-objc-header  : the bridging header that exposes C (defc.h) to Swift
-    #   -swift-version 4     : the language mode the Swift sources were written in
-    #   -Onone               : no Swift optimization (same as comp_swift)
-    #   -Xcc -I<srcdir>      : let the Swift clang-importer find defc.h & friends
-    target_compile_options(gsplus PRIVATE
-        "$<$<COMPILE_LANGUAGE:Swift>:-import-objc-header;${CMAKE_CURRENT_SOURCE_DIR}/Kegs-Bridging-Header.h;-swift-version;4;-Onone;-Xcc;-I${CMAKE_CURRENT_SOURCE_DIR}>"
-    )
-
-    # Link the emulator core plus the macOS frameworks the code needs:
-    #   Cocoa        -> the AppKit GUI used by the Swift files
-    #   AudioToolbox / CoreAudio / AudioUnit -> used by macsnd_driver.c
-    # (Cocoa/CoreGraphics etc. imported by Swift are autolinked from the Swift
-    #  objects, but we name the ones the C driver needs explicitly to be safe.)
-    target_link_libraries(gsplus PRIVATE
-        gsplus_core
-        "-framework Cocoa"
-        "-framework AudioToolbox"
-        "-framework CoreAudio"
-        "-framework AudioUnit"
-    )
-
-    message(STATUS "GSplus: configured macOS app target (GSplus.app)")
-endif()
-
-
-# ============================================================================
 #  Phase 2: the SDL3 cross-platform target (gsplus-sdl)
 # ============================================================================
 #
@@ -306,13 +226,12 @@ if(APPLE)
     # Tell CMake to drop the icon into the bundle's Contents/Resources.
     set_source_files_properties(${GSPLUS_SDL_ICON} PROPERTIES
         MACOSX_PACKAGE_LOCATION Resources)
-    # The app is just "GSplus" -> GSplus.app with GSplus inside (the native Swift
-    # app is GSplus-Cocoa.app, so no collision).
+    # The app is "EmuBuddy" -> EmuBuddy.app.
     set_target_properties(gsplus-sdl PROPERTIES
         MACOSX_BUNDLE TRUE
-        OUTPUT_NAME "GSplus"
-        MACOSX_BUNDLE_BUNDLE_NAME "GSplus"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.gsplus.GSplus"
+        OUTPUT_NAME "EmuBuddy"
+        MACOSX_BUNDLE_BUNDLE_NAME "EmuBuddy"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.portwally.EmuBuddy"
         MACOSX_BUNDLE_BUNDLE_VERSION "${GSPLUS_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${GSPLUS_VERSION}"
         MACOSX_BUNDLE_ICON_FILE "gsplusicon.icns"
@@ -323,12 +242,12 @@ if(APPLE)
     # ("code has no resources but signature indicates they must be present"),
     # which makes Finder reject the bundle and show the prohibitory icon. Re-sign
     # ad-hoc after the build so the bundle is valid and shows its icon. First
-    # delete the Ninja depfile (GSplus.d) that lands next to the executable --
+    # delete the Ninja depfile (EmuBuddy.d) that lands next to the executable --
     # codesign chokes on that stray file in Contents/MacOS.
     add_custom_command(TARGET gsplus-sdl POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:gsplus-sdl>/GSplus.d"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:gsplus-sdl>/EmuBuddy.d"
         COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:gsplus-sdl>"
-        COMMENT "Re-signing GSplus.app (ad-hoc)"
+        COMMENT "Re-signing EmuBuddy.app (ad-hoc)"
         VERBATIM)
 endif()
 
@@ -375,12 +294,12 @@ if(APPLE)
     # resolves to Homebrew's libdir or the FetchContent build dir as appropriate.
     install(CODE "
         include(BundleUtilities)
-        fixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/GSplus.app\" \"\" \"$<TARGET_FILE_DIR:SDL3::SDL3>\")
+        fixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/EmuBuddy.app\" \"\" \"$<TARGET_FILE_DIR:SDL3::SDL3>\")
         execute_process(COMMAND codesign --force --deep --sign -
-            \"\${CMAKE_INSTALL_PREFIX}/GSplus.app\")
+            \"\${CMAKE_INSTALL_PREFIX}/EmuBuddy.app\")
     ")
     set(CPACK_GENERATOR "DragNDrop")          # -> a .dmg
-    set(CPACK_DMG_VOLUME_NAME "GSplus")
+    set(CPACK_DMG_VOLUME_NAME "EmuBuddy")
 else()
     # Install to the package root (no bin/ subdir) so the .zip/.tar.gz has the
     # executable at the top level.
@@ -410,8 +329,8 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../README.md"
               "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
         DESTINATION .)
 
-set(CPACK_PACKAGE_NAME "GSplus")
-set(CPACK_PACKAGE_VENDOR "GSplus Contributors")
+set(CPACK_PACKAGE_NAME "EmuBuddy")
+set(CPACK_PACKAGE_VENDOR "EmuBuddy")
 set(CPACK_PACKAGE_VERSION "${GSPLUS_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
 include(CPack)

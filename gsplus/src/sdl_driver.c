@@ -517,7 +517,7 @@ sdl_video_init(void)
 	if(g_borderless) { flags |= SDL_WINDOW_BORDERLESS; }
 	if(g_fullscreen) { flags |= SDL_WINDOW_FULLSCREEN; g_is_fullscreen = 1; }
 
-	g_mainwin_info.window = SDL_CreateWindow("GSplus",
+	g_mainwin_info.window = SDL_CreateWindow("EmuBuddy",
 				w, h, flags);
 	if(!g_mainwin_info.window) {
 		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -1488,7 +1488,7 @@ main(int argc, char **argv)
 	int	mdepth = 32;		/* ARGB8888 -> 32-bit pixels */
 	int	ret;
 
-	printf("GSplus %s (SDL3)\n", GSPLUS_VERSION_STR);
+	printf("EmuBuddy %s (SDL3, based on GSplus)\n", GSPLUS_VERSION_STR);
 
 	ret = parse_argv(argc, argv, 1);
 	if(ret) {
