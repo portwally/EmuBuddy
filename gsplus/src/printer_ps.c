@@ -50,6 +50,9 @@ static int		g_nqueue;
 static SDL_Process	*g_proc;
 static PsJob		g_cur;
 static word32		g_proc_start;
+#define PS_MAX_KEEP	99
+static PsJob		g_keep[PS_MAX_KEEP];	/* jobs whose pages are in the window */
+static int		g_nkeep;
 
 /* ---- finding Ghostscript ---- */
 
@@ -194,7 +197,7 @@ read_ppm(const char *path, unsigned char **rgb, int *w, int *h)
 	return 0;
 }
 
-static void
+static int
 collect_pages(void)
 {
 	char		path[1200];
@@ -215,6 +218,7 @@ collect_pages(void)
 		ui_message("PostScript job %d gave no pages (Ghostscript could "
 					"not read it)", g_cur.no);
 	}
+	return got;
 }
 
 static void
@@ -282,8 +286,9 @@ poll_gs(void)
 	if(SDL_WaitProcess(g_proc, false, &code)) {
 		SDL_DestroyProcess(g_proc);
 		g_proc = NULL;
-		collect_pages();
-		if(g_cur.own && !getenv("EMUBUDDY_PSDIR")) {
+		if(collect_pages() > 0 && g_nkeep < PS_MAX_KEEP) {
+			g_keep[g_nkeep++] = g_cur;	/* kept for a vector PDF */
+		} else if(g_cur.own && !getenv("EMUBUDDY_PSDIR")) {
 			SDL_RemovePath(g_cur.path);
 		}
 		start_next();
@@ -469,4 +474,52 @@ printer_ps_vbl(void)
 	if(g_proc || g_nqueue) {
 		poll_gs();
 	}
+}
+
+/* The window's pages were cleared: the job files are no longer needed. */
+void
+printer_ps_forget_jobs(void)
+{
+	int	i;
+
+	for(i = 0; i < g_nkeep; i++) {
+		if(g_keep[i].own && !getenv("EMUBUDDY_PSDIR")) {
+			SDL_RemovePath(g_keep[i].path);
+		}
+	}
+	g_nkeep = 0;
+}
+
+/* Write all kept jobs as one vector PDF (sharp text, small files). Waits for
+ * Ghostscript, which takes a moment. Returns 0 on success. */
+int
+printer_ps_save_pdf(const char *pdf_path)
+{
+	const char	*args[PS_MAX_KEEP + 12];
+	char		out[1200];
+	SDL_Process	*proc;
+	int		n = 0, i, code = -1;
+
+	if(g_nkeep == 0 || !g_gs) {
+		return -1;
+	}
+	snprintf(out, sizeof(out), "-sOutputFile=%s", pdf_path);
+	args[n++] = g_gs;
+	args[n++] = "-q";
+	args[n++] = "-dNOPAUSE";
+	args[n++] = "-dBATCH";
+	args[n++] = "-dSAFER";
+	args[n++] = "-sDEVICE=pdfwrite";
+	args[n++] = out;
+	for(i = 0; i < g_nkeep; i++) {
+		args[n++] = g_keep[i].path;
+	}
+	args[n] = NULL;
+	proc = SDL_CreateProcess(args, false);
+	if(!proc) {
+		return -1;
+	}
+	SDL_WaitProcess(proc, true, &code);
+	SDL_DestroyProcess(proc);
+	return code == 0 ? 0 : -1;
 }

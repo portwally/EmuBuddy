@@ -8,12 +8,14 @@
 #include <time.h>
 
 void	printer_eject_now(void);
+int	printer_ps_save_pdf(const char *pdf_path);
+void	printer_ps_forget_jobs(void);
 SDL_Renderer *ui_renderer(void);
 
 #define MAX_PAGES	99
 
 typedef struct {
-	int		w, h, dpi, color;
+	int		w, h, dpi, color, ps;	/* ps: came from a PostScript job */
 	unsigned char	*rgb;		/* w*h*3 */
 	SDL_Texture	*tex;
 } Page;
@@ -60,6 +62,7 @@ printer_page_done(const unsigned char *pixels, int w, int h, int pitch,
 	p->h = h;
 	p->dpi = dpi;
 	p->color = color;
+	p->ps = 0;
 	p->tex = NULL;
 	g_cur = g_npages++;
 	ui_message("Printed page %d", g_npages);
@@ -96,6 +99,7 @@ printer_page_done_rgb(const unsigned char *rgb, int w, int h, int dpi)
 	p->h = h;
 	p->dpi = dpi;
 	p->color = color;
+	p->ps = 1;
 	p->tex = NULL;
 	g_cur = g_npages++;
 	ui_message("Printed page %d", g_npages);
@@ -116,6 +120,7 @@ clear_pages(void)
 		}
 	}
 	memset(g_pages, 0, sizeof(g_pages));
+	printer_ps_forget_jobs();
 	g_npages = 0;
 	g_cur = 0;
 }
@@ -156,7 +161,7 @@ rle_encode(const unsigned char *in, size_t n, unsigned char *out)
 }
 
 static int
-write_pdf(const char *path)
+write_pdf_bitmap(const char *path)
 {
 	FILE	*f = fopen(path, "wb");
 	long	*off;
@@ -231,6 +236,24 @@ write_pdf(const char *path)
 	}
 	free(off);
 	return fclose(f) == 0 ? 0 : -1;
+}
+
+/* All pages from PostScript jobs: let Ghostscript write a vector PDF.
+ * Otherwise (ImageWriter pages, or a mix) pages go in as bitmaps. */
+static int
+write_pdf(const char *path)
+{
+	int	i, all_ps = g_npages > 0;
+
+	for(i = 0; i < g_npages; i++) {
+		if(!g_pages[i].ps) {
+			all_ps = 0;
+		}
+	}
+	if(all_ps && printer_ps_save_pdf(path) == 0) {
+		return 0;
+	}
+	return write_pdf_bitmap(path);
 }
 
 static void

@@ -84,3 +84,4 @@ control panel, pick the printer port and the type **DC.PostScript**, then print.
 Each job is converted by Ghostscript (`gs`, found in PATH or the usual install
 folders; `EMUBUDDY_GS=<path>` overrides) and the pages appear in the Printer
 window like ImageWriter pages. Ghostscript is not bundled.
+Save PDF writes a vector PDF (sharp text, a few KB per page) when all pages came from PostScript jobs; ImageWriter pages are saved as bitmaps.
