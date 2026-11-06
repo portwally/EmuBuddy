@@ -161,3 +161,12 @@ The skin picker shows a live preview.
 Phases 0 to 2 are as in section 6. Phase 2 now also includes the library (section 8) and the generated covers. Phase 3 builds
 all skins in this order: MacOS 7, Magazine, MacOS 1, Terminal/Amber, Shelf, Cover Flow, Apple II (1977), NeXT, BeOS. Phase 4 adds
 the combined download (one installer or archive per platform with both apps).
+
+## 10. Status
+
+- **Done:** EmuBuddy command-line additions (`-title`, `-profile`, `-validate`, `-showconfig`); profile files and the
+  command-line builder with tests; the window with the profile list, details with the exact command line, New, Duplicate,
+  Delete, Edit, Play; the profile editor (name, description, ROM, three hard disks, 3.5" and 5.25" floppy, shared and bridge
+  folder, memory, speed, slots 1/2/3/4/7, window size, CRT, full screen, extra options) with file choosers, text fields and
+  disk drop. The window uses EmuBuddy's own toolkit (the "Retro" look), compiled from `emubuddy/src/ui*.c`.
+- **Next:** ROM and disk library (section 8), generated covers, the skin engine, the other skins, one download with both apps.

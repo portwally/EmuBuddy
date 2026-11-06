@@ -30,7 +30,10 @@ if(NOT SDL3_FOUND)
     FetchContent_MakeAvailable(SDL3)
 endif()
 
-add_executable(emubuddy-launcher src/main.c)
+# The window uses EmuBuddy's own UI toolkit and font, compiled from its folder.
+set(EB_UI ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/src)
+add_executable(emubuddy-launcher src/main.c ${EB_UI}/ui.c ${EB_UI}/ui_font.c ${EB_UI}/ui_font_data.c)
+target_include_directories(emubuddy-launcher PRIVATE src ${EB_UI})
 target_compile_definitions(emubuddy-launcher PRIVATE
     LAUNCHER_VERSION_STR="${EMUBUDDY_VERSION}")
 target_link_libraries(emubuddy-launcher PRIVATE launcher_profile SDL3::SDL3)
