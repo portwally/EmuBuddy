@@ -1143,6 +1143,121 @@ sdl_dev_drops(Window_info *win, int frames)
 	}
 }
 
+/* EMUBUDDY_MOUSE="frame:op:x:y;..." op d = move then press 2 frames later,
+ * m = move, u = move then release 2 frames later (logical coordinates). */
+static void
+sdl_dev_mouse(Window_info *win, int frames)
+{
+	const char	*p = getenv("EMUBUDDY_MOUSE");
+	int		f, x, y, n;
+	char		op;
+
+	while(p && sscanf(p, "%d:%c:%d:%d%n", &f, &op, &x, &y, &n) == 4) {
+		if(f == frames || (op != 'm' && f + 2 == frames)) {
+			SDL_Event	e;
+			float		wx, wy;
+
+			SDL_RenderCoordinatesToWindow(win->renderer, (float)x,
+							(float)y, &wx, &wy);
+			SDL_zero(e);
+			if(f == frames) {
+				e.type = SDL_EVENT_MOUSE_MOTION;
+				e.motion.x = wx;
+				e.motion.y = wy;
+				if(op == 'u') {
+					e.motion.state = SDL_BUTTON_LMASK;
+				}
+			} else {
+				e.type = (op == 'd') ? SDL_EVENT_MOUSE_BUTTON_DOWN :
+						SDL_EVENT_MOUSE_BUTTON_UP;
+				e.button.button = SDL_BUTTON_LEFT;
+				e.button.down = (op == 'd');
+				e.button.clicks = 1;
+				e.button.x = wx;
+				e.button.y = wy;
+			}
+			SDL_PushEvent(&e);
+		}
+		p += n;
+		if(*p == ';') {
+			p++;
+		} else {
+			break;
+		}
+	}
+}
+
+/* EMUBUDDY_KEYS="frame:combo;..." presses a key, e.g. "cmd+o", "return",
+ * "down", "cmd+p" (SDL key names; "cmd" is the Open-Apple key). The key goes
+ * down at frame and up 3 frames later. */
+static void
+sdl_dev_keys(Window_info *win, int frames)
+{
+	const char	*p = getenv("EMUBUDDY_KEYS");
+	int		f, n, down;
+	char		combo[64], *plus;
+	SDL_Scancode	mod, key;
+
+	while(p && sscanf(p, "%d:%63[^;]%n", &f, combo, &n) == 2) {
+		down = (f == frames);
+		if(down || f + 3 == frames) {
+			mod = SDL_SCANCODE_UNKNOWN;
+			plus = strchr(combo, '+');
+			if(plus) {
+				*plus = 0;
+				if(!strcmp(combo, "cmd")) mod = SDL_SCANCODE_LGUI;
+				else if(!strcmp(combo, "ctrl")) mod = SDL_SCANCODE_LCTRL;
+				else if(!strcmp(combo, "shift")) mod = SDL_SCANCODE_LSHIFT;
+				else if(!strcmp(combo, "opt")) mod = SDL_SCANCODE_LALT;
+				key = SDL_GetScancodeFromName(plus + 1);
+			} else {
+				key = SDL_GetScancodeFromName(combo);
+			}
+			if(down) {
+				if(mod) sdl_handle_key(win, mod, 0, 0);
+				sdl_handle_key(win, key, 0, 0);
+			} else {
+				sdl_handle_key(win, key, 1, 0);
+				if(mod) sdl_handle_key(win, mod, 1, 0);
+			}
+		}
+		p += n;
+		if(*p == ';') {
+			p++;
+		} else {
+			break;
+		}
+	}
+}
+
+/* EMUBUDDY_SNAPS="f1,f2,..." + EMUBUDDY_SNAPDIR=dir: save dir/s<frame>.bmp
+ * at each frame, quit after the last. */
+static int
+sdl_dev_multisnap(Window_info *win, int frames)
+{
+	const char	*p = getenv("EMUBUDDY_SNAPS");
+	const char	*dir = getenv("EMUBUDDY_SNAPDIR");
+	int		f, n, last = 0, hit = 0;
+	char		path[1100];
+	SDL_Surface	*shot;
+
+	while(p && sscanf(p, "%d%n", &f, &n) == 1) {
+		if(f == frames) hit = 1;
+		if(f > last) last = f;
+		p += n;
+		if(*p == ',') p++; else break;
+	}
+	if(hit && dir) {
+		snprintf(path, sizeof(path), "%s/s%05d.bmp", dir, frames);
+		shot = SDL_RenderReadPixels(win->renderer, NULL);
+		if(shot) {
+			SDL_SaveBMP(shot, path);
+			SDL_DestroySurface(shot);
+		}
+	}
+	return last && frames >= last;
+}
+
 static void
 sdl_dev_snapshot(Window_info *win)
 {
@@ -1159,6 +1274,11 @@ sdl_dev_snapshot(Window_info *win)
 					win->main_height + 2 * UI_BAR_H);
 	}
 	sdl_dev_drops(win, frames);
+	sdl_dev_mouse(win, frames);
+	sdl_dev_keys(win, frames);
+	if(sdl_dev_multisnap(win, frames)) {
+		g_quit_requested = 1;
+	}
 	{	/* EMUBUDDY_TYPE="frame:text" types into the IIgs ('|' = Return) */
 		const char *t = getenv("EMUBUDDY_TYPE");
 		int f2, n2;

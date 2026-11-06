@@ -164,7 +164,8 @@ the F4 text menu. Work:
 
 ### Phase 4: Printer (S–M)
 **Status, working:** legacy GSport/GSplus `imagewriter.cpp` (GPL v2+) ported unchanged except the page output; small stand-ins (`iw_shim.h`) replace SDL 1.2 surfaces and FreeType, text is drawn as dots from the IIgs character set (`kegsfont.h`). Serial mode 4 = ImageWriter (Slots: slot 1 "ImageWriter"); idle pages eject after 3 s. Printer window (Machine > Printer, opens on the first page): preview, Save PDF to the Desktop (own PDF writer, RunLength compressed, ~40 KB/page), Print (lp / Windows opens the PDF), Open in the system viewer, Clear, Eject. Tested: Applesoft PR#1 output -> page -> PDF.
-**Open:** GS/OS graphics printing (ImageWriter driver bit images) not yet tested with a real print job; text fonts are the IIgs screen font, not the ImageWriter's own; no printer setting for paper size.
+GS/OS printing tested: Teach on System 6 -> ImageWriter driver v4.2 dialog -> bit-image page in the Printer window -> PDF, crisp at 144 dpi.
+**Open:** printer-native text mode uses the IIgs screen font, not the ImageWriter's own; no paper size setting; Print button not tried against a real printer.
 - Port the ImageWriter II emulation from legacy GSplus/GSport (`imagewriter.cpp`,
   `scc_imagewriter.c`, `printer.cpp`, charmaps; GPL v2+). Attach it to the SCC
   printer port and as a slot 1 card.
@@ -242,6 +243,10 @@ Why slirp: pcap needs root or BPF permissions, and macOS `vmnet` needs a root
 helper or an entitlement Apple doesn't give normal apps (legacy GSplus and Ample
 both fell back to a root helper). slirp needs nothing and works on all three OSes.
 Sweet16 used it too.
+
+## Developer test hooks (environment variables, no effect in normal use)
+
+`EMUBUDDY_SNAPSHOT`/`SNAPFRAME`, `EMUBUDDY_SNAPS`+`SNAPDIR` (screenshots at frames), `EMUBUDDY_CLICKS`, `EMUBUDDY_MOUSE` (press/move/release), `EMUBUDDY_KEYS` (e.g. `cmd+o`), `EMUBUDDY_TYPE` (paste text), `EMUBUDDY_DROPS`, `EMUBUDDY_INSERT`, `EMUBUDDY_OPEN` (about/open/drives/slots/printer), `EMUBUDDY_MENU`, `EMUBUDDY_NETDEBUG`. Always run tests with `-cfg <scratch file>` so `~/config.kegs` is not touched, and on copies of disk images.
 
 ## Risks
 
