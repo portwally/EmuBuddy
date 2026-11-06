@@ -184,6 +184,63 @@ main(void)
 	CHECK(call(0x10, 0, BUF, 4096, 0) == 0x4e, "overlap refused");
 	bridge_overlap_check = NULL;
 
+	/* ---- staging for the IIgs program Receive ---- */
+	{
+		char	src[1200], p[1400], msg[200];
+		SDL_IOStream *io;
+
+		bridge_prodos_name("My Long Picture File.png", name, sizeof(name), &t, &a);
+		CHECK(!strcmp(name, "My.Long.Picture") && t == 6 && a == 0, "name: %s %x", name, t);
+		bridge_prodos_name("9lives.txt", name, sizeof(name), &t, &a);
+		CHECK(!strcmp(name, "F9lives") && t == 4, "digit first: %s", name);
+		bridge_prodos_name("Pict2.Dt.9.SHK", name, sizeof(name), &t, &a);
+		CHECK(!strcmp(name, "Pict2.Dt.9.SHK") && t == 0xe0 && a == 0x8002, "shk: %s %x %x", name, t, a);
+		bridge_prodos_name("README.txt", name, sizeof(name), &t, &a);
+		CHECK(!strcmp(name, "README") && t == 4, "txt: %s", name);
+		bridge_prodos_name("a-b c.bin", name, sizeof(name), &t, &a);
+		CHECK(!strcmp(name, "a.b.c.bin") && t == 6 && a == 0x2000, "bin: %s", name);
+
+		snprintf(src, sizeof(src), "%s/source file.shk", outside);
+		io = SDL_IOFromFile(src, "wb");
+		SDL_WriteIO(io, "XYZ", 3);
+		SDL_CloseIO(io);
+		rc = bridge_stage_file(src, ":Boot.Disk:Dragtests", msg, sizeof(msg));
+		CHECK(rc == 0, "stage: %s", msg);
+		snprintf(p, sizeof(p), "%s/Inbox/0001/source.file.shk,t$E0,a$8002", root);
+		CHECK(SDL_GetPathInfo(p, NULL), "staged data file");
+		snprintf(p, sizeof(p), "%s/Inbox/0001/target.txt", root);
+		io = SDL_IOFromFile(p, "rb");
+		CHECK(io != NULL, "target.txt exists");
+		if(io) {
+			char tgt[100] = "";
+			size_t n = SDL_ReadIO(io, tgt, 99);
+			tgt[n] = 0;
+			CHECK(!strcmp(tgt, ":Boot.Disk:Dragtests\r"), "target text: %s", tgt);
+			SDL_CloseIO(io);
+		}
+		rc = bridge_stage_file(src, ":Boot.Disk", msg, sizeof(msg));
+		snprintf(p, sizeof(p), "%s/Inbox/0002/target.txt", root);
+		CHECK(rc == 0 && SDL_GetPathInfo(p, NULL), "second drop gets 0002");
+		/* the bridge sees the staged files with their ProDOS names */
+		rc = call(0x10, path(STR, "Inbox/0001"), BUF, 4096, 0);
+		CHECK(rc == 0 && r32(BLK + 0x14) == 2, "LIST Inbox/0001: %lu", r32(BLK + 0x14));
+		/* results from the IIgs */
+		CHECK(!bridge_next_result(msg, sizeof(msg)), "no result yet");
+		snprintf(p, sizeof(p), "%s/Outbox", root);
+		SDL_CreateDirectory(p);
+		snprintf(p, sizeof(p), "%s/Outbox/0001.txt", root);
+		io = SDL_IOFromFile(p, "wb");
+		SDL_WriteIO(io, "OK :Boot.Disk:Dragtests:x\r", 26);
+		SDL_CloseIO(io);
+		CHECK(bridge_next_result(msg, sizeof(msg)) && !strcmp(msg, "OK :Boot.Disk:Dragtests:x"), "result: %s", msg);
+		CHECK(!bridge_next_result(msg, sizeof(msg)), "result consumed");
+		/* no bridge folder: refused with a reason */
+		g_bridge_root = "";
+		CHECK(bridge_stage_file(src, ":V", msg, sizeof(msg)) == -1, "stage without folder");
+		g_bridge_root = root;
+		SDL_RemovePath(src);
+	}
+
 	bridge_close_all();
 	SDL_RemovePath(root);
 	SDL_RemovePath(outside);

@@ -29,10 +29,12 @@ DoCmd       MAC
 SetPtr      MAC
             lda   #]1
             sta   Block+]2
-            phk
+            sep   #$20
+            phk                    ; (8-bit: push 1 byte, pull 1 byte)
             pla
-            and   #$00FF
             sta   Block+]2+2
+            stz   Block+]2+3
+            rep   #$20
             <<<
 
 * --- Block+]2 = the 16-bit value ]1 (and a zero high word) ---

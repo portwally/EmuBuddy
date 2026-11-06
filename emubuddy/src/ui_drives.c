@@ -4,6 +4,9 @@
  * (.2mg, .hdv, .po, ...) are read by the core; this file is the UI for them. */
 #include "defc.h"
 #include "ui.h"
+#include "bridge.h"
+#include "receive_bin.h"
+int	ui_bridge_is_on(void);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -588,6 +591,17 @@ static struct {
 void
 ui_drives_tick(void)
 {
+	static int	poll;
+
+	if(++poll >= 60) {			/* once a second: notes from Receive */
+		char	note[300];
+
+		poll = 0;
+		if(ui_bridge_is_on() && bridge_next_result(note, sizeof(note))) {
+			printf("Receive note: %s\n", note);
+			ui_message("Receive: %s", note);
+		}
+	}
 	if(!g_remount.active || --g_remount.frames > 0) {
 		return;
 	}
@@ -768,6 +782,7 @@ ui_drop_dest_toggle(void)
 
 int	finder_front_path(char *out, size_t n);		/* finder_probe.c */
 
+static int	g_force_root;				/* copy to the top of the share */
 static char	g_drop_label[300];			/* where the last drop went */
 
 /* lower-case letters and digits only, so "My Folder" matches "My.Folder" */
@@ -859,7 +874,6 @@ finder_path_to_host(const char *root, const char *gsos, char *out, size_t n)
 
 /* ---- Host bridge folder (bridge.c): Disks > Bridge Folder ---- */
 
-#include "bridge.h"
 #ifndef _WIN32
 # include <limits.h>
 # include <stdlib.h>
@@ -944,6 +958,35 @@ ui_bridge_is_on(void)
 	return g_bridge_root && g_bridge_root[0];
 }
 
+/* Disks > Copy Receive to Shared Folder: puts the IIgs program Receive
+ * (tools/receive) in the top of the shared folder, with its file type. */
+void
+ui_install_receive(void)
+{
+	char		*pref = SDL_GetPrefPath("EmuBuddy", "EmuBuddy");
+	char		tmp[1300];
+	SDL_IOStream	*io;
+
+	if(!shared_root()) {
+		ui_message("No shared folder yet - use Disks > Share a Folder");
+		SDL_free(pref);
+		return;
+	}
+	snprintf(tmp, sizeof(tmp), "%sReceive,t$B3,a$DB03", pref ? pref : "");
+	SDL_free(pref);
+	io = SDL_IOFromFile(tmp, "wb");
+	if(!io) {
+		ui_message("Could not prepare Receive");
+		return;
+	}
+	SDL_WriteIO(io, receive_bin, sizeof(receive_bin));
+	SDL_CloseIO(io);
+	g_force_root = 1;
+	ui_drop_regular_file(tmp);
+	g_force_root = 0;
+	SDL_RemovePath(tmp);
+}
+
 /* Disks > Show Shared Folder: open the shared folder in the computer's own
  * file manager (Finder / Explorer). */
 void
@@ -982,7 +1025,7 @@ drop_folder(const char *root, char *out, size_t n)
 
 	snprintf(out, n, "%s", root);
 	snprintf(g_drop_label, sizeof(g_drop_label), "%s", base_name(root));
-	if(g_drop_follow_finder) {
+	if(g_drop_follow_finder && !g_force_root) {
 		char	gp[300], host[1800];
 
 		if(finder_front_path(gp, sizeof(gp))) {
@@ -997,7 +1040,7 @@ drop_folder(const char *root, char *out, size_t n)
 				base_name(root), gp + 1);
 		}
 	}
-	if(g_drop_sub[0]) {
+	if(g_drop_sub[0] && !g_force_root) {
 		char	sub[1800];
 
 		snprintf(sub, sizeof(sub), "%s/%s", root, g_drop_sub);
@@ -1008,12 +1051,40 @@ drop_folder(const char *root, char *out, size_t n)
 	}
 }
 
+/* The front Finder window shows a folder that the shared folder can't reach
+ * (another disk): stage the file in the bridge folder for the IIgs program
+ * Receive. Returns 1 if the drop was handled here. */
+static int
+try_stage_for_receive(const char *path)
+{
+	char		gp[300], host[1800], msg[300];
+	const char	*root = shared_root();
+
+	if(g_force_root || !g_drop_follow_finder || !ui_bridge_is_on() ||
+			!finder_front_path(gp, sizeof(gp))) {
+		return 0;
+	}
+	if(root && finder_path_to_host(root, gp, host, sizeof(host))) {
+		return 0;			/* the shared volume: copy there as usual */
+	}
+	if(bridge_stage_file(path, gp, msg, (int)sizeof(msg)) == 0) {
+		ui_message("Staged %s for %s - run Receive in the IIgs", msg, gp + 1);
+	} else {
+		ui_message("Could not stage the file: %s", msg);
+	}
+	return 1;
+}
+
 /* Copy a plain Mac/PC file into the chosen folder of the shared volume and
  * refresh that volume so the IIgs sees the file. Returns 1 (handled). */
 int
 ui_drop_regular_file(const char *path)
 {
 	int	slot, d = 0, nd, i, found = 0;
+
+	if(try_stage_for_receive(path)) {
+		return 1;
+	}
 
 	if(g_remount.active) {
 		/* the folder is being refreshed already: just add the file */

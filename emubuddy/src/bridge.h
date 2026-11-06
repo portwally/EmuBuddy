@@ -37,4 +37,24 @@ void	bridge_decode_name(const char *host, char *out, int outsize, int *ftype,
 void	bridge_encode_name(const char *prodos, int ftype, int aux, char *out,
 								int outsize);
 
+/* ---- Dropping files into a GS/OS folder that the shared folder can't reach ----
+ * The Mac side stages the file in <bridge folder>/Inbox/NNNN/ together with a
+ * target.txt that holds the GS/OS path of the folder; the program "Receive"
+ * (tools/receive) running in the IIgs copies it there and leaves a note in
+ * <bridge folder>/Outbox/. */
+
+/* ProDOS-safe name (15 characters, a letter first, letters digits and dots)
+ * and the type and aux type chosen from the extension. */
+void	bridge_prodos_name(const char *host, char *out, int outsize, int *ftype,
+								int *aux);
+
+/* Stage src for the GS/OS folder (":Volume:Folder"). Returns 0, or -1 with
+ * the reason in msg. */
+int	bridge_stage_file(const char *src, const char *gsos_folder, char *msg,
+								int msgsize);
+
+/* The next note the IIgs left in Outbox ("OK ..." or "ERR ..."); removes it.
+ * Returns 1 if there was one. */
+int	bridge_next_result(char *msg, int msgsize);
+
 #endif

@@ -6,5 +6,5 @@
             ASM   main.s
             SNA   Main
             KND   #$1000
-            ALI   None
+            ALI   BANK
             LNA   BridgeTest

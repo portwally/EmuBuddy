@@ -99,3 +99,29 @@ Up to 8 files can be open at once; they are closed by a reset.
 `tools/bridgetest/` is a small GS/OS program (Merlin 32) that creates `fromiigs/` in the bridge folder, writes a text
 file and a typed file, and records every status code. `tools/bridgetest/build.sh` assembles it. The host side is
 tested by `cmake --build build --target test_bridge && build/test_bridge`.
+
+## Dropping files into GS/OS folders (Receive)
+
+A shared folder can only be reached through its own disk. To drop a file from your computer onto a Finder window that shows
+a folder on **another** disk (for example `:Boot.Disk:Dragtests`), EmuBuddy and a small IIgs program work together:
+
+1. You drop the file on the emulator while that Finder window is in front, and a bridge folder is set. EmuBuddy does not
+   write into the disk. It **stages** the file in the bridge folder instead:
+   - `Inbox/NNNN/NAME,t$TT,a$AAAA` is the file. `NAME` is made ProDOS-safe (at most 15 characters, a letter first, letters,
+     digits and dots) and type and aux type come from the extension (`.txt` text, `.shk` $E0/$8002, `.bin`, `.bas`,
+     `.system`; everything else BIN).
+   - `Inbox/NNNN/target.txt` holds the GS/OS path of the folder (`:Boot.Disk:Dragtests`) and a CR. It is written last, so a
+     drop that is still being copied is skipped.
+   - Files with a resource fork (`.applesingle`) are not staged.
+2. You run **Receive** in the IIgs (Disks > Copy Receive to Shared Folder puts it on the shared disk as an S16 program).
+   It lists `Inbox`, and for every drop with a target it creates the file in that folder (data fork, with type and aux
+   type), copies the data in 16 KB pieces, removes the staged files, and leaves a note in `Outbox/NNNN.txt`.
+3. EmuBuddy reads the notes once a second and shows them in the status bar: `OK :Boot.Disk:Dragtests:NAME`, or
+   `ERR $xx path`.
+
+Errors keep the staged files in `Inbox` so nothing is lost: `$47` the name exists already, `$44` the folder does not exist
+(or was closed), `$48` the disk is full, `$4E` write protected. Receive reports them again the next time it runs. Delete the
+`Inbox/NNNN` folder on the computer to forget a drop.
+
+Receive needs nothing else: it only uses the bridge and GS/OS. Its source is in `tools/receive/` (Merlin 32); a desk
+accessory that does the same without being started by hand can reuse the same steps.

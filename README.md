@@ -109,7 +109,9 @@ There are four ways, from the simplest to the most flexible:
    folder shows up in the IIgs. **Disks > Show Shared Folder** opens the folder in your file manager.
 2. **Drop files on the emulator.** Drop any file on the window and it is copied into the shared folder. If the front
    window of the GS/OS Finder shows the shared disk or one of its folders, the file goes **into exactly that
-   folder**. Otherwise it goes where **Disks > Drop Destination...** says. ShrinkIt archives (`.shk`) are files, so
+   folder**. If it shows a folder on another disk and a bridge folder is set, EmuBuddy stages the file and the small
+   IIgs program **Receive** (**Disks > Copy Receive to Shared Folder**) copies it into that folder; see
+   [docs/BRIDGE.md](docs/BRIDGE.md). Otherwise it goes where **Disks > Drop Destination...** says. ShrinkIt archives (`.shk`) are files, so
    they are copied, not mounted. Disk images are mounted in a drive instead.
 3. **Disk Browser.** **Disks > Disk Browser** opens any ProDOS image (also one that is in a drive) and lists its
    files and folders with type and size. Choose **Export to Desktop**, or on macOS drag a file out of the window to

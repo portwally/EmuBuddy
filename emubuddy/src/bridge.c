@@ -792,5 +792,203 @@ bridge_command(unsigned long block)
 		}
 	}
 	put16(block + B_STATUS, (unsigned)rc);
+	if(getenv("EMUBUDDY_BRIDGELOG")) {		/* debug aid */
+		unsigned long p1 = mem32(block + B_P1);
+		char	pstr[200] = "";
+
+		if((cmd == C_LIST || cmd == C_MKDIR || cmd == C_DELETE || cmd == C_GETINFO ||
+				cmd == C_OPEN) && p1) {
+			unsigned l = mem16(p1), i;
+
+			for(i = 0; i < l && i < 190; i++) {
+				pstr[i] = (char)mem8(p1 + 2 + i);
+			}
+			pstr[i] = 0;
+		}
+		printf("BRIDGE cmd %04x \"%s\" p1=%lx p2=%lx p3=%lx -> status %02x r1=%lx\n",
+			cmd, pstr, p1, mem32(block + B_P2), mem32(block + B_P3), rc,
+			mem32(block + B_R1));
+	}
 	return rc;
+}
+
+/* ---- staging drops for the IIgs program "Receive" ---- */
+
+typedef struct { const char *ext; int type; int aux; } ExtType;
+static const ExtType g_ext_types[] = {
+	{ "txt", 0x04, 0 }, { "c", 0x04, 0 }, { "s", 0x04, 0 }, { "h", 0x04, 0 },
+	{ "bin", 0x06, 0x2000 }, { "bas", 0xfc, 0x0801 }, { "system", 0xff, 0x2000 },
+	{ "shk", 0xe0, 0x8002 }, { "sdk", 0xe0, 0x8002 }, { NULL, 0, 0 }
+};
+
+void
+bridge_prodos_name(const char *host, char *out, int outsize, int *ftype, int *aux)
+{
+	char	tmp[300];
+	const char *dot;
+	int	i, k = 0, t = 0x06, a = 0, n;
+
+	snprintf(tmp, sizeof(tmp), "%s", host);
+	dot = strrchr(tmp, '.');
+	if(dot && dot != tmp) {
+		for(i = 0; g_ext_types[i].ext; i++) {
+			if(!SDL_strcasecmp(dot + 1, g_ext_types[i].ext)) {
+				t = g_ext_types[i].type;
+				a = g_ext_types[i].aux;
+				break;
+			}
+		}
+		if(!SDL_strcasecmp(dot + 1, "txt")) {
+			tmp[dot - tmp] = 0;		/* "README.txt" is the text file README */
+		}
+	}
+	n = outsize < 16 ? outsize - 1 : 15;
+	if(n < 1) {
+		out[0] = 0;
+		return;
+	}
+	for(i = 0; tmp[i] && k < n; i++) {
+		unsigned char c = (unsigned char)tmp[i];
+
+		if(k == 0 && !isalpha(c)) {
+			out[k++] = 'F';			/* ProDOS names start with a letter */
+			if(k >= n) {
+				break;
+			}
+		}
+		out[k++] = (isalnum(c) || c == '.') ? (char)c : '.';
+	}
+	if(k == 0) {
+		out[k++] = 'F';
+	}
+	out[k] = 0;
+	if(ftype) *ftype = t;
+	if(aux) *aux = a;
+}
+
+static int
+all_digits(const char *s)
+{
+	if(!*s) return 0;
+	for(; *s; s++) {
+		if(!isdigit((unsigned char)*s)) return 0;
+	}
+	return 1;
+}
+
+typedef struct { int max; } NumScan;
+
+static SDL_EnumerationResult SDLCALL
+num_cb(void *ud, const char *dirname, const char *fname)
+{
+	NumScan	*ns = ud;
+
+	(void)dirname;
+	if(all_digits(fname) && atoi(fname) > ns->max) {
+		ns->max = atoi(fname);
+	}
+	return SDL_ENUM_CONTINUE;
+}
+
+int
+bridge_stage_file(const char *src, const char *gsos_folder, char *msg, int msgsize)
+{
+	Ctx		cx;
+	char		inbox[1300], dir[1400], name[64], host[300], dst[1800], tf[1800];
+	const char	*base;
+	NumScan		ns = { 0 };
+	int		t, a, rc;
+	SDL_IOStream	*io;
+	char		line[400];
+
+	if((rc = ctx_open(&cx)) != 0) {
+		snprintf(msg, (size_t)msgsize, rc == E_ACCESS ?
+			"the bridge folder is also shared as a disk" :
+			"no bridge folder is set (Disks > Bridge Folder)");
+		return -1;
+	}
+	if(strstr(src, ".applesingle") || strstr(src, ".AppleSingle")) {
+		snprintf(msg, (size_t)msgsize, "files with a resource fork can't be staged yet");
+		return -1;
+	}
+	snprintf(inbox, sizeof(inbox), "%s/Inbox", cx.root);
+	SDL_CreateDirectory(inbox);
+	SDL_EnumerateDirectory(inbox, num_cb, &ns);
+	snprintf(dir, sizeof(dir), "%s/%04d", inbox, ns.max + 1);
+	if(!SDL_CreateDirectory(dir)) {
+		snprintf(msg, (size_t)msgsize, "could not create the Inbox folder");
+		return -1;
+	}
+	base = strrchr(src, '/');
+	base = base ? base + 1 : src;
+	bridge_prodos_name(base, name, sizeof(name), &t, &a);
+	bridge_encode_name(name, t, a, host, sizeof(host));
+	snprintf(dst, sizeof(dst), "%s/%s", dir, host);
+	if(!SDL_CopyFile(src, dst)) {
+		SDL_RemovePath(dir);
+		snprintf(msg, (size_t)msgsize, "could not copy %s", base);
+		return -1;
+	}
+	/* the target goes in last: Receive ignores folders without one */
+	snprintf(tf, sizeof(tf), "%s/target.txt", dir);
+	snprintf(line, sizeof(line), "%s\r", gsos_folder);
+	io = SDL_IOFromFile(tf, "wb");
+	if(!io) {
+		snprintf(msg, (size_t)msgsize, "could not write the target");
+		return -1;
+	}
+	SDL_WriteIO(io, line, strlen(line));
+	SDL_CloseIO(io);
+	snprintf(msg, (size_t)msgsize, "%s", name);
+	return 0;
+}
+
+typedef struct { char name[300]; int found; } ResScan;
+
+static SDL_EnumerationResult SDLCALL
+res_cb(void *ud, const char *dirname, const char *fname)
+{
+	ResScan	*rs = ud;
+
+	(void)dirname;
+	if(fname[0] != '.' && !rs->found) {
+		snprintf(rs->name, sizeof(rs->name), "%s", fname);
+		rs->found = 1;
+		return SDL_ENUM_SUCCESS;
+	}
+	return SDL_ENUM_CONTINUE;
+}
+
+int
+bridge_next_result(char *msg, int msgsize)
+{
+	Ctx		cx;
+	char		out[1300], path[1700], buf[300];
+	ResScan		rs;
+	SDL_IOStream	*io;
+	size_t		n;
+
+	if(ctx_open(&cx) != 0) {
+		return 0;
+	}
+	snprintf(out, sizeof(out), "%s/Outbox", cx.root);
+	rs.found = 0;
+	SDL_EnumerateDirectory(out, res_cb, &rs);
+	if(!rs.found) {
+		return 0;
+	}
+	snprintf(path, sizeof(path), "%s/%s", out, rs.name);
+	io = SDL_IOFromFile(path, "rb");
+	if(!io) {
+		return 0;
+	}
+	n = SDL_ReadIO(io, buf, sizeof(buf) - 1);
+	SDL_CloseIO(io);
+	buf[n] = 0;
+	while(n > 0 && (buf[n - 1] == '\r' || buf[n - 1] == '\n' || buf[n - 1] == ' ')) {
+		buf[--n] = 0;
+	}
+	snprintf(msg, (size_t)msgsize, "%s", buf);
+	SDL_RemovePath(path);
+	return 1;
 }
