@@ -134,7 +134,29 @@ void	ui_list_columns(const int *xs, int n);
  * under the mouse. */
 int	ui_mouse_in(UiWindow *win, int cx, int cy, int x, int y, int w, int h);
 
-/* Colors (GS/OS white skin) */
+/* Colors. EmuBuddy uses the fixed GS/OS white look. The Launcher builds the
+ * toolkit with UI_THEMABLE, and then the colors and the window title style
+ * come from g_ui_theme (set by its skins). */
+typedef struct {
+	const char	*name;
+	Uint32		bg, fg, dim, line, good, warn, bad;	/* windows, text, grey text, rules */
+	Uint32		accent, accent_fg;			/* title bar of flat skins, buttons */
+	Uint32		desktop;				/* behind the windows */
+	int		title_style;				/* UI_TITLE_* */
+	int		checker;				/* desktop is a black/white dither */
+} UiTheme;
+enum { UI_TITLE_GSOS, UI_TITLE_MAC1, UI_TITLE_PLATINUM, UI_TITLE_FLAT, UI_TITLE_MAGAZINE,
+	UI_TITLE_TERMINAL };
+extern UiTheme	g_ui_theme;
+#ifdef UI_THEMABLE
+#define UI_WHITE	(g_ui_theme.bg)
+#define UI_BLACK	(g_ui_theme.fg)
+#define UI_GREY		(g_ui_theme.dim)
+#define UI_LGREY	(g_ui_theme.line)
+#define UI_GOOD		(g_ui_theme.good)
+#define UI_WARN		(g_ui_theme.warn)
+#define UI_BAD		(g_ui_theme.bad)
+#else
 #define UI_WHITE	0xFFFFFF
 #define UI_BLACK	0x000000
 #define UI_GREY		0x777777
@@ -142,6 +164,7 @@ int	ui_mouse_in(UiWindow *win, int cx, int cy, int x, int y, int w, int h);
 #define UI_GOOD		0x00AA00
 #define UI_WARN		0xFF6600
 #define UI_BAD		0xDD0000
+#endif
 
 /* ---- EmuBuddy app layer (ui_app.c) ---- */
 void	ui_app_init(SDL_Window *w, SDL_Renderer *r);

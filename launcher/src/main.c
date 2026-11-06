@@ -14,6 +14,7 @@
 #include <string.h>
 #include "profile.h"
 #include "library.h"
+#include "skins.h"
 
 #define MAX_PROFILES	64
 
@@ -256,6 +257,7 @@ cli(int argc, char **argv)
 #define LH	640
 
 static void lib_open(int kind, char *target, int cap);
+static int		g_skin;
 static SDL_Window	*g_win;
 static SDL_Renderer	*g_ren;
 static int		g_sel, g_top, g_running = 1;
@@ -332,6 +334,7 @@ static PathField g_pf[] = {
 	{ "flop1", "5.25\" floppy", "", 0 },
 	{ "share", "Shared folder", "", 1 },
 	{ "bridge", "Bridge folder", "", 1 },
+	{ "cover", "Cover picture", "", 0 },
 };
 #define NPF	((int)(sizeof(g_pf) / sizeof(g_pf[0])))
 
@@ -473,8 +476,8 @@ edit_draw(UiWindow *win, int cx, int cy)
 		PathField *f = &g_pf[i];
 
 		ui_draw_text(cx + 10, cy + y + 1, f->label, UI_BLACK);
-		field(win, cx, cy, 110, y, f->folder ? 460 : 390, f->buf, sizeof(f->buf));
-		if(!f->folder && ui_button(win, cx, cy, 504, y - 1, 70, 20, "Library", 1)) {
+		field(win, cx, cy, 110, y, (f->folder || i >= 6) ? 460 : 390, f->buf, sizeof(f->buf));
+		if(!f->folder && i < 6 && ui_button(win, cx, cy, 504, y - 1, 70, 20, "Library", 1)) {
 			lib_open(i == 0 ? LIB_ROM : LIB_DISK, f->buf, (int)sizeof(f->buf));
 		}
 		if(ui_button(win, cx, cy, 578, y - 1, 60, 20, "Choose...", 1)) {
@@ -558,13 +561,13 @@ edit_open(const Profile *src, int is_new)
 	focus_clear();
 	snprintf(g_edit_win.title, sizeof(g_edit_win.title), is_new ? "New Profile" : "Edit Profile");
 	g_edit_win.w = 690;
-	g_edit_win.h = 566;
+	g_edit_win.h = 590;
 	g_edit_win.modal = 1;
 	g_edit_win.closable = 1;
 	g_edit_win.draw = edit_draw;
 	g_edit_win.on_drop = edit_drop;
 	ui_window_center(&g_edit_win);
-	g_edit_win.y = 26;
+	g_edit_win.y = 24;
 	ui_window_open(&g_edit_win);
 }
 
@@ -658,6 +661,155 @@ lib_play(void)
 	}
 }
 
+/* ---- settings and covers ---- */
+
+static void
+settings_load(void)
+{
+	char	path[1300], line[300];
+	FILE	*f;
+
+	snprintf(path, sizeof(path), "%s/Launcher.settings", g_dir);
+	f = fopen(path, "r");
+	while(f && fgets(line, sizeof(line), f)) {
+		line[strcspn(line, "\r\n")] = 0;
+		if(!strncmp(line, "skin = ", 7) && skin_find(line + 7) >= 0) {
+			g_skin = skin_find(line + 7);
+		}
+	}
+	if(f) {
+		fclose(f);
+	}
+	skin_apply(g_skin);
+}
+
+static void
+settings_save(void)
+{
+	char	path[1300];
+	FILE	*f;
+
+	snprintf(path, sizeof(path), "%s/Launcher.settings", g_dir);
+	f = fopen(path, "w");
+	if(f) {
+		fprintf(f, "skin = %s\n", skin_get(g_skin)->name);
+		fclose(f);
+	}
+}
+
+static void
+dot(int x, int y)
+{
+	ui_fill(x, y, 2, 2, g_ui_theme.accent_fg);
+}
+
+static void
+ell(int cx, int cy, int rx, int ry)
+{
+	for(int a = 0; a < 360; a += 3) {
+		double t = a * 3.14159265 / 180.0;
+
+		dot(cx + (int)(rx * SDL_cos(t)), cy + (int)(ry * SDL_sin(t)));
+	}
+}
+
+static void
+cover_icon(const Profile *p, int ox, int oy)
+{
+	char		hay[400];
+	const char	*kind = profile_get(p, "icon");
+	Uint32		c = g_ui_theme.accent_fg;
+	int		cx = ox + 32, cy = oy + 32;
+
+	if(!kind[0]) {
+		snprintf(hay, sizeof(hay), "%s %s", profile_name(p), profile_get(p, "description"));
+		if(strcasestr(hay, "web") || strcasestr(hay, "internet") || strcasestr(hay, "net")) {
+			kind = "globe";
+		} else if(strcasestr(hay, "proj") || strcasestr(hay, "dev") || strcasestr(hay, "code") ||
+				strcasestr(hay, "program")) {
+			kind = "gear";
+		} else if(strcasestr(hay, "game") || strcasestr(hay, "play")) {
+			kind = "joystick";
+		} else {
+			kind = "disk";
+		}
+	}
+	if(!strcasecmp(kind, "globe")) {
+		ell(cx, cy, 26, 26);
+		ell(cx, cy, 12, 26);
+		ell(cx, cy, 26, 10);
+		ui_fill(cx - 26, cy, 52, 2, c);
+		ui_fill(cx, cy - 26, 2, 52, c);
+	} else if(!strcasecmp(kind, "gear")) {
+		ell(cx, cy, 16, 16);
+		ell(cx, cy, 7, 7);
+		for(int a = 0; a < 8; a++) {
+			double t = a * 3.14159265 / 4;
+			int tx = cx + (int)(23 * SDL_cos(t)), ty = cy + (int)(23 * SDL_sin(t));
+
+			ui_fill(tx - 4, ty - 4, 9, 9, c);
+		}
+	} else if(!strcasecmp(kind, "joystick")) {
+		ui_fill(cx - 24, cy + 14, 48, 10, c);
+		ui_fill(cx - 2, cy - 14, 5, 30, c);
+		ell(cx, cy - 18, 8, 8);
+		ui_fill(cx - 8, cy - 22, 17, 9, c);
+		ui_fill(cx + 12, cy + 6, 8, 8, c);
+	} else {				/* a 3.5" disk */
+		ui_frame(ox + 8, oy + 6, 48, 52, c);
+		ui_fill(ox + 20, oy + 6, 24, 16, c);
+		ui_fill(ox + 36, oy + 9, 5, 10, g_ui_theme.accent);
+		ui_frame(ox + 14, oy + 32, 36, 26, c);
+		ui_hline(ox + 18, oy + 40, 28, c);
+		ui_hline(ox + 18, oy + 48, 28, c);
+	}
+}
+
+static SDL_Texture *g_cover_tex;
+static char	g_cover_path[1200];
+
+/* The profile's own picture if it has one (png or bmp), else a generated cover. */
+static void
+draw_cover(const Profile *p, int x, int y, int w, int h)
+{
+	char	full[1200];
+	const char *v = profile_get(p, "cover");
+
+	profile_expand_path(v, full, sizeof(full));
+	if(v[0]) {
+		if(strcmp(full, g_cover_path) != 0) {
+			SDL_Surface *sf = SDL_LoadSurface(full);
+
+			if(g_cover_tex) {
+				SDL_DestroyTexture(g_cover_tex);
+				g_cover_tex = NULL;
+			}
+			snprintf(g_cover_path, sizeof(g_cover_path), "%s", full);
+			if(sf) {
+				g_cover_tex = SDL_CreateTextureFromSurface(g_ren, sf);
+				SDL_DestroySurface(sf);
+			}
+		}
+		if(g_cover_tex) {
+			float	tw, th, sc;
+			SDL_FRect d;
+
+			SDL_GetTextureSize(g_cover_tex, &tw, &th);
+			sc = SDL_min((float)w / tw, (float)h / th);
+			d.w = tw * sc;
+			d.h = th * sc;
+			d.x = x + (w - d.w) / 2;
+			d.y = y + (h - d.h) / 2;
+			ui_frame(x - 1, y - 1, w + 2, h + 2, UI_BLACK);
+			SDL_RenderTexture(g_ren, g_cover_tex, NULL, &d);
+			return;
+		}
+	}
+	ui_fill(x, y, w, h, g_ui_theme.accent);
+	ui_frame(x, y, w, h, UI_BLACK);
+	cover_icon(p, x + (w - 64) / 2, y + (h - 64) / 2);
+}
+
 static void
 lib_draw(UiWindow *win, int cx, int cy)
 {
@@ -682,10 +834,11 @@ lib_draw(UiWindow *win, int cx, int cy)
 		char		buf[6000], err[200], line[7000], *a[PROFILE_MAX_ARGS], part[100];
 		int		n;
 
-		ui_draw_text(cx + 270, cy + y, profile_name(p), UI_BLACK);
-		y += 22;
-		ui_draw_text(cx + 270, cy + y, profile_get(p, "description"), UI_GREY);
-		y += 28;
+		draw_cover(p, cx + 270, cy + 10, 120, 90);
+		ui_draw_text(cx + 404, cy + y + 4, profile_name(p), UI_BLACK);
+		y += 26;
+		ui_draw_text(cx + 404, cy + y + 4, profile_get(p, "description"), UI_GREY);
+		y = 112;
 		for(i = 0; keys[i][0]; i++) {
 			const char *v = profile_get(p, keys[i][0]);
 
@@ -1122,7 +1275,7 @@ lib_open(int kind, char *target, int cap)
 
 /* ---- menus ---- */
 
-enum { C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -1142,9 +1295,11 @@ static const UiMenuItem m_prof[] = {
 static const UiMenuItem m_help[] = {
 	{ "About EmuBuddy Launcher", C_ABOUT, NULL, 0 },
 };
+static UiMenuItem m_skin[16];
 static const UiMenu g_menus[] = {
-	{ "File", m_file, 7 }, { "Profile", m_prof, 4 }, { "Help", m_help, 1 },
+	{ "File", m_file, 7 }, { "Profile", m_prof, 4 }, { "Skin", m_skin, 0 }, { "Help", m_help, 1 },
 };
+static UiMenu g_menus_rw[4];
 
 static void
 app_command(int id)
@@ -1158,6 +1313,12 @@ app_command(int id)
 	case C_PLAY: lib_play(); break;
 	case C_EDIT: if(g_nprof) { edit_open(&g_prof[g_sel], 0); } break;
 	case C_LIB: lib_open(LIB_DISK, NULL, 0); break;
+	case C_SKIN0 + 0: case C_SKIN0 + 1: case C_SKIN0 + 2: case C_SKIN0 + 3: case C_SKIN0 + 4:
+	case C_SKIN0 + 5: case C_SKIN0 + 6: case C_SKIN0 + 7: case C_SKIN0 + 8: case C_SKIN0 + 9:
+		g_skin = id - C_SKIN0;
+		skin_apply(g_skin);
+		settings_save();
+		break;
 	case C_ABOUT:
 		ui_message("EmuBuddy Launcher %s - 2026, Walter Tengler", LAUNCHER_VERSION_STR);
 		break;
@@ -1167,8 +1328,7 @@ app_command(int id)
 static int
 app_state(int id)
 {
-	(void)id;
-	return 0;
+	return (id >= C_SKIN0 && id - C_SKIN0 == g_skin) ? UI_MI_CHECKED : 0;
 }
 
 static void
@@ -1198,7 +1358,7 @@ app_tick(void)
 	}
 }
 
-static const UiApp g_app = { g_menus, 3, app_state, app_command, app_status, app_tick,
+static UiApp g_app = { g_menus_rw, 4, app_state, app_command, app_status, app_tick,
 	NULL, NULL, NULL };
 
 static void
@@ -1215,6 +1375,13 @@ window(void)
 	}
 	SDL_SetRenderLogicalPresentation(g_ren, LW, LH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 	lfold_load();
+	settings_load();
+	for(int i = 0; i < skin_count() && i < 16; i++) {
+		m_skin[i].label = skin_get(i)->name;
+		m_skin[i].id = C_SKIN0 + i;
+	}
+	memcpy(g_menus_rw, g_menus, sizeof(g_menus));
+	g_menus_rw[2].n_items = skin_count();
 	ui_init(g_win, g_ren, &g_app);
 	snprintf(g_lib.title, sizeof(g_lib.title), "Profiles");
 	g_lib.x = 10;
@@ -1290,8 +1457,27 @@ window(void)
 				}
 			}
 		}
-		SDL_SetRenderDrawColor(g_ren, 34, 34, 255, 255);
-		SDL_RenderClear(g_ren);
+		{
+			Uint32 d = g_ui_theme.desktop;
+
+			SDL_SetRenderDrawColor(g_ren, (d >> 16) & 255, (d >> 8) & 255, d & 255, 255);
+			SDL_RenderClear(g_ren);
+			if(g_ui_theme.checker) {
+				static SDL_Texture *chk;
+
+				if(!chk) {
+					Uint32 px[4] = { 0xFF000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFF000000 };
+
+					chk = SDL_CreateTexture(g_ren, SDL_PIXELFORMAT_ARGB8888,
+								SDL_TEXTUREACCESS_STATIC, 2, 2);
+					SDL_UpdateTexture(chk, NULL, px, 8);
+					SDL_SetTextureScaleMode(chk, SDL_SCALEMODE_NEAREST);
+				}
+				SDL_FRect all = { 0, UI_BAR_H, LW, LH - 2 * UI_BAR_H };
+
+				SDL_RenderTextureTiled(g_ren, chk, NULL, 1.0f, &all);
+			}
+		}
 		ui_draw(LW, LH);
 		{	/* developer aids: LAUNCHER_EDIT=1 opens the editor, LAUNCHER_SHOT=<file.bmp> saves a picture and quits */
 			static int frame;
@@ -1309,6 +1495,10 @@ window(void)
 			if(frame == 6 && getenv("LAUNCHER_LIB")) {
 				lib_open(LIB_DISK, NULL, 0);
 				g_ltab = atoi(getenv("LAUNCHER_LIB")) > 1;
+			}
+			if(frame == 3 && getenv("LAUNCHER_SKIN") && skin_find(getenv("LAUNCHER_SKIN")) >= 0) {
+				g_skin = skin_find(getenv("LAUNCHER_SKIN"));
+				skin_apply(g_skin);
 			}
 			if(frame == 20 && getenv("LAUNCHER_SHOT")) {
 				SDL_Surface *sf = SDL_RenderReadPixels(g_ren, NULL);

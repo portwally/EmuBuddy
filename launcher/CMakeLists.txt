@@ -38,8 +38,9 @@ endif()
 
 # The window uses EmuBuddy's own UI toolkit and font, compiled from its folder.
 set(EB_UI ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/src)
-add_executable(emubuddy-launcher src/main.c ${EB_UI}/ui.c ${EB_UI}/ui_font.c ${EB_UI}/ui_font_data.c)
+add_executable(emubuddy-launcher src/main.c src/skins.c ${EB_UI}/ui.c ${EB_UI}/ui_font.c ${EB_UI}/ui_font_data.c)
 target_include_directories(emubuddy-launcher PRIVATE src ${EB_UI})
 target_compile_definitions(emubuddy-launcher PRIVATE
+    UI_THEMABLE=1
     LAUNCHER_VERSION_STR="${EMUBUDDY_VERSION}")
 target_link_libraries(emubuddy-launcher PRIVATE launcher_profile launcher_library SDL3::SDL3)

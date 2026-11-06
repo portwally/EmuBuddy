@@ -3,6 +3,8 @@
 #include "ui.h"
 
 int	g_ui_top_h = UI_BAR_H;
+UiTheme	g_ui_theme = { "GS/OS", 0xFFFFFF, 0x000000, 0x777777, 0xCCCCCC, 0x00AA00, 0xFF6600,
+	0xDD0000, 0x000000, 0xFFFFFF, 0x2222FF, UI_TITLE_GSOS, 0 };
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1004,22 +1006,83 @@ draw_window(UiWindow *w, int active)
 	SDL_Rect clip;
 
 	ui_fill(x, y, w->w, w->h, UI_WHITE);
-	ui_frame(x, y, w->w, w->h, UI_BLACK);
-	ui_hline(x, y + UI_TITLE_H - 1, w->w, UI_BLACK);
-	if(active) {
-		for(i = y + 4; i < y + UI_TITLE_H - 4; i += 2) {
-			ui_hline(x + 2, i, w->w - 4, UI_BLACK);
-		}
-	}
 	tw = ui_text_width(w->title);
-	ui_fill(x + (w->w - tw) / 2 - 6, y + 2, tw + 12, UI_TITLE_H - 5,
-								UI_WHITE);
-	ui_draw_text(x + (w->w - tw) / 2, y + 1, w->title,
-					active ? UI_BLACK : UI_GREY);
-	if(w->closable) {
-		close_box_rect(w, &bx, &by);
-		ui_fill(bx - 2, by - 2, 15, 15, UI_WHITE);
-		ui_frame(bx, by, 11, 11, UI_BLACK);
+	switch(g_ui_theme.title_style) {
+	case UI_TITLE_MAC1:			/* plain bar, centred title, square close box */
+		ui_frame(x, y, w->w, w->h, UI_BLACK);
+		ui_frame(x + 1, y + 1, w->w - 2, w->h - 2, UI_BLACK);
+		ui_hline(x, y + UI_TITLE_H - 1, w->w, UI_BLACK);
+		ui_draw_text(x + (w->w - tw) / 2, y + 2, w->title, UI_BLACK);
+		if(w->closable) {
+			close_box_rect(w, &bx, &by);
+			ui_frame(bx, by + 1, 10, 10, UI_BLACK);
+		}
+		break;
+	case UI_TITLE_PLATINUM:			/* grey bevel with ridged title bar */
+		ui_fill(x, y, w->w, UI_TITLE_H, UI_LGREY);
+		ui_frame(x, y, w->w, w->h, UI_BLACK);
+		ui_hline(x + 1, y + 1, w->w - 2, UI_WHITE);
+		ui_vline(x + 1, y + 1, w->h - 2, UI_WHITE);
+		ui_hline(x, y + UI_TITLE_H - 1, w->w, UI_GREY);
+		if(active) {
+			for(i = y + 4; i < y + UI_TITLE_H - 4; i += 2) {
+				ui_hline(x + 24, i, w->w - 48, UI_WHITE);
+				ui_hline(x + 24, i + 1, w->w - 48, UI_GREY);
+			}
+		}
+		ui_fill(x + (w->w - tw) / 2 - 8, y + 2, tw + 16, UI_TITLE_H - 5, UI_LGREY);
+		ui_draw_text(x + (w->w - tw) / 2, y + 1, w->title, active ? UI_BLACK : UI_GREY);
+		if(w->closable) {
+			close_box_rect(w, &bx, &by);
+			ui_fill(bx, by, 11, 11, UI_WHITE);
+			ui_frame(bx, by, 11, 11, UI_GREY);
+		}
+		break;
+	case UI_TITLE_FLAT:			/* solid coloured bar */
+		ui_fill(x, y, w->w, UI_TITLE_H, g_ui_theme.accent);
+		ui_frame(x, y, w->w, w->h, g_ui_theme.accent);
+		ui_draw_text(x + (w->w - tw) / 2, y + 1, w->title, g_ui_theme.accent_fg);
+		if(w->closable) {
+			close_box_rect(w, &bx, &by);
+			ui_frame(bx + 1, by + 1, 9, 9, g_ui_theme.accent_fg);
+		}
+		break;
+	case UI_TITLE_MAGAZINE:			/* headline and a double rule, no bar */
+		ui_frame(x, y, w->w, w->h, UI_LGREY);
+		ui_draw_text(x + 12, y + 1, w->title, UI_BLACK);
+		ui_hline(x + 8, y + UI_TITLE_H - 4, w->w - 16, UI_BLACK);
+		ui_hline(x + 8, y + UI_TITLE_H - 2, w->w - 16, UI_BLACK);
+		if(w->closable) {
+			close_box_rect(w, &bx, &by);
+			ui_draw_text(x + w->w - 22, y + 1, "x", UI_BLACK);
+		}
+		break;
+	case UI_TITLE_TERMINAL: {		/* [ title ] and a plain rule */
+		char	t[80];
+
+		snprintf(t, sizeof(t), "[ %s ]", w->title);
+		ui_frame(x, y, w->w, w->h, UI_BLACK);
+		ui_draw_text(x + 10, y + 1, t, UI_BLACK);
+		ui_hline(x, y + UI_TITLE_H - 1, w->w, UI_BLACK);
+		if(w->closable) {
+			ui_draw_text(x + w->w - 22, y + 1, "x", UI_BLACK);
+		}
+		break; }
+	default:				/* the GS/OS look */
+		ui_frame(x, y, w->w, w->h, UI_BLACK);
+		ui_hline(x, y + UI_TITLE_H - 1, w->w, UI_BLACK);
+		if(active) {
+			for(i = y + 4; i < y + UI_TITLE_H - 4; i += 2) {
+				ui_hline(x + 2, i, w->w - 4, UI_BLACK);
+			}
+		}
+		ui_fill(x + (w->w - tw) / 2 - 6, y + 2, tw + 12, UI_TITLE_H - 5, UI_WHITE);
+		ui_draw_text(x + (w->w - tw) / 2, y + 1, w->title, active ? UI_BLACK : UI_GREY);
+		if(w->closable) {
+			close_box_rect(w, &bx, &by);
+			ui_fill(bx - 2, by - 2, 15, 15, UI_WHITE);
+			ui_frame(bx, by, 11, 11, UI_BLACK);
+		}
 	}
 	if(w->draw) {
 		clip.x = x + 1;
