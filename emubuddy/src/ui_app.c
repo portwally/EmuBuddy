@@ -14,6 +14,10 @@ extern int	g_zip_speed_mhz;
 extern double	g_eff_mhz;
 extern int	g_fullscreen;
 extern int	g_window_scale;
+int		rec_active(void);
+double		rec_seconds(void);
+void		sdl_request_window_screenshot(void);
+void		sdl_request_record_toggle(void);
 int		sdl_scale_fits(int s);
 void		sdl_set_window_scale(int s);
 extern int	g_crt;
@@ -48,6 +52,7 @@ enum {
 	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT, CMD_CORE_STATUS,
 	CMD_PASTE = 45, CMD_COPY_SCREEN,
 	CMD_SIZE_1 = 50, CMD_SIZE_2, CMD_SIZE_3, CMD_SIZE_4,
+	CMD_SHOT_WIN = 55, CMD_RECORD,
 	CMD_ABOUT = 40,
 	CMD_RECENT0 = 60,		/* 60..69 */
 };
@@ -63,6 +68,10 @@ static UiMenuItem disks_items[DISKS_FIXED + 2 + N_RECENT] = {
 };
 static const UiMenuItem file_items[] = {
 	{ "Choose ROM File...", CMD_CHOOSE_ROM, NULL, 0 },
+	{ "", 0, NULL, UI_MI_SEP },
+	{ "Save Screenshot", CMD_SCREENSHOT, "F10", 0 },
+	{ "Save Window Screenshot", CMD_SHOT_WIN, "Shift-F10", 0 },
+	{ "Record Video", CMD_RECORD, "Ctrl-F10", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Quit EmuBuddy", CMD_QUIT, NULL, 0 },
 };
@@ -95,7 +104,6 @@ static const UiMenuItem view_items[] = {
 	{ "CRT Effect", CMD_CRT, "Ctrl-F11", 0 },
 	{ "Scanlines", CMD_SCANLINES, "Shift-F11", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
-	{ "Save Screenshot", CMD_SCREENSHOT, "F10", 0 },
 	{ "Core Debug Lines", CMD_CORE_STATUS, NULL, 0 },
 };
 static const UiMenuItem edit_items[] = {
@@ -559,6 +567,8 @@ app_command(int id)
 		g_scanline_simulator = g_scanline_simulator ? 0 : 50;
 		break;
 	case CMD_SCREENSHOT: sdl_request_screenshot(); break;
+	case CMD_SHOT_WIN: sdl_request_window_screenshot(); break;
+	case CMD_RECORD: sdl_request_record_toggle(); break;
 	case CMD_CORE_STATUS: g_status_enable = !g_status_enable; break;
 	case CMD_ABOUT: about_open(); break;
 	case CMD_PASTE: paste_text(); break;
@@ -598,6 +608,7 @@ app_item_state(int id)
 		return (g_window_scale == n && !g_fullscreen ? UI_MI_CHECKED : 0) |
 			(sdl_scale_fits(n) ? 0 : UI_MI_DISABLED);
 	}
+	case CMD_RECORD: return rec_active() ? UI_MI_CHECKED : 0;
 	case CMD_FULLSCREEN: return g_fullscreen ? UI_MI_CHECKED : 0;
 	case CMD_CRT: return g_crt ? UI_MI_CHECKED : 0;
 	case CMD_CORE_STATUS: return g_status_enable ? UI_MI_CHECKED : 0;
@@ -631,7 +642,13 @@ app_status(char *left, char *center, char *right, int n)
 		uthernet2_counters(&tx, &rx);
 		snprintf(left + l, (size_t)n - l, "   Net out %u in %u", tx, rx);
 	}
-	snprintf(center, n, "%s", g_ui_pause ? "PAUSED" : "");
+	if(rec_active()) {
+		int sec = (int)rec_seconds();
+
+		snprintf(center, n, "REC %d:%02d", sec / 60, sec % 60);
+	} else {
+		snprintf(center, n, "%s", g_ui_pause ? "PAUSED" : "");
+	}
 	snprintf(right, n, "%s", limit);
 }
 

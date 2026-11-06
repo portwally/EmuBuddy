@@ -104,6 +104,9 @@ static int g_is_fullscreen = 0;		/* current fullscreen state (F11 toggles) */
 static int g_mouse_over_window = 0;	/* cursor is inside our window (ENTER/LEAVE) */
 static int g_cursor_hidden = 0;		/* current SDL cursor state we last set */
 static int g_scanline_saved = 50;	/* intensity to restore when toggled back on */
+extern int g_ui_pause;
+static int g_screenshot_window_requested = 0;
+static int g_rec_toggle_requested = 0;
 static int g_screenshot_requested = 0;	/* set by Shift+F12, serviced at frame end */
 
 /* CRT effect tuning. The curvature amount is a config var (g_crt_curve, 0-100);
@@ -962,7 +965,13 @@ sdl_poll_events(void)
 			 * reset). Not sent to the IIgs. */
 			if(ev.key.scancode == SDL_SCANCODE_F10) {
 				if(!ev.key.repeat) {
-					g_screenshot_requested = 1;
+					if(SDL_GetModState() & SDL_KMOD_CTRL) {
+						g_rec_toggle_requested = 1;
+					} else if(SDL_GetModState() & SDL_KMOD_SHIFT) {
+						g_screenshot_window_requested = 1;
+					} else {
+						g_screenshot_requested = 1;
+					}
 				}
 				break;
 			}
@@ -1053,23 +1062,30 @@ sdl_poll_events(void)
 /* Build "[<ssdir>/]gsplus_screenshot_YYYYMMDD_HHMMSS.png" into buf. With no
  * ssdir configured the file lands in the current working directory. */
 static void
-sdl_build_screenshot_path(char *buf, size_t buflen)
+sdl_build_screenshot_path(char *buf, size_t buflen, const char *kind)
 {
-	char	fname[64];
+	char	fname[96];
 	time_t	now;
 	struct tm *tmv;
 
 	now = time(NULL);
 	tmv = localtime(&now);
-	strftime(fname, sizeof(fname),
-			"gsplus_screenshot_%Y%m%d_%H%M%S.png", tmv);
+	strftime(fname, sizeof(fname), "%Y-%m-%d %H%M%S", tmv);
+	{
+		char	tmp[128];
+
+		snprintf(tmp, sizeof(tmp), "EmuBuddy %s %s.png", kind, fname);
+		snprintf(fname, sizeof(fname), "%s", tmp);
+	}
 
 	if(g_cfg_ssdir && g_cfg_ssdir[0]) {
 		size_t len = strlen(g_cfg_ssdir);
 		const char *sep = (g_cfg_ssdir[len - 1] == '/') ? "" : "/";
 		snprintf(buf, buflen, "%s%s%s", g_cfg_ssdir, sep, fname);
 	} else {
-		snprintf(buf, buflen, "%s", fname);
+		const char *pics = SDL_GetUserFolder(SDL_FOLDER_PICTURES);
+
+		snprintf(buf, buflen, "%s%s", pics ? pics : "", fname);
 	}
 }
 
@@ -1080,6 +1096,18 @@ void
 sdl_request_screenshot(void)
 {
 	g_screenshot_requested = 1;
+}
+
+void
+sdl_request_window_screenshot(void)
+{
+	g_screenshot_window_requested = 1;
+}
+
+void
+sdl_request_record_toggle(void)
+{
+	g_rec_toggle_requested = 1;
 }
 
 /* Developer aids (headless UI checks):
@@ -1275,6 +1303,23 @@ sdl_dev_snapshot(Window_info *win)
 					win->main_height + 2 * UI_BAR_H);
 	}
 	sdl_dev_drops(win, frames);
+	{	/* EMUBUDDY_REC="a:b" toggles recording at frames a and b;
+		 * EMUBUDDY_WSHOT=n takes a window screenshot at frame n */
+		const char *rc = getenv("EMUBUDDY_REC"), *ws = getenv("EMUBUDDY_WSHOT"),
+			*ss = getenv("EMUBUDDY_SHOT");
+		int ra, rb;
+
+		if(rc && sscanf(rc, "%d:%d", &ra, &rb) == 2 &&
+				(frames == ra || frames == rb)) {
+			g_rec_toggle_requested = 1;
+		}
+		if(ws && atoi(ws) == frames) {
+			g_screenshot_window_requested = 1;
+		}
+		if(ss && atoi(ss) == frames) {
+			g_screenshot_requested = 1;
+		}
+	}
 	sdl_dev_mouse(win, frames);
 	sdl_dev_keys(win, frames);
 	if(sdl_dev_multisnap(win, frames)) {
@@ -1404,24 +1449,21 @@ sdl_apply_cli(void)
 		ui_insert_auto(emubuddy_cli_later(i));
 	}
 	if(g_config_session_only) {
-		ui_message("Command-line settings (not saved)");
+		ui_message("This run only (not saved)");
 	}
 }
 
-static void
-sdl_save_screenshot(Window_info *win)
+/* The emulator picture (below the menu bar, above the status bar) as an
+ * RGBA32 surface, or the whole window if whole is set. Call after the frame
+ * is drawn and before SDL_RenderPresent. Caller destroys the surface. */
+static SDL_Surface *
+sdl_grab_picture(Window_info *win, int whole)
 {
-	SDL_Surface *shot, *conv;
-	unsigned char *packed;
-	char	path[1100];
-	size_t	rowbytes;
-	int	w, h, y, rc;
-
+	SDL_Surface	*shot, *conv;
 	SDL_Rect	pic;
 	SDL_FRect	lr;
 
-	/* Crop to the emulator picture (below the menu bar, above the status bar). */
-	if(SDL_GetRenderLogicalPresentationRect(win->renderer, &lr)) {
+	if(!whole && SDL_GetRenderLogicalPresentationRect(win->renderer, &lr)) {
 		float th = (float)(win->main_height + 2 * UI_BAR_H);
 
 		pic.x = (int)lr.x;
@@ -1433,50 +1475,113 @@ sdl_save_screenshot(Window_info *win)
 		shot = SDL_RenderReadPixels(win->renderer, NULL);
 	}
 	if(!shot) {
-		printf("Screenshot failed: SDL_RenderReadPixels: %s\n",
-			SDL_GetError());
-		return;
+		return NULL;
 	}
-	/* Normalise to byte-order RGBA, which is what write_png_rgba() expects. */
+	/* byte-order RGBA, which write_png_rgba() and FFmpeg expect */
 	conv = SDL_ConvertSurface(shot, SDL_PIXELFORMAT_RGBA32);
 	SDL_DestroySurface(shot);
-	if(!conv) {
-		printf("Screenshot failed: SDL_ConvertSurface: %s\n",
-			SDL_GetError());
-		return;
-	}
+	return conv;
+}
 
-	/* SDL surfaces may pad rows (pitch >= w*4); pack them tightly. */
-	w = conv->w;
-	h = conv->h;
-	rowbytes = (size_t)w * 4;
-	packed = malloc(rowbytes * (size_t)h);
+/* RGBA surface -> tightly packed opaque RGBA (malloc'ed), or NULL. */
+static unsigned char *
+sdl_pack_opaque(SDL_Surface *conv)
+{
+	size_t		rowbytes = (size_t)conv->w * 4;
+	unsigned char	*packed = malloc(rowbytes * (size_t)conv->h);
+	int		x, y;
+
 	if(!packed) {
-		SDL_DestroySurface(conv);
-		return;
+		return NULL;
 	}
-	for(y = 0; y < h; y++) {
+	for(y = 0; y < conv->h; y++) {
 		unsigned char *dst = packed + (size_t)y * rowbytes;
-		memcpy(dst, (unsigned char *)conv->pixels
-				+ (size_t)y * conv->pitch, rowbytes);
-		/* The renderer's back buffer can carry a non-opaque alpha, which
-		 * makes viewers composite the PNG over white and wash the colors
-		 * out. A screenshot is opaque, so force every alpha byte to 0xff. */
-		for(int x = 0; x < w; x++) {
+
+		memcpy(dst, (unsigned char *)conv->pixels + (size_t)y * conv->pitch,
+								rowbytes);
+		/* The back buffer can carry a non-opaque alpha, which makes viewers
+		 * composite the PNG over white. A capture is opaque. */
+		for(x = 0; x < conv->w; x++) {
 			dst[x * 4 + 3] = 0xff;
 		}
 	}
-	SDL_DestroySurface(conv);
+	return packed;
+}
 
-	sdl_build_screenshot_path(path, sizeof(path));
+static void
+sdl_save_screenshot(Window_info *win, int whole)
+{
+	SDL_Surface	*conv = sdl_grab_picture(win, whole);
+	unsigned char	*packed;
+	char		path[1100];
+	int		w, h, rc;
+
+	if(!conv) {
+		ui_message("Screenshot failed");
+		return;
+	}
+	w = conv->w;
+	h = conv->h;
+	packed = sdl_pack_opaque(conv);
+	SDL_DestroySurface(conv);
+	if(!packed) {
+		return;
+	}
+	sdl_build_screenshot_path(path, sizeof(path),
+					whole ? "Window Screenshot" : "Screenshot");
 	rc = write_png_rgba(path, packed, w, h);
 	free(packed);
-
 	if(rc) {
-		printf("Screenshot failed: could not write %s\n", path);
+		ui_message("Screenshot failed: could not write the file");
 	} else {
+		const char *base = strrchr(path, '/');
+
+		ui_message("Saved to Pictures: %s", base ? base + 1 : path);
 		printf("Screenshot saved: %s (%dx%d)\n", path, w, h);
 	}
+}
+
+/* Video recording (video_rec.c): one frame per emulated 1/60 s. */
+int	rec_active(void);
+int	rec_start(int w, int h);
+void	rec_stop(void);
+void	rec_frame(const unsigned char *rgba);
+void	rec_get_size(int *w, int *h);
+
+static void
+sdl_record_frame(Window_info *win)
+{
+	static unsigned char	*buf;
+	static size_t		cap;
+	SDL_Surface		*conv = sdl_grab_picture(win, 0), *sc = NULL;
+	int			rw, rh, y;
+	size_t			rowbytes;
+
+	if(!conv) {
+		return;
+	}
+	rec_get_size(&rw, &rh);
+	if(conv->w != rw || conv->h != rh) {	/* window was resized meanwhile */
+		sc = SDL_ScaleSurface(conv, rw, rh, SDL_SCALEMODE_NEAREST);
+		SDL_DestroySurface(conv);
+		conv = sc;
+		if(!conv) {
+			return;
+		}
+	}
+	rowbytes = (size_t)rw * 4;
+	if(cap < rowbytes * (size_t)rh) {
+		cap = rowbytes * (size_t)rh;
+		buf = realloc(buf, cap);
+	}
+	if(buf) {
+		for(y = 0; y < rh; y++) {
+			memcpy(buf + (size_t)y * rowbytes, (unsigned char *)conv->pixels +
+						(size_t)y * conv->pitch, rowbytes);
+		}
+		rec_frame(buf);
+	}
+	SDL_DestroySurface(conv);
 }
 
 /* Linear blur, horizontal (g_hblur) and/or vertical (g_vblur). Each is 0-100 and
@@ -1738,11 +1843,31 @@ sdl_update_display(Window_info *win)
 	/* Service a pending Shift+F12 capture now, while the just-drawn frame is
 	 * still in the back buffer (RenderPresent may invalidate it). */
 	if(g_screenshot_requested) {
-		sdl_save_screenshot(win);
+		sdl_save_screenshot(win, 0);
 		g_screenshot_requested = 0;
+	}
+	if(g_rec_toggle_requested) {
+		g_rec_toggle_requested = 0;
+		if(rec_active()) {
+			rec_stop();
+		} else {
+			SDL_Surface *probe = sdl_grab_picture(win, 0);
+
+			if(probe) {
+				rec_start(probe->w, probe->h);
+				SDL_DestroySurface(probe);
+			}
+		}
+	}
+	if(rec_active() && !g_ui_pause) {
+		sdl_record_frame(win);
 	}
 
 	ui_draw(win->width_req, win->main_height + 2 * UI_BAR_H);
+	if(g_screenshot_window_requested) {
+		g_screenshot_window_requested = 0;
+		sdl_save_screenshot(win, 1);
+	}
 	sdl_dev_snapshot(win);
 	SDL_RenderPresent(win->renderer);
 }
@@ -1918,6 +2043,9 @@ main(int argc, char **argv)
 	}
 
 	net_shutdown();
+	if(rec_active()) {
+		rec_stop();		/* finish a recording that was still running */
+	}
 	sdl_snd_shutdown();
 	SDL_Quit();
 	return 0;

@@ -13,6 +13,7 @@
 #include "defc.h"
 #include "scc.h"
 #include "ui.h"
+#include "tool_find.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,79 +58,15 @@ static int		g_nkeep;
 
 /* ---- finding Ghostscript ---- */
 
-static int
-is_file(const char *p)
-{
-	SDL_PathInfo	info;
-
-	return SDL_GetPathInfo(p, &info) && info.type == SDL_PATHTYPE_FILE;
-}
-
-static char *
-join_try(const char *dir, size_t n, const char *name)
-{
-	char	buf[1100];
-
-	snprintf(buf, sizeof(buf), "%.*s/%s", (int)n, dir, name);
-	return is_file(buf) ? strdup(buf) : NULL;
-}
-
 static void
 find_gs(void)
 {
-	const char	*env, *path, *p, *q;
-	static const char *names[] = { "gs", "gswin64c.exe", "gswin32c.exe" };
-	static const char *dirs[] = { "/opt/homebrew/bin", "/usr/local/bin",
-				"/opt/local/bin", "/usr/bin", "/snap/bin", NULL };
-	int		i, j;
-	char		*found;
+	static const char *names[] = { "gs", "gswin64c.exe", "gswin32c.exe", NULL };
 
 	g_gs_searched = 1;
-	env = getenv("EMUBUDDY_GS");
-	if(env && !strcmp(env, "none")) {
-		return;			/* test: pretend gs is not installed */
-	}
-	if(env && is_file(env)) {
-		g_gs = strdup(env);
-		return;
-	}
-	path = getenv("PATH");
-	for(p = path; p && *p; p = *q ? q + 1 : q) {
-		q = strchr(p, ':');
-#ifdef _WIN32
-		q = strchr(p, ';');
-#endif
-		if(!q) {
-			q = p + strlen(p);
-		}
-		for(j = 0; j < 3; j++) {
-			if((found = join_try(p, (size_t)(q - p), names[j]))) {
-				g_gs = found;
-				return;
-			}
-		}
-	}
-	for(i = 0; dirs[i]; i++) {
-		if((found = join_try(dirs[i], strlen(dirs[i]), "gs"))) {
-			g_gs = found;
-			return;
-		}
-	}
-#ifdef _WIN32
-	{
-		int	n = 0;
-		char	**list = SDL_GlobDirectory("C:/Program Files/gs", "*/bin/gswin64c.exe",
-							SDL_GLOB_CASEINSENSITIVE, &n);
-
-		if(list && n > 0) {
-			char	buf[1100];
-
-			snprintf(buf, sizeof(buf), "C:/Program Files/gs/%s", list[n - 1]);
-			g_gs = strdup(buf);
-		}
-		SDL_free(list);
-	}
-#endif
+	free(g_gs);
+	g_gs = tool_find("EMUBUDDY_GS", names, "C:/Program Files/gs",
+						"*/bin/gswin64c.exe");
 }
 
 /* ---- scratch folder ---- */

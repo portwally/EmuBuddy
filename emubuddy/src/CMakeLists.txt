@@ -203,7 +203,7 @@ endif()
 
 # Virtual ImageWriter II (C++, ported from GSport/GSplus legacy, GPL v2+)
 enable_language(CXX)
-set(EMUBUDDY_PRINTER_SOURCES imagewriter.cpp iw_font.c printer_scc.c printer_ps.c ui_printer.c)
+set(EMUBUDDY_PRINTER_SOURCES imagewriter.cpp iw_font.c printer_scc.c printer_ps.c tool_find.c video_rec.c ui_printer.c)
 set_source_files_properties(imagewriter.cpp PROPERTIES COMPILE_OPTIONS "-w;-std=c++11")
 
 add_executable(gsplus-sdl

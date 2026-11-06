@@ -74,10 +74,14 @@ sdl_snd_init(word32 *shmaddr)
 	printf("sdl_snd_init: SDL3 audio stream open, rate=%d\n", g_preferred_rate);
 }
 
+void rec_audio(const unsigned char *pcm, int n);	/* video_rec.c */
+
 int
 sdl_send_audio(byte *ptr, int size)
 {
 	int	bytes_per_sec, target, high, queued;
+
+	rec_audio((const unsigned char *)ptr, size);	/* video recording */
 
 	if(g_sdl_audio_stream) {
 		/* SDL's audio thread drains this queue at a steady rate on its own

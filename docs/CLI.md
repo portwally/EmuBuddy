@@ -91,3 +91,10 @@ If Ghostscript is missing, EmuBuddy keeps the print job and shows a "Ghostscript
 ## Window size
 
 View > Window Size 1x / 2x / 3x / 4x resizes the window; sizes that don't fit the screen are greyed out. The choice is saved. `-scale n` does the same for one run (and steps down if it doesn't fit). Full Screen is F11.
+
+## Screenshots and video
+
+File menu: **Save Screenshot** (F10, the IIgs picture only, to your Pictures folder), **Save Window Screenshot**
+(Shift-F10, with menu bar and windows) and **Record Video** (Ctrl-F10, MP4 with sound, to your Movies folder;
+the status bar shows REC and the time). Recording needs FFmpeg (`brew install ffmpeg`, `winget install ffmpeg`
+or `sudo apt install ffmpeg`); if it is missing, a window explains it. Quitting while recording saves the file.
