@@ -1078,6 +1078,12 @@ sdl_poll_events(void)
 	sdl_drain_key_queue(win);
 
 	while(SDL_PollEvent(&ev)) {
+		if(ev.type == SDL_EVENT_DROP_BEGIN || ev.type == SDL_EVENT_DROP_FILE ||
+				ev.type == SDL_EVENT_DROP_COMPLETE ||
+				ev.type == SDL_EVENT_DROP_TEXT) {
+			printf("Drop event %d: %s\n", (int)ev.type,
+				ev.drop.data ? ev.drop.data : "(none)");
+		}
 		if(ui_handle_event(&ev)) {
 			continue;		/* menu bar / window / status bar */
 		}

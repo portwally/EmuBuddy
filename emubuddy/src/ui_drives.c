@@ -78,7 +78,9 @@ recent_load(void)
 	}
 	while(g_n_recent < N_RECENT && fgets(line, sizeof(line), f)) {
 		line[strcspn(line, "\r\n")] = 0;
-		if(line[0]) {
+		if(line[0] && !(strlen(line) > 4 &&
+				!SDL_strcasecmp(line + strlen(line) - 4, ".shk"))) {
+			/* (ShrinkIt file archives are not disks: old entries are dropped) */
 			g_recent[g_n_recent++] = strdup(line);
 		}
 	}
@@ -599,8 +601,184 @@ ui_drives_tick(void)
 	ui_message("%s is back with the new files", base_name(g_remount.path));
 }
 
-/* Copy a plain Mac/PC file into the first shared folder and refresh that
- * volume so the IIgs sees the file. Returns 1 (handled). */
+/* ---- Drop destination: which folder inside the shared folder gets the
+ * files that are dropped on the window ---- */
+
+#define DEST_MAX	200
+static char	g_drop_sub[600];		/* "" = top of the shared folder */
+static UiWindow	g_dest_win;
+static char	g_dest_path[DEST_MAX][600];	/* relative path, "" = top */
+static char	*g_dest_rows[DEST_MAX];
+static char	g_dest_text[DEST_MAX][640];
+static int	g_dest_n, g_dest_sel, g_dest_top;
+static char	g_dest_root[1100];
+
+static const char *
+shared_root(void)
+{
+	int	slot, d, nd;
+	Disk	*dsk;
+
+	for(slot = 7; slot >= 5; slot--) {
+		nd = (slot == 7) ? MAX_C7_DISKS : 2;
+		for(d = 0; d < nd; d++) {
+			dsk = iwm_get_dsk_from_slot_drive(slot, d);
+			if(dsk->fd >= 0 && dsk->dynapro_info_ptr && dsk->name_ptr) {
+				return dsk->name_ptr;
+			}
+		}
+	}
+	return NULL;
+}
+
+static void	dest_scan(const char *rel, int depth);
+
+typedef struct { const char *rel; int depth; } DestScan;
+
+static SDL_EnumerationResult SDLCALL
+dest_enum_cb(void *ud, const char *dirname, const char *fname)
+{
+	DestScan	*sc = ud;
+	char		full[1800], rel[600];
+	SDL_PathInfo	info;
+
+	if(fname[0] == '.' || g_dest_n >= DEST_MAX) {
+		return SDL_ENUM_CONTINUE;
+	}
+	snprintf(full, sizeof(full), "%s%s%s", dirname,
+			dirname[strlen(dirname) - 1] == '/' ? "" : "/", fname);
+	if(!SDL_GetPathInfo(full, &info) || info.type != SDL_PATHTYPE_DIRECTORY) {
+		return SDL_ENUM_CONTINUE;
+	}
+	snprintf(rel, sizeof(rel), "%s%s%s", sc->rel, sc->rel[0] ? "/" : "", fname);
+	snprintf(g_dest_path[g_dest_n], sizeof(g_dest_path[0]), "%s", rel);
+	g_dest_n++;
+	if(sc->depth < 3) {
+		dest_scan(rel, sc->depth + 1);
+	}
+	return SDL_ENUM_CONTINUE;
+}
+
+static void
+dest_scan(const char *rel, int depth)
+{
+	char	dir[1800];
+	DestScan sc = { rel, depth };
+
+	snprintf(dir, sizeof(dir), "%s%s%s", g_dest_root, rel[0] ? "/" : "", rel);
+	SDL_EnumerateDirectory(dir, dest_enum_cb, &sc);
+}
+
+static void
+dest_rebuild(void)
+{
+	const char	*root = shared_root();
+	int		i, depth;
+	const char	*c;
+
+	g_dest_n = 0;
+	g_dest_sel = 0;
+	g_dest_top = 0;
+	if(!root) {
+		return;
+	}
+	snprintf(g_dest_root, sizeof(g_dest_root), "%s", root);
+	g_dest_path[g_dest_n++][0] = 0;			/* top level */
+	dest_scan("", 1);
+	for(i = 0; i < g_dest_n; i++) {
+		if(g_dest_path[i][0] == 0) {
+			snprintf(g_dest_text[i], sizeof(g_dest_text[0]),
+							"(top level)");
+		} else {
+			depth = 0;
+			for(c = g_dest_path[i]; *c; c++) {
+				if(*c == '/') {
+					depth++;
+				}
+			}
+			snprintf(g_dest_text[i], sizeof(g_dest_text[0]), "%*s%s/",
+				depth * 3, "", strrchr(g_dest_path[i], '/') ?
+				strrchr(g_dest_path[i], '/') + 1 : g_dest_path[i]);
+		}
+		g_dest_rows[i] = g_dest_text[i];
+		if(!strcmp(g_dest_path[i], g_drop_sub)) {
+			g_dest_sel = i;
+		}
+	}
+}
+
+static void
+dest_draw(UiWindow *win, int cx, int cy)
+{
+	int	by = win->h - UI_TITLE_H - 34, prev = g_dest_sel;
+	char	line[200];
+
+	if(g_dest_n == 0) {
+		ui_draw_text(cx + 12, cy + 14, "No shared folder yet.", UI_BLACK);
+		ui_draw_text(cx + 12, cy + 32, "Use Disks > Share a Folder.", UI_GREY);
+	} else {
+		snprintf(line, sizeof(line), "Shared: %.40s", base_name(g_dest_root));
+		ui_draw_text(cx + 12, cy + 6, line, UI_BLACK);
+		ui_draw_text(cx + 12, cy + 24, "Dropped files go into:", UI_GREY);
+		ui_list(win, cx, cy, 8, 46, win->w - 2 - 16, by - 52,
+			(const char **)g_dest_rows, g_dest_n, &g_dest_sel,
+			&g_dest_top);
+		if(g_dest_sel != prev && g_dest_sel >= 0 && g_dest_sel < g_dest_n) {
+			snprintf(g_drop_sub, sizeof(g_drop_sub), "%s",
+						g_dest_path[g_dest_sel]);
+			ui_message("Files now go to %s", g_dest_sel ?
+					g_dest_text[g_dest_sel] + strspn(
+					g_dest_text[g_dest_sel], " ") : "the top level");
+		}
+	}
+	if(ui_button(win, cx, cy, 8, by, 90, 24, "Refresh", 1)) {
+		dest_rebuild();
+	}
+	if(ui_button(win, cx, cy, win->w - 2 - 8 - 70, by, 70, 24, "Done", 1)) {
+		ui_window_close(win);
+	}
+}
+
+void
+ui_drop_dest_toggle(void)
+{
+	if(g_dest_win.open) {
+		ui_window_close(&g_dest_win);
+		return;
+	}
+	dest_rebuild();
+	snprintf(g_dest_win.title, sizeof(g_dest_win.title), "Drop Destination");
+	g_dest_win.w = 360;
+	g_dest_win.h = 330;
+	g_dest_win.closable = 1;
+	g_dest_win.modal = 0;
+	g_dest_win.draw = dest_draw;
+	if(g_dest_win.x == 0 && g_dest_win.y == 0) {
+		ui_window_center(&g_dest_win);
+	}
+	ui_window_open(&g_dest_win);
+}
+
+/* The folder for dropped files: the chosen subfolder if it still exists. */
+static void
+drop_folder(const char *root, char *out, size_t n)
+{
+	SDL_PathInfo	info;
+
+	snprintf(out, n, "%s", root);
+	if(g_drop_sub[0]) {
+		char	sub[1800];
+
+		snprintf(sub, sizeof(sub), "%s/%s", root, g_drop_sub);
+		if(SDL_GetPathInfo(sub, &info) &&
+				info.type == SDL_PATHTYPE_DIRECTORY) {
+			snprintf(out, n, "%s", sub);
+		}
+	}
+}
+
+/* Copy a plain Mac/PC file into the chosen folder of the shared volume and
+ * refresh that volume so the IIgs sees the file. Returns 1 (handled). */
 int
 ui_drop_regular_file(const char *path)
 {
@@ -608,10 +786,10 @@ ui_drop_regular_file(const char *path)
 
 	if(g_remount.active) {
 		/* the folder is being refreshed already: just add the file */
-		char dst2[1400];
+		char dst2[1700], f2[1500];
 
-		snprintf(dst2, sizeof(dst2), "%s/%s", g_remount.path,
-							base_name(path));
+		drop_folder(g_remount.path, f2, sizeof(f2));
+		snprintf(dst2, sizeof(dst2), "%s/%s", f2, base_name(path));
 		if(SDL_CopyFile(path, dst2)) {
 			g_remount.frames = REMOUNT_FRAMES;
 			ui_message("Copied %s", base_name(path));
@@ -619,7 +797,7 @@ ui_drop_regular_file(const char *path)
 		return 1;
 	}
 	Disk	*dsk = NULL;
-	char	dst[1400], folder[1100];
+	char	dst[1700], folder[1100], target[1500];
 	unsigned blocks;
 
 	for(slot = 7; slot >= 5 && !found; slot--) {
@@ -638,9 +816,10 @@ ui_drop_regular_file(const char *path)
 	}
 	slot++;				/* undo the loop's last step */
 	snprintf(folder, sizeof(folder), "%s", dsk->name_ptr);
-	snprintf(dst, sizeof(dst), "%s/%s", folder, base_name(path));
+	drop_folder(folder, target, sizeof(target));
+	snprintf(dst, sizeof(dst), "%s/%s", target, base_name(path));
 	for(i = 2; SDL_GetPathInfo(dst, NULL) && i < 100; i++) {
-		snprintf(dst, sizeof(dst), "%s/%d %s", folder, i, base_name(path));
+		snprintf(dst, sizeof(dst), "%s/%d %s", target, i, base_name(path));
 	}
 	if(!SDL_CopyFile(path, dst)) {
 		ui_message("Could not copy %s", base_name(path));

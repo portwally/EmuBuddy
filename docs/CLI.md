@@ -102,3 +102,7 @@ or `sudo apt install ffmpeg`); if it is missing, a window explains it. Quitting 
 ## Keyboard layouts
 
 EmuBuddy passes the character your keyboard makes to the IIgs, so a German (or any other) host keyboard types what its keys show, whatever layout is set in the IIgs Control Panel. Umlauts and other non-ASCII characters depend on the screen: in the desktop (super hi-res) they are typed the Mac way with Option dead keys (for example a-umlaut = Option-u then a), which the IIgs ROM turns into the real Mac Roman character; on the text screens they are sent as the IIgs national codes (German: a-umlaut = `{`, o-umlaut = `|`, u-umlaut = `}`, ss = `~`, A/O/U-umlaut = `[` `\` `]`), which the German character set shows as umlauts. Control and Open-Apple key combinations are unchanged.
+
+## Dropping files
+
+Drop a file from the Finder / Explorer on the window and it is copied into the shared folder; the IIgs sees it after a moment. ShrinkIt archives (.shk) are files, not disks. Disks > Drop Destination... chooses which folder inside the shared folder receives dropped files (the top level, or a subfolder; use Refresh after creating folders on your computer). Disk images (.po .hdv .2mg .dsk .woz ...) are mounted in a drive instead.
