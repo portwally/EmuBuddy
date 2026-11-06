@@ -84,7 +84,7 @@ typedef struct {
 static Window_info g_mainwin_info;
 
 /* Window/display options, defined in config.c and settable via the command line
- * (e.g. "-fullscreen 1") or config.kegs. */
+ * (e.g. "-fullscreen 1") or emubuddy.config. */
 extern int g_fullscreen, g_borderless, g_noaspect, g_highdpi;
 extern int g_nohwaccel;
 extern int g_scanline_simulator;	/* CRT scanline overlay intensity, 0-100 */

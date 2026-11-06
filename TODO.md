@@ -10,7 +10,7 @@
 ## Bugs (pre-release, lower urgency)
 
 - [ ] Blur breaks on the software renderer (`sdl_driver.c:1143-1148`): `SDL_ComposeCustomBlendMode` is unsupported there, so `-nohwaccel 1` + blur gives a dark picture. Check the `SDL_SetTextureBlendMode` return and fall back to a plain copy.
-- [ ] `-cfg missingdir/foo.gsp` silently autocreates `./foo.gsp` in the CWD when the `chdir` fails (`config.c:1457-1482`) — skip autocreate and keep the fatal when the directory component doesn't resolve. Also `stat`/`S_IFDIR`-check `-cfg` pointing at an existing directory (currently dies later with a misleading "Could not read config.kegs").
+- [ ] `-cfg missingdir/foo.gsp` silently autocreates `./foo.gsp` in the CWD when the `chdir` fails (`config.c:1457-1482`) — skip autocreate and keep the fatal when the directory component doesn't resolve. Also `stat`/`S_IFDIR`-check `-cfg` pointing at an existing directory (currently dies later with a misleading "Could not read emubuddy.config").
 - [ ] Window position never persists: no `SDL_EVENT_WINDOW_MOVED` handler, so the saved "Main Window X/Y position" config vars never update (cf. `xdriver.c:1208` calling `video_update_xpos_ypos()`).
 - [ ] Hardening: unchecked 5 MB `calloc` (`sdl_driver.c:485`); `localtime()` NULL → `strftime` UB in the screenshot path (~`sdl_driver.c:993`); `printf("%s", NULL)` risk on renderer/gamepad names (`sdl_driver.c:533`, `:747`); `st_size` truncated to `int` in `cfg_guess_image_size()` (`config.c:2645`).
 - [ ] Drag-and-drop misroutes ~230 KB 5.25" WOZ images into slot 5 — sniff the WOZ INFO chunk disk type before the size guess (`config.c:2633-2660`).

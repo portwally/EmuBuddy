@@ -93,7 +93,7 @@ int g_cfg_newdisk_type_default = 1;
 word32 g_cfg_newdisk_slotdrive = 0;
 
 const char *g_config_kegs_name_list[] = {
-		"config.kegs", "kegs_conf", ".config.kegs", 0
+		"emubuddy.config", 0
 };
 
 int	g_highest_smartport_unit = -1;
@@ -160,12 +160,12 @@ extern Cfg_menu g_cfg_sdl_video_menu[];
 #define KNM(a)		&a, #a
 
 /* SDL display options not present in upstream KEGS. Registered in the Video
- * Settings menu below, so they're settable via the config panel, config.kegs,
+ * Settings menu below, so they're settable via the config panel, emubuddy.config,
  * and the command line (KEGS style, e.g. "-g_fullscreen 1"). The SDL driver
  * reads them; the X11 and native macOS drivers ignore them. (Window size and
  * position use KEGS's existing g_mainwin_width/height/xpos/ypos.) */
 /* Which emulated cards are plugged in (EmuBuddy "Slots" window). They live in
- * the main menu table so they are saved in config.kegs. */
+ * the main menu table so they are saved in emubuddy.config. */
 int	g_slot4_mockingboard = 0;	/* slot 4: 1 Mockingboard, 0 empty */
 extern char *g_bridge_root;		/* bridge.c: the bridge folder */
 int	g_helper_ask = 1;			/* offer to install the IIgs drop helper */
@@ -399,8 +399,8 @@ Cfg_menu g_cfg_video_menu[] = {
 /* SDL-only display options, split out of Video Settings so each page fits the
  * 24-line control panel. Not present in upstream KEGS: the SDL driver reads
  * them; the X11 and native macOS drivers ignore them. Each is also settable
- * via config.kegs and the command line (KEGS style, e.g. "-fullscreen 1").
- * The name_str (the CLI flag / config.kegs key) has no "g_" prefix -- that's
+ * via emubuddy.config and the command line (KEGS style, e.g. "-fullscreen 1").
+ * The name_str (the CLI flag / emubuddy.config key) has no "g_" prefix -- that's
  * just our C convention for globals, not something users should type. */
 Cfg_menu g_cfg_sdl_video_menu[] = {
 { "GSplus Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_MENU },
@@ -438,7 +438,7 @@ Cfg_menu g_cfg_main_menu[] = {
 { "Serial Port Configuration", g_cfg_serial_menu, 0, 0, CFGTYPE_SUBMENU },
 { "Virtual Modem Configuration", g_cfg_modem_menu, 0, 0, CFGTYPE_SUBMENU },
 { "Video Settings", g_cfg_video_menu, 0, 0, CFGTYPE_SUBMENU },
-{ "Auto-update config.kegs,0,Manual,1,Immediately",
+{ "Auto-update emubuddy.config,0,Manual,1,Immediately",
 		KNMP(g_config_kegs_auto_update), CFGTYPE_INT },
 { "Slot 4 Mockingboard,0,Empty,1,Mockingboard",
 		KNMP(g_slot4_mockingboard), CFGTYPE_INT },
@@ -467,7 +467,7 @@ Cfg_menu g_cfg_main_menu[] = {
 { "Swap Command/Option keys,0,Disabled,1,Swapped",
 				KNMP(g_adb_swap_command_option), CFGTYPE_INT },
 { "", 0, 0, 0, 0 },
-{ "Save changes to config.kegs", (void *)config_write_config_kegs_file, 0, 0,
+{ "Save changes to emubuddy.config", (void *)config_write_config_kegs_file, 0, 0,
 		CFGTYPE_FUNC },
 { "", 0, 0, 0, 0 },
 { "Exit Config (or press F4)", (void *)cfg_exit, 0, 0, CFGTYPE_FUNC },
@@ -752,7 +752,7 @@ config_init()
 {
 	config_init_menus(g_cfg_main_menu);
 
-	// Find the config.kegs file
+	// Find the emubuddy.config file
 	if(g_config_kegs_name[0] == 0) {
 		cfg_find_config_kegs_file();
 	}
@@ -771,13 +771,13 @@ cfg_find_config_kegs_file()
 	fd = 0;
 	if(!config_setup_kegs_file(&g_config_kegs_name[0], maxlen,
 						&g_config_kegs_name_list[0])) {
-		// Try to create config.kegs
+		// Try to create emubuddy.config
 		fd = -1;
 		path_ptr = &g_kegs_default_paths[0];
 		while(*path_ptr) {
 			config_expand_path(&g_config_kegs_name[0], *path_ptr,
 									maxlen);
-			cfg_strlcat(&g_config_kegs_name[0], "config.kegs",
+			cfg_strlcat(&g_config_kegs_name[0], "emubuddy.config",
 									maxlen);
 			printf("Trying to create %s\n", &g_config_kegs_name[0]);
 			fd = open(&g_config_kegs_name[0],
@@ -791,7 +791,7 @@ cfg_find_config_kegs_file()
 	}
 
 	if(fd < 0) {
-		fatal_printf("Could not create config.kegs!\n");
+		fatal_printf("Could not create emubuddy.config!\n");
 		my_exit(2);
 	}
 }
@@ -1506,7 +1506,7 @@ config_parse_config_kegs_file()
 	int	fd, pos, start, size, last_c, line, ret, c, maxlen;
 	int	i;
 
-	printf("Parsing config.kegs file: %s\n", g_config_kegs_name);
+	printf("Parsing emubuddy.config file: %s\n", g_config_kegs_name);
 
 	clk_bram_zero();
 
@@ -1532,7 +1532,7 @@ config_parse_config_kegs_file()
 	if((fd < 0) && (errno == ENOENT)) {
 		// File doesn't exist (e.g. a -cfg name that isn't there yet).
 		//  Create it, matching the auto-create behavior for the
-		//  default config.kegs.  It's populated with defaults on save.
+		//  default emubuddy.config.  It's populated with defaults on save.
 		printf("Config file %s not found, creating it\n",
 							g_config_kegs_name);
 		fd = open(g_config_kegs_name,
@@ -1560,7 +1560,7 @@ config_parse_config_kegs_file()
 	close(fd);
 	if(ret != size) {
 		free(bufptr);
-		fatal_printf("Could not read config.kegs at %s\n",
+		fatal_printf("Could not read emubuddy.config at %s\n",
 							g_config_kegs_name);
 		my_exit(3);
 		return;
@@ -1723,13 +1723,13 @@ cfg_parse_bram(char *buf, int pos, int len)
 	// Format: "bram1[00] = xx yy..." or "bram3[00] = xx yy ..."
 	// pos = position just after "bram"
 	if((len < (pos+5)) || (buf[pos+1] != '[') || (buf[pos+4] != ']')) {
-		fatal_printf("While reading config.kegs, found malformed bram "
+		fatal_printf("While reading emubuddy.config, found malformed bram "
 			"statement: %s\n", buf);
 		return;
 	}
 	bram_num = buf[pos] - '0';
 	if((bram_num != 1) && (bram_num != 3)) {
-		fatal_printf("While reading config.kegs, found bad bram "
+		fatal_printf("While reading emubuddy.config, found bad bram "
 			"num: %s\n", buf);
 		return;
 	}
@@ -1874,7 +1874,7 @@ config_write_config_kegs_file(int get_status)
 	if(get_status) {
 		return 0;
 	}
-	printf("Writing config.kegs file to %s\n", g_config_kegs_name);
+	printf("Writing emubuddy.config file to %s\n", g_config_kegs_name);
 
 	fconf = fopen(g_config_kegs_name, "w+");
 	if(fconf == 0) {
@@ -4246,7 +4246,7 @@ cfg_file_draw()
 	}
 
 	cfg_htab_vtab(2, 1);
-	cfg_printf("config.kegs path: %-56s",
+	cfg_printf("emubuddy.config path: %-56s",
 			cfg_shorten_filename(&g_config_kegs_name[0], 56));
 
 	cfg_htab_vtab(2, 2);

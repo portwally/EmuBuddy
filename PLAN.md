@@ -41,7 +41,7 @@ Microsoft or GTK window chrome, and no other skins for now.
 | Area | Status | Where |
 |---|---|---|
 | SDL3 front-end | Window, renderer, keyboard, mouse, gamepad, audio, fullscreen, CRT/scanline effects, screenshots, **file drops** (`SDL_EVENT_DROP_FILE`). Builds on macOS, Linux, Windows with CMake. | `sdl_driver.c`, `sdl_snd_driver.c`, `CMakeLists.txt` |
-| Config menu | F4 text menu drawn into the emulated screen. **Replaced.** `config.c` stays as the data model and `config.kegs` as the hidden settings file. | `config.c` |
+| Config menu | F4 text menu drawn into the emulated screen. **Replaced.** `config.c` stays as the data model and `emubuddy.config` as the hidden settings file. | `config.c` |
 | Disk mount/eject | `insert_disk()`, eject, create new image, slot guess for drops | `config.c`, `iwm.c`, `smartport.c` |
 | Mac/PC folder as ProDOS volume | **Read/write.** Guest writes go back to host files. Types via AppleSingle or name suffixes. | `dynapro.c`, `dyna_*.c`, `applesingle.c` |
 | Serial ports (slots 1/2) | Real device, virtual modem, TCP | `scc.c`, `scc_socket_driver.c` |
@@ -150,7 +150,7 @@ the F4 text menu. Work:
 - New Blank Disk dialog (size and type) using the existing image-creation code.
 
 ### Phase 3: Slot configuration (M–L, core work)
-**Status, first version done:** Slots window (Machine > Slots...) with staged changes and Apply/Revert. Slot 1/2: Idle or Virtual Modem. Slot 3: Empty or Video Overlay Card. Slot 4: Mockingboard on/off. Slot 7: SCSI card on/off (Apply reloads the card ROM and restarts). Settings saved in config.kegs. ImageWriter (slot 1) and Uthernet (slot 3) are shown greyed until Phases 4/5.
+**Status, first version done:** Slots window (Machine > Slots...) with staged changes and Apply/Revert. Slot 1/2: Idle or Virtual Modem. Slot 3: Empty or Video Overlay Card. Slot 4: Mockingboard on/off. Slot 7: SCSI card on/off (Apply reloads the card ROM and restarts). Settings saved in emubuddy.config. ImageWriter (slot 1) and Uthernet (slot 3) are shown greyed until Phases 4/5.
 **Open:** the IIgs "Your Card" battery-RAM setting is not changed automatically (its byte layout wasn't confirmed, and guessing could corrupt saved settings); users set it in the IIgs Control Panel. Serial TCP/real-device setups need text fields.
 - **Slots** window with a popup per slot:
   - Slot 1: Printer (ImageWriter II) · Serial · Empty
@@ -279,7 +279,7 @@ MAME apple2gs-style options (`-flop1..4`, `-hard1..7`, `-sl1..sl7 <card>`, `-sha
 
 ## Developer test hooks (environment variables, no effect in normal use)
 
-`EMUBUDDY_SNAPSHOT`/`SNAPFRAME`, `EMUBUDDY_SNAPS`+`SNAPDIR` (screenshots at frames), `EMUBUDDY_CLICKS`, `EMUBUDDY_MOUSE` (press/move/release), `EMUBUDDY_KEYS` (e.g. `cmd+o`), `EMUBUDDY_TYPE` (paste text), `EMUBUDDY_DROPS`, `EMUBUDDY_INSERT`, `EMUBUDDY_OPEN` (about/open/drives/slots/printer), `EMUBUDDY_MENU`, `EMUBUDDY_NETDEBUG`. Always run tests with `-cfg <scratch file>` so `~/config.kegs` is not touched, and on copies of disk images.
+`EMUBUDDY_SNAPSHOT`/`SNAPFRAME`, `EMUBUDDY_SNAPS`+`SNAPDIR` (screenshots at frames), `EMUBUDDY_CLICKS`, `EMUBUDDY_MOUSE` (press/move/release), `EMUBUDDY_KEYS` (e.g. `cmd+o`), `EMUBUDDY_TYPE` (paste text), `EMUBUDDY_DROPS`, `EMUBUDDY_INSERT`, `EMUBUDDY_OPEN` (about/open/drives/slots/printer), `EMUBUDDY_MENU`, `EMUBUDDY_NETDEBUG`. Always run tests with `-cfg <scratch file>` so `~/emubuddy.config` is not touched, and on copies of disk images.
 
 ## Risks
 

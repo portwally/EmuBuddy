@@ -3,7 +3,7 @@
 # Build / runtime artifacts
 emubuddy/GSplus.app/
 emubuddy/src/build/
-config.kegs
+emubuddy.config
 gsplus_screenshot_*.png
 
 # Local Claude Code tooling

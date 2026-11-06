@@ -1118,8 +1118,11 @@ try_stage_for_receive(const char *path)
 
 	if(g_force_root || !g_drop_follow_finder || !ui_bridge_is_on() ||
 			!finder_front_path(gp, sizeof(gp))) {
+		printf("Drop: not staged (force_root %d follow %d bridge %d)\n",
+			g_force_root, g_drop_follow_finder, ui_bridge_is_on());
 		return 0;
 	}
+	printf("Drop: front window %s\n", gp);
 	if(root && finder_path_to_host(root, gp, host, sizeof(host))) {
 		return 0;			/* the shared volume: copy there as usual */
 	}
@@ -1368,7 +1371,9 @@ ui_auto_bridge(void)
 {
 	char		*pref, path[1300];
 
-	if(ui_bridge_is_on() || g_bridge_off || !g_slot7_scsi) {
+	/* a saved bridge folder that is also the shared disk can't be used */
+	if((ui_bridge_is_on() && !bridge_overlaps_share(g_bridge_root)) ||
+			g_bridge_off || !g_slot7_scsi) {
 		return;
 	}
 	pref = SDL_GetPrefPath("EmuBuddy", "Bridge");
