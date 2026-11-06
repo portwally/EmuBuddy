@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include "cli.h"
 
 int	g_config_session_only = 0;	/* checked by config.c before saving */
@@ -23,6 +24,20 @@ static int	g_nout;
 static char	*g_later_insert[32];	/* shares and loose images */
 static int	g_nlater;
 static int	g_win_w, g_win_h, g_scale;
+static char	g_title[200], g_profile[100];
+static char	*g_check[64];		/* paths -validate looks at: "kind path" */
+static int	g_ncheck;
+
+static void
+check(const char *kind, const char *path)
+{
+	char	buf[1200];
+
+	if(g_ncheck < 64 && path && path[0]) {
+		snprintf(buf, sizeof(buf), "%s\t%s", kind, path);
+		g_check[g_ncheck++] = strdup(buf);
+	}
+}
 
 static void
 emit(const char *a)
@@ -69,6 +84,8 @@ usage(void)
 "  -hard1 <img> ... -hard7 <img>  SCSI hard disks (slot 7, drive 1-7)\n"
 "  -share <folder>                Mac/PC folder as a ProDOS volume\n"
 "  -bridge <folder>               folder IIgs programs may read/write (host bridge)\n"
+"  -title <text>                  window title\n"
+"  -profile <name>                 name of the Launcher profile (shown in the window title)\n"
 "  -skin iigs | system            look: IIgs style, or the macOS menu bar (macOS only)\n"
 "  <img or folder>                put in the first free fitting drive\n"
 "\n"
@@ -96,7 +113,12 @@ usage(void)
 "Other:\n"
 "  -save                also save these settings to the config file\n"
 "  -cfg <file>          use another config file\n"
+"  -validate            check the files and folders named here, print the result and exit\n"
+"                       (exit code 0 = fine, 1 = something is missing)\n"
+"  -showconfig          print the settings this command line stands for and exit\n"
 "  -h, -help            this help\n"
+"\n"
+"Exit codes: 0 fine, 1 error while running, 2 bad command line.\n"
 "\n"
 "Example:\n"
 "  EmuBuddy apple2gs -rom ROM03 -hard1 System6.hdv -sl4 uthernet2 -mhz 16 \\\n"
@@ -220,10 +242,89 @@ slot_option(int slot, const char *card)
 	return -1;
 }
 
+/* -validate: do the files and folders named on the command line exist? */
+static int
+validate_files(void)
+{
+	struct stat	sb;
+	int		i, bad = 0;
+
+	for(i = 0; i < g_ncheck; i++) {
+		char	*tab = strchr(g_check[i], '\t'), *path = tab + 1;
+		int	want_dir = !strncmp(g_check[i], "folder", 6);
+
+		*tab = 0;
+		if(stat(path, &sb) != 0) {
+			printf("MISSING %s: %s\n", g_check[i], path);
+			bad++;
+		} else if(want_dir && !S_ISDIR(sb.st_mode)) {
+			printf("NOT A FOLDER: %s\n", path);
+			bad++;
+		} else if(!strcmp(g_check[i], "rom") && S_ISREG(sb.st_mode) &&
+				sb.st_size != 131072 && sb.st_size != 262144) {
+			printf("ROM has an unusual size (%ld bytes): %s\n",
+						(long)sb.st_size, path);
+			bad++;
+		} else {
+			printf("OK %s: %s\n", g_check[i], path);
+		}
+	}
+	if(g_ncheck == 0) {
+		printf("Nothing to check (no disks, folders or ROM named).\n");
+	}
+	printf(bad ? "%d problem(s)\n" : "All fine\n", bad);
+	return bad ? 1 : 0;
+}
+
+/* -showconfig: the KEGS arguments this command line turned into. */
+static void
+show_config(void)
+{
+	int	i;
+
+	printf("Settings for this run:\n");
+	for(i = 1; i < g_nout; i++) {
+		if(g_out[i][0] == '-') {
+			printf("  %s", g_out[i]);
+			if(i + 1 < g_nout && g_out[i + 1][0] != '-') {
+				printf(" %s", g_out[++i]);
+			}
+			printf("\n");
+		}
+	}
+	for(i = 0; i < g_nlater; i++) {
+		printf("  insert %s\n", g_later_insert[i]);
+	}
+	if(g_win_w || g_scale) {
+		printf("  window %dx%d scale %d\n", g_win_w, g_win_h, g_scale);
+	}
+	if(g_profile[0]) {
+		printf("  profile %s\n", g_profile);
+	}
+	if(g_title[0]) {
+		printf("  title %s\n", g_title);
+	}
+}
+
+const char *
+emubuddy_cli_title(void)
+{
+	static char	t[320];
+
+	if(g_title[0]) {
+		return g_title;
+	}
+	if(g_profile[0]) {
+		snprintf(t, sizeof(t), "EmuBuddy - %s", g_profile);
+		return t;
+	}
+	return "";
+}
+
 int
 emubuddy_cli(int *pargc, char ***pargv)
 {
-	int	argc = *pargc, i, any = 0, save = 0, n;
+	int	argc = *pargc, i, any = 0, save = 0, n, validate = 0, showconfig = 0;
 	char	**argv = *pargv, buf[1100];
 
 	g_nout = 0;
@@ -247,6 +348,14 @@ emubuddy_cli(int *pargc, char ***pargv)
 		}
 		if(is(o, "-save")) {
 			save = 1;
+			continue;
+		}
+		if(is(o, "-validate")) {
+			validate = 1;
+			continue;
+		}
+		if(is(o, "-showconfig")) {
+			showconfig = 1;
 			continue;
 		}
 		if(is(o, "-nothrottle")) {
@@ -276,14 +385,17 @@ emubuddy_cli(int *pargc, char ***pargv)
 				!strncasecmp(o, "-sl", 3) || is(o, "-share") || is(o, "-bridge") || is(o, "-skin") ||
 				is(o, "-mhz") || is(o, "-ramsize") ||
 				is(o, "-resolution") || is(o, "-scale") ||
-				is(o, "-rompath") || is(o, "-scanlines"))) {
+				is(o, "-rompath") || is(o, "-scanlines") ||
+				is(o, "-title") || is(o, "-profile"))) {
 			fprintf(stderr, "EmuBuddy: %s needs a value (see -help)\n", a);
 			return -1;
 		}
 		if(is(o, "-flop1") || is(o, "-flop2")) {
 			emit2(is(o, "-flop1") ? "-s6d1" : "-s6d2", v);
+			check("disk", v);
 		} else if(is(o, "-flop3") || is(o, "-flop4")) {
 			emit2(is(o, "-flop3") ? "-s5d1" : "-s5d2", v);
+			check("disk", v);
 		} else if(!strncasecmp(o, "-hard", 5)) {
 			n = o[5] ? atoi(o + 5) : 1;
 			if(n < 1 || n > 7) {
@@ -292,6 +404,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 			}
 			snprintf(buf, sizeof(buf), "-s7d%d", n);
 			emit2(buf, v);
+			check("disk", v);
 		} else if(!strncasecmp(o, "-sl", 3) && o[3] >= '1' && o[3] <= '7' &&
 								!o[4]) {
 			if(slot_option(o[3] - '0', v) != 0) {
@@ -299,8 +412,14 @@ emubuddy_cli(int *pargc, char ***pargv)
 			}
 		} else if(is(o, "-share")) {
 			later(v);
+			check("folder", v);
+		} else if(is(o, "-title")) {
+			snprintf(g_title, sizeof(g_title), "%s", v);
+		} else if(is(o, "-profile")) {
+			snprintf(g_profile, sizeof(g_profile), "%s", v);
 		} else if(is(o, "-bridge")) {
 			emit2("-g_bridge_root", v);
+			check("folder", v);
 		} else if(is(o, "-skin")) {
 			if(is(v, "system")) {
 				emit2("-g_skin", "1");
@@ -342,10 +461,14 @@ emubuddy_cli(int *pargc, char ***pargv)
 				return -1;
 			}
 			emit2("-rom", buf);
+			check("rom", buf);
 		} else if(is(o, "-scanlines")) {
 			emit2("-scanline", v);
 		} else {
 			/* KEGS option: pass it (and its value) through */
+			if(is(o, "-rom") && v) {
+				check("rom", v);
+			}
 			emit(a);
 			if(v && v[0] != '-') {
 				emit(v);
@@ -358,6 +481,13 @@ emubuddy_cli(int *pargc, char ***pargv)
 		}
 		any = 1;
 		i++;				/* consumed the value */
+	}
+	if(validate) {
+		exit(validate_files());
+	}
+	if(showconfig) {
+		show_config();
+		exit(0);
 	}
 	g_config_session_only = any && !save;
 	g_out[g_nout] = NULL;

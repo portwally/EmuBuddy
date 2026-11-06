@@ -16,3 +16,4 @@ build/
 .DS_Store
 tools/bridgetest/build/
 build2/
+build-launcher/

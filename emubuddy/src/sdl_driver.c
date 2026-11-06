@@ -566,7 +566,8 @@ sdl_video_init(void)
 #else
 	g_skin = 0;
 #endif
-	g_mainwin_info.window = SDL_CreateWindow("EmuBuddy",
+	g_mainwin_info.window = SDL_CreateWindow(emubuddy_cli_title()[0] ?
+			emubuddy_cli_title() : "EmuBuddy",
 				w, h + UI_TOP_H + UI_BAR_H, flags);
 	if(!g_mainwin_info.window) {
 		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());

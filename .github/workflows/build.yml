@@ -30,6 +30,11 @@ jobs:
           cmake -G Ninja -B build -S emubuddy/src $ARGS
       - name: Build
         run: cmake --build build --target gsplus-sdl
+      - name: Build and test the Launcher
+        run: |
+          cmake -G Ninja -B build-launcher -S launcher
+          cmake --build build-launcher
+          ./build-launcher/test_profile
       - name: Package (.dmg)
         run: cd build && cpack
       - uses: actions/upload-artifact@v7

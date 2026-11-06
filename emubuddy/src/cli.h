@@ -10,6 +10,8 @@ int	emubuddy_cli_later_count(void);
 const char *emubuddy_cli_later(int i);
 /* Window size from -resolution / -scale (0 = not given). */
 void	emubuddy_cli_window(int *w, int *h, int *scale);
+/* Window title from -title / -profile ("" = default). */
+const char *emubuddy_cli_title(void);
 /* 1 when settings came from the command line and must not be saved. */
 extern int	g_config_session_only;
 

@@ -60,6 +60,12 @@ used when its slot is set to "Your Card" in the IIgs Control Panel.
 
 | Option | |
 |---|---|
+| `-title <text>` | window title |
+| `-profile <name>` | name of the Launcher profile; the window is titled `EmuBuddy - <name>` |
+| `-validate` | check that the ROM, disks and folders named here exist, print the result and exit (0 = fine, 1 = something is missing) |
+| `-showconfig` | print the settings this command line stands for and exit |
+| `-bridge <folder>` | folder IIgs programs may read and write (host bridge) |
+| `-skin iigs\|system` | look: IIgs style, or the macOS menu bar (macOS only) |
 | `-save` | also save these settings to the config file |
 | `-cfg <file>` | use another config file |
 | `-h`, `-help` | list the options |
@@ -76,6 +82,8 @@ EmuBuddy apple2gs -rom ROM03 -hard1 System6.hdv -flop3 Game.2mg \
 
 On macOS the program inside the app bundle is
 `EmuBuddy.app/Contents/MacOS/EmuBuddy`.
+
+Exit codes: 0 fine, 1 error while running (or `-validate` found a problem), 2 bad command line.
 
 ## PostScript printer (`-sl1 postscript`)
 
