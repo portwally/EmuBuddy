@@ -1529,6 +1529,31 @@ sdl_dev_snapshot(Window_info *win)
 			g_screenshot_requested = 1;
 		}
 	}
+	{	/* EMUBUDDY_DUMPRAM="frame:/path/prefix" writes the IIgs RAM at that frame
+		 * to prefix.fast (banks 00..) and prefix.slow (banks E0/E1) */
+		const char *dr = getenv("EMUBUDDY_DUMPRAM");
+		int	df, dn = 0;
+		char	dp[900];
+
+		if(dr && sscanf(dr, "%d:%899s%n", &df, dp, &dn) >= 2 && df == frames) {
+			extern byte *g_memory_ptr, *g_slow_memory_ptr;
+			extern word32 g_mem_size_total;
+			char	fn[1000];
+			FILE	*f;
+
+			snprintf(fn, sizeof(fn), "%s.fast", dp);
+			if((f = fopen(fn, "wb"))) {
+				fwrite(g_memory_ptr, 1, g_mem_size_total, f);
+				fclose(f);
+			}
+			snprintf(fn, sizeof(fn), "%s.slow", dp);
+			if((f = fopen(fn, "wb"))) {
+				fwrite(g_slow_memory_ptr, 1, 0x20000, f);
+				fclose(f);
+			}
+			printf("RAM dumped to %s.fast/.slow\n", dp);
+		}
+	}
 	sdl_dev_mouse(win, frames);
 	{	/* EMUBUDDY_CHARS="frame:Scancode:text;..." key down + the text the host
 		 * keyboard made for it (to test other keyboard layouts), then key up */
