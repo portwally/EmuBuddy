@@ -602,7 +602,7 @@ ui_text_width(const char *s)
 {
 	int	w = 0;
 
-	if(!g_atlas) {
+	if(!g_atlas || !s) {
 		return 0;
 	}
 	while(*s) {

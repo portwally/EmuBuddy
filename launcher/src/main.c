@@ -1512,15 +1512,15 @@ static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
 	{ "Duplicate Profile", C_DUP, NULL, 0 },
 	{ "Delete Profile...", C_DEL, NULL, 0 },
-	{ NULL, 0, NULL, UI_MI_SEP },
+	{ "", 0, NULL, UI_MI_SEP },
 	{ "Show Profiles Folder", C_FOLDER, NULL, 0 },
-	{ NULL, 0, NULL, UI_MI_SEP },
+	{ "", 0, NULL, UI_MI_SEP },
 	{ "Quit", C_QUIT, "Cmd-Q", 0 },
 };
 static const UiMenuItem m_prof[] = {
 	{ "Play", C_PLAY, "Return", 0 },
 	{ "Edit...", C_EDIT, "Cmd-E", 0 },
-	{ NULL, 0, NULL, UI_MI_SEP },
+	{ "", 0, NULL, UI_MI_SEP },
 	{ "Library...", C_LIB, "Cmd-L", 0 },
 };
 static const UiMenuItem m_help[] = {
@@ -1682,6 +1682,24 @@ window(void)
 					continue;
 				}
 			}
+			if(e.type == SDL_EVENT_KEY_DOWN && !g_focus && !ui_is_modal() &&
+					(e.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL))) {
+				SDL_Keycode k = e.key.key;
+
+				if(k == SDLK_N) {
+					app_command(C_NEW);
+					continue;
+				} else if(k == SDLK_E) {
+					app_command(C_EDIT);
+					continue;
+				} else if(k == SDLK_L) {
+					app_command(C_LIB);
+					continue;
+				} else if(k == SDLK_Q) {
+					g_running = 0;
+					continue;
+				}
+			}
 			if(e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
 				focus_clear();
 			}
@@ -1776,6 +1794,13 @@ window(void)
 			if(frame == 3 && getenv("LAUNCHER_SKIN") && skin_find(getenv("LAUNCHER_SKIN")) >= 0) {
 				g_skin = skin_find(getenv("LAUNCHER_SKIN"));
 				skin_apply(g_skin);
+			}
+			if(frame == 4 && getenv("LAUNCHER_RESIZE")) {		/* test aid: WxH */
+				int rw = 0, rh = 0;
+
+				if(sscanf(getenv("LAUNCHER_RESIZE"), "%dx%d", &rw, &rh) == 2) {
+					SDL_SetWindowSize(g_win, rw, rh);
+				}
 			}
 			if(frame == 5 && getenv("LAUNCHER_ABOUT")) {
 				about_open();
