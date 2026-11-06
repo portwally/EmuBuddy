@@ -1449,7 +1449,7 @@ sdl_apply_cli(void)
 		ui_insert_auto(emubuddy_cli_later(i));
 	}
 	if(g_config_session_only) {
-		ui_message("This run only (not saved)");
+		ui_message("This run only");
 	}
 }
 

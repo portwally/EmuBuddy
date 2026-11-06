@@ -28,6 +28,7 @@ extern int	g_scanline_simulator;
 extern int	g_ui_pause;
 extern int	g_rom_version;
 void		do_reset(void);
+void		load_roms_init_memory(void);
 void		cfg_file_update_rom(const char *str);
 void		cfg_set_config_panel(int panel);
 extern int	g_config_control_panel;
@@ -46,7 +47,7 @@ void		sdl_request_screenshot(void);
 enum {
 	CMD_OPEN_DISK = 1, CMD_QUIT, CMD_CHOOSE_ROM, CMD_DRIVES, CMD_EJECT_ALL,
 	CMD_SHARE, CMD_BROWSER,
-	CMD_RESET = 10, CMD_PAUSE, CMD_SLOTS, CMD_PRINTER,
+	CMD_RESET = 10, CMD_PAUSE, CMD_SLOTS, CMD_PRINTER, CMD_HARD_RESET,
 	CMD_SPEED_1 = 20, CMD_SPEED_28, CMD_ZIP_8, CMD_ZIP_16, CMD_ZIP_32,
 	CMD_ZIP_64, CMD_ZIP_128, CMD_UNLIMITED,
 	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT, CMD_CORE_STATUS,
@@ -76,7 +77,8 @@ static const UiMenuItem file_items[] = {
 	{ "Quit EmuBuddy", CMD_QUIT, NULL, 0 },
 };
 static const UiMenuItem machine_items[] = {
-	{ "Reset", CMD_RESET, "Ctrl-F12", 0 },
+	{ "Soft Reset", CMD_RESET, "Ctrl-F12", 0 },
+	{ "Hard Reset", CMD_HARD_RESET, NULL, 0 },
 	{ "Pause", CMD_PAUSE, "F3", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Slots...", CMD_SLOTS, "F4", 0 },
@@ -549,6 +551,10 @@ app_command(int id)
 		SDL_PushEvent(&q);
 		break; }
 	case CMD_RESET: do_reset(); break;
+	case CMD_HARD_RESET:
+		load_roms_init_memory();	/* reload ROM, wipe RAM */
+		do_reset();			/* and boot from the startup disk */
+		break;
 	case CMD_PAUSE: g_ui_pause = !g_ui_pause; break;
 	case CMD_SPEED_1: set_limit(1, 0); break;
 	case CMD_SPEED_28: set_limit(2, 0); break;

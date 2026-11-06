@@ -40,7 +40,7 @@ extern int g_adb_swap_command_option;
 extern int g_limit_speed;
 extern int g_zip_speed_mhz;
 extern int g_force_depth;
-int g_serial_cfg[2] = { 0, 1 };		// Slot 1=0=Real serial (printer?)
+int g_serial_cfg[2] = { 5, 1 };		// EmuBuddy: slot 1 = 5 = PostScript printer
 					// Slot 2=1=Virt Modem
 int g_serial_mask[2] = { 0, 0 };
 char *g_serial_remote_ip[2] = { "", "" };	// cfg_init_menus will malloc()
@@ -166,10 +166,10 @@ extern Cfg_menu g_cfg_sdl_video_menu[];
  * position use KEGS's existing g_mainwin_width/height/xpos/ypos.) */
 /* Which emulated cards are plugged in (EmuBuddy "Slots" window). They live in
  * the main menu table so they are saved in config.kegs. */
-int	g_slot4_mockingboard = 1;	/* slot 4: 1 Mockingboard, 0 empty */
+int	g_slot4_mockingboard = 0;	/* slot 4: 1 Mockingboard, 0 empty */
 int	g_window_scale = 1;		/* EmuBuddy window size: 1x..4x */
 int	g_slot7_scsi = 1;		/* slot 7: 1 SCSI card (7 hard drives), 0 empty */
-int	g_uthernet2_slot = 0;		/* slot of the Uthernet II card, 0 = none */
+int	g_uthernet2_slot = 4;		/* slot of the Uthernet II card, 0 = none */
 
 int	g_fullscreen = 0;	/* fullscreen state; applied live, F11 also toggles it */
 int	g_borderless = 0;	/* no window title bar / border */
