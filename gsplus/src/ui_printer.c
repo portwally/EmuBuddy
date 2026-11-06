@@ -108,6 +108,68 @@ printer_page_done_rgb(const unsigned char *rgb, int w, int h, int dpi)
 	}
 }
 
+/* ---- "Ghostscript needed" dialog ---- */
+
+int	printer_ps_retry(void);
+void	printer_ps_cancel_waiting(void);
+
+static UiWindow	g_gs_win;
+static int	g_gs_tried;
+
+static void
+gs_draw(UiWindow *win, int cx, int cy)
+{
+	const char	*plat = SDL_GetPlatform(), *how;
+	int		by = win->h - UI_TITLE_H - 38;
+
+	if(!strcmp(plat, "macOS")) {
+		how = "In Terminal:  brew install ghostscript";
+	} else if(!strcmp(plat, "Windows")) {
+		how = "Run the installer from ghostscript.com";
+	} else {
+		how = "In a terminal: sudo apt install ghostscript";
+	}
+	ui_draw_text(cx + 16, cy + 14, "PostScript printing needs Ghostscript.", UI_BLACK);
+	ui_draw_text(cx + 16, cy + 34, "It is free. Install it, then press", UI_BLACK);
+	ui_draw_text(cx + 16, cy + 52, "Try Again. The print job is kept.", UI_BLACK);
+	ui_draw_text(cx + 16, cy + 82, how, UI_BLACK);
+	if(g_gs_tried) {
+		ui_draw_text(cx + 16, cy + 108, "Not found yet.", UI_BAD);
+	}
+	if(ui_button(win, cx, cy, 12, by, 120, 26, "Download Page", 1)) {
+		SDL_OpenURL("https://ghostscript.com/releases/gsdnld.html");
+	}
+	if(ui_button(win, cx, cy, 142, by, 100, 26, "Try Again", 1)) {
+		if(printer_ps_retry()) {
+			ui_window_close(win);
+			ui_message("Ghostscript found - printing");
+		} else {
+			g_gs_tried = 1;
+		}
+	}
+	if(ui_button(win, cx, cy, win->w - 2 - 12 - 90, by, 90, 26, "Cancel", 1)) {
+		printer_ps_cancel_waiting();
+		ui_window_close(win);
+	}
+}
+
+void
+ui_printer_need_gs(void)
+{
+	g_gs_tried = 0;
+	if(g_gs_win.open) {
+		return;
+	}
+	snprintf(g_gs_win.title, sizeof(g_gs_win.title), "Ghostscript Needed");
+	g_gs_win.w = 360;
+	g_gs_win.h = 200;
+	g_gs_win.closable = 0;
+	g_gs_win.modal = 0;
+	g_gs_win.draw = gs_draw;
+	ui_window_center(&g_gs_win);
+	ui_window_open(&g_gs_win);
+}
+
 static void
 clear_pages(void)
 {

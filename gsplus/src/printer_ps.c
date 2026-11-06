@@ -21,6 +21,7 @@ extern Scc	g_scc[2];
 extern word32	g_vbl_count;
 
 void	printer_page_done_rgb(const unsigned char *rgb, int w, int h, int dpi);
+void	ui_printer_need_gs(void);	/* ui_printer.c: show install help */
 
 #define PS_DPI		144
 #define PS_IDLE_VBL	75		/* 1.25 s without data ends a job */
@@ -37,7 +38,7 @@ static unsigned char	g_reply[4096];	/* answers waiting to be read */
 static int		g_reply_len, g_reply_pos;
 
 static char		*g_gs;		/* path of the gs program */
-static int		g_gs_searched, g_gs_warned;
+static int		g_gs_searched, g_blocked;
 static char		*g_tmp;		/* scratch folder */
 
 typedef struct {
@@ -85,6 +86,9 @@ find_gs(void)
 
 	g_gs_searched = 1;
 	env = getenv("EMUBUDDY_GS");
+	if(env && !strcmp(env, "none")) {
+		return;			/* test: pretend gs is not installed */
+	}
 	if(env && is_file(env)) {
 		g_gs = strdup(env);
 		return;
@@ -234,22 +238,19 @@ start_next(void)
 	if(!g_gs_searched) {
 		find_gs();
 	}
+	if(!g_gs) {
+		/* keep the jobs until Ghostscript is installed (Try Again) */
+		if(!g_blocked) {
+			g_blocked = 1;
+			ui_printer_need_gs();
+		}
+		return;
+	}
 	g_cur = g_queue[0];
 	for(i = 1; i < g_nqueue; i++) {
 		g_queue[i - 1] = g_queue[i];
 	}
 	g_nqueue--;
-	if(!g_gs) {
-		if(!g_gs_warned) {
-			g_gs_warned = 1;
-			ui_message("PostScript printing needs Ghostscript "
-				"(ghostscript.com, or: brew install ghostscript)");
-		}
-		if(g_cur.own) {
-			SDL_RemovePath(g_cur.path);
-		}
-		return;
-	}
 	snprintf(out, sizeof(out), "-sOutputFile=%s/page-%%03d.ppm", tmp_dir());
 	snprintf(res, sizeof(res), "-r%d", PS_DPI);
 	args[n++] = g_gs;
@@ -471,7 +472,7 @@ printer_ps_vbl(void)
 	if(g_len && g_vbl_count - g_last_vbl >= PS_IDLE_VBL) {
 		finish_job();
 	}
-	if(g_proc || g_nqueue) {
+	if((g_proc || g_nqueue) && !g_blocked) {
 		poll_gs();
 	}
 }
@@ -522,4 +523,32 @@ printer_ps_save_pdf(const char *pdf_path)
 	SDL_WaitProcess(proc, true, &code);
 	SDL_DestroyProcess(proc);
 	return code == 0 ? 0 : -1;
+}
+
+/* "Try Again" in the Ghostscript dialog: look for gs once more. Returns 1 if
+ * it was found; the waiting jobs then print. */
+int
+printer_ps_retry(void)
+{
+	find_gs();
+	if(!g_gs) {
+		return 0;
+	}
+	g_blocked = 0;
+	return 1;
+}
+
+/* "Cancel" in the dialog: drop the waiting jobs. */
+void
+printer_ps_cancel_waiting(void)
+{
+	int	i;
+
+	for(i = 0; i < g_nqueue; i++) {
+		if(g_queue[i].own && !getenv("EMUBUDDY_PSDIR")) {
+			SDL_RemovePath(g_queue[i].path);
+		}
+	}
+	g_nqueue = 0;
+	g_blocked = 0;
 }

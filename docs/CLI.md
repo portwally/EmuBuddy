@@ -85,3 +85,5 @@ Each job is converted by Ghostscript (`gs`, found in PATH or the usual install
 folders; `EMUBUDDY_GS=<path>` overrides) and the pages appear in the Printer
 window like ImageWriter pages. Ghostscript is not bundled.
 Save PDF writes a vector PDF (sharp text, a few KB per page) when all pages came from PostScript jobs; ImageWriter pages are saved as bitmaps.
+
+If Ghostscript is missing, EmuBuddy keeps the print job and shows a "Ghostscript Needed" window (Download Page / Try Again / Cancel). Install: macOS `brew install ghostscript`; Windows installer from ghostscript.com; Linux `sudo apt install ghostscript` (or your package manager). `EMUBUDDY_GS=none` pretends it is missing (testing).
