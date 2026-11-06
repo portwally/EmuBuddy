@@ -258,7 +258,7 @@ cli(int argc, char **argv)
 #define LH	640
 
 static void lib_open(int kind, char *target, int cap);
-static int		g_skin;
+static int		g_skin, g_wscale = 1, g_full;
 static SDL_Window	*g_win;
 static SDL_Renderer	*g_ren;
 static int		g_sel, g_top, g_running = 1;
@@ -874,6 +874,58 @@ skin_switch(int i)
 
 /* ---- settings and covers ---- */
 
+/* ---- window size: 1x, 2x, 3x of the 800x640 design, or full screen ---- */
+
+static int
+size_fits(int n)
+{
+	SDL_Rect	r;
+
+	if(n <= 1) {
+		return 1;
+	}
+	if(!SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(g_win), &r)) {
+		return 1;
+	}
+	return LW * n <= r.w && LH * n + 30 <= r.h;
+}
+
+static void
+settings_save(void);
+
+static void
+apply_window_mode(void)
+{
+	if(g_full) {
+		SDL_SetWindowFullscreen(g_win, true);
+	} else {
+		SDL_SetWindowFullscreen(g_win, false);
+		SDL_SetWindowSize(g_win, LW * g_wscale, LH * g_wscale);
+		SDL_SetWindowPosition(g_win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+	}
+}
+
+static void
+set_window_size(int n)
+{
+	if(!size_fits(n)) {
+		ui_message("%dx does not fit this screen", n);
+		return;
+	}
+	g_wscale = n;
+	g_full = 0;
+	apply_window_mode();
+	settings_save();
+}
+
+static void
+toggle_fullscreen(void)
+{
+	g_full = !g_full;
+	apply_window_mode();
+	settings_save();
+}
+
 static void
 settings_load(void)
 {
@@ -886,6 +938,10 @@ settings_load(void)
 		line[strcspn(line, "\r\n")] = 0;
 		if(!strncmp(line, "skin = ", 7) && skin_find(line + 7) >= 0) {
 			g_skin = skin_find(line + 7);
+		} else if(!strncmp(line, "size = ", 7)) {
+			g_wscale = atoi(line + 7) >= 1 && atoi(line + 7) <= 3 ? atoi(line + 7) : 1;
+		} else if(!strncmp(line, "fullscreen = ", 13)) {
+			g_full = atoi(line + 13) != 0;
 		}
 	}
 	if(f) {
@@ -905,6 +961,7 @@ settings_save(void)
 	f = fopen(path, "w");
 	if(f) {
 		fprintf(f, "skin = %s\n", skin_get(g_skin)->name);
+		fprintf(f, "size = %d\nfullscreen = %d\n", g_wscale, g_full);
 		fclose(f);
 	}
 }
@@ -1734,7 +1791,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_SIZE1 = 80, C_SIZE2, C_SIZE3, C_FULL, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -1751,6 +1808,13 @@ static const UiMenuItem m_edit[] = {
 	{ "Paste", C_PASTE, "Cmd-V", 0 },
 	{ "Select All", C_SELALL, "Cmd-A", 0 },
 };
+static const UiMenuItem m_view[] = {
+	{ "Window Size 1x", C_SIZE1, "Cmd-1", 0 },
+	{ "Window Size 2x", C_SIZE2, "Cmd-2", 0 },
+	{ "Window Size 3x", C_SIZE3, "Cmd-3", 0 },
+	{ "", 0, NULL, UI_MI_SEP },
+	{ "Full Screen", C_FULL, "F11", 0 },
+};
 static const UiMenuItem m_prof[] = {
 	{ "Play", C_PLAY, "Return", 0 },
 	{ "Edit...", C_EDIT, "Cmd-E", 0 },
@@ -1762,10 +1826,10 @@ static const UiMenuItem m_help[] = {
 };
 static UiMenuItem m_skin[16];
 static const UiMenu g_menus[] = {
-	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "Skin", m_skin, 0 },
-	{ "Help", m_help, 1 },
+	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "View", m_view, 5 },
+	{ "Skin", m_skin, 0 }, { "Help", m_help, 1 },
 };
-static UiMenu g_menus_rw[5];
+static UiMenu g_menus_rw[6];
 
 static void
 app_command(int id)
@@ -1777,6 +1841,8 @@ app_command(int id)
 		return;
 	}
 	switch(id) {
+	case C_SIZE1: case C_SIZE2: case C_SIZE3: set_window_size(id - C_SIZE1 + 1); break;
+	case C_FULL: toggle_fullscreen(); break;
 	case C_CUT: clip_copy(1); break;
 	case C_COPY: clip_copy(0); break;
 	case C_PASTE: clip_paste(); break;
@@ -1799,6 +1865,14 @@ app_command(int id)
 static int
 app_state(int id)
 {
+	if(id >= C_SIZE1 && id <= C_SIZE3) {
+		int n = id - C_SIZE1 + 1;
+
+		return (g_wscale == n && !g_full ? UI_MI_CHECKED : 0) | (size_fits(n) ? 0 : UI_MI_DISABLED);
+	}
+	if(id == C_FULL) {
+		return g_full ? UI_MI_CHECKED : 0;
+	}
 	return (id >= C_SKIN0 && id - C_SKIN0 == g_skin) ? UI_MI_CHECKED : 0;
 }
 
@@ -1829,7 +1903,7 @@ app_tick(void)
 	}
 }
 
-static UiApp g_app = { g_menus_rw, 5, app_state, app_command, app_status, app_tick,
+static UiApp g_app = { g_menus_rw, 6, app_state, app_command, app_status, app_tick,
 	NULL, NULL, NULL };
 
 static void
@@ -1852,7 +1926,7 @@ window(void)
 		m_skin[i].id = C_SKIN0 + i;
 	}
 	memcpy(g_menus_rw, g_menus, sizeof(g_menus));
-	g_menus_rw[3].n_items = skin_count();
+	g_menus_rw[4].n_items = skin_count();
 	{
 		SDL_Surface *ic = SDL_CreateSurfaceFrom(launcher_icon_size, launcher_icon_size,
 				SDL_PIXELFORMAT_RGBA32, (void *)launcher_icon_rgba, launcher_icon_size * 4);
@@ -1864,6 +1938,12 @@ window(void)
 	}
 	ui_init(g_win, g_ren, &g_app);
 	skin_switch(g_skin);
+	if(g_full || g_wscale > 1) {
+		if(!g_full && !size_fits(g_wscale)) {
+			g_wscale = 1;
+		}
+		apply_window_mode();
+	}
 	snprintf(g_lib.title, sizeof(g_lib.title), "Profiles");
 	g_lib.x = 10;
 	g_lib.y = UI_BAR_H + 10;
@@ -1932,7 +2012,10 @@ window(void)
 					(e.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL))) {
 				SDL_Keycode k = e.key.key;
 
-				if(k == SDLK_N) {
+				if(k == SDLK_1 || k == SDLK_2 || k == SDLK_3) {
+					app_command(C_SIZE1 + (int)(k - SDLK_1));
+					continue;
+				} else if(k == SDLK_N) {
 					app_command(C_NEW);
 					continue;
 				} else if(k == SDLK_E) {
@@ -1945,6 +2028,10 @@ window(void)
 					g_running = 0;
 					continue;
 				}
+			}
+			if(e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_F11 && !e.key.repeat) {
+				toggle_fullscreen();
+				continue;
 			}
 			if(e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
 				float lx, ly;

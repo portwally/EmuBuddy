@@ -216,6 +216,7 @@ apps, one for your own projects and one for games. A profile holds the whole set
 the disks in the drives, the shared folder and the window. **Play** starts EmuBuddy with the matching command line
 (see [Command line](#command-line)); the launcher shows that line, so you can use it in your own scripts.
 
+- **View > Window Size** 1x, 2x, 3x (sizes that do not fit the screen are greyed out) and **Full Screen** (F11); the choice is kept.
 - A **library** of your ROMs and disk images: you name the folders, the launcher lists what it finds with disk type
   and ProDOS volume name, shows which profile uses each file, and can check for copies and damaged images. A profile
   can use a **private copy** of a disk so the original stays as it is.
