@@ -808,7 +808,9 @@ skin_switch(int i)
 		ui_font_load_file(NULL, 16);
 		return;
 	}
-	if(dir && dir[0]) {
+	if(file[0] == '/') {			/* a system font */
+		snprintf(path, sizeof(path), "%s", file);
+	} else if(dir && dir[0]) {
 		snprintf(path, sizeof(path), "%s/%s", dir, file);
 	} else {
 		snprintf(path, sizeof(path), "%sfonts/%s", base ? base : "", file);

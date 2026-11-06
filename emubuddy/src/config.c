@@ -1279,6 +1279,52 @@ cfg_load_charrom()
 	}
 }
 
+/* A ROM in EmuBuddy's own data folder (macOS: ~/Library/Application Support/
+ * EmuBuddy, Windows: %APPDATA%\\EmuBuddy, Linux: ~/.local/share/EmuBuddy) is
+ * found whatever config file is used, so profiles from the Launcher (each has
+ * its own config file) start without choosing the ROM again. */
+static int
+cfg_find_rom_in_data_folder(char *out, int outsize)
+{
+	static const char *names[] = { "ROM03", "ROM.03", "ROM", "ROM01", "ROM.01", NULL };
+	char		dir[1000];
+	const char	*home = getenv("HOME");
+	struct stat	sb;
+	int		i;
+
+#ifdef _WIN32
+	const char	*app = getenv("APPDATA");
+
+	if(!app) {
+		return 0;
+	}
+	snprintf(dir, sizeof(dir), "%s\\EmuBuddy", app);
+#elif defined(__APPLE__)
+	if(!home) {
+		return 0;
+	}
+	snprintf(dir, sizeof(dir), "%s/Library/Application Support/EmuBuddy", home);
+#else
+	const char	*xdg = getenv("XDG_DATA_HOME");
+
+	if(xdg && xdg[0]) {
+		snprintf(dir, sizeof(dir), "%s/EmuBuddy", xdg);
+	} else if(home) {
+		snprintf(dir, sizeof(dir), "%s/.local/share/EmuBuddy", home);
+	} else {
+		return 0;
+	}
+#endif
+	(void)home;
+	for(i = 0; names[i]; i++) {
+		snprintf(out, (size_t)outsize, "%s/%s", dir, names[i]);
+		if(stat(out, &sb) == 0 && S_ISREG(sb.st_mode)) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
 void
 config_load_roms()
 {
@@ -1294,6 +1340,9 @@ config_load_roms()
 	g_kegs_rom_names[0] = g_cfg_rom_path;
 	ret = config_setup_kegs_file(&g_cfg_tmp_path[0], CFG_PATH_MAX,
 							&g_kegs_rom_names[0]);
+	if(ret == 0) {
+		ret = cfg_find_rom_in_data_folder(&g_cfg_tmp_path[0], CFG_PATH_MAX);
+	}
 	if(ret == 0) {
 		// Just get out, let config interface select ROM
 		g_config_control_panel = 1;

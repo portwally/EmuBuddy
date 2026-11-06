@@ -220,7 +220,7 @@ the disks in the drives, the shared folder and the window. **Play** starts EmuBu
   and ProDOS volume name, shows which profile uses each file, and can check for copies and damaged images. A profile
   can use a **private copy** of a disk so the original stays as it is.
 - **Skins:** Retro, Modern, Magazine, MacOS 1, MacOS 7, Terminal Amber, Apple II, Commodore 64, ZX Spectrum, Amstrad
-  CPC, NeXT, BeOS, Retro Neon, Shelf and Cover Flow. The computer skins use the matching font (Apple II: PR Number 3,
+  CPC, NeXT, BeOS, Retro Neon, Shelf and Cover Flow. The computer skins use the matching font (Apple II: Print Char 21, MacOS 1 and 7: Geneva from the Mac itself,
   Commodore 64: Pet Me 64, ZX Spectrum: ZX Spectrum-7, Amstrad CPC: Amstrad CPC464). Every profile has a cover, your own
   picture or a generated one.
 

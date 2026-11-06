@@ -75,12 +75,17 @@ skin_font(int i, int *ppem)
 
 	*ppem = 16;
 	if(!strcmp(n, "Apple II")) {
-		return "PRNumber3.ttf";
-	} else if(!strcmp(n, "Terminal Amber")) {
 		*ppem = 13;
 		return "PrintChar21.ttf";
+	} else if(!strcmp(n, "Terminal Amber")) {
+		return "PRNumber3.ttf";
 	} else if(!strcmp(n, "Commodore 64") || !strcmp(n, "Retro Neon")) {
 		return "PetMe642Y.ttf";
+	} else if(!strcmp(n, "MacOS 1") || !strcmp(n, "MacOS 7")) {
+		/* Apple's Geneva, from the Mac itself (not shipped with the launcher);
+		 * elsewhere the built-in font is used. */
+		*ppem = 12;
+		return "/System/Library/Fonts/Geneva.ttf";
 	} else if(!strcmp(n, "ZX Spectrum")) {
 		*ppem = 12;
 		return "zx_spectrum-7.ttf";
