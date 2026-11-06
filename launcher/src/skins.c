@@ -24,6 +24,12 @@ static const UiTheme g_skins[] = {
 		0x707070, UI_TITLE_FLAT, 0 },
 	{ "BeOS", 0xE8E8E8, K, 0x666666, 0xB0B0B0, 0x007700, 0xCC6600, 0xCC0000, 0xFFCB00, K,
 		0x336699, UI_TITLE_FLAT, 0 },
+	{ "Retro Neon", 0x120B2E, 0x00F0FF, 0x8A6FD6, 0x3A1F7A, 0x39FF14, 0xFFD300, 0xFF3860,
+		0xFF2BD6, W, 0x07031A, UI_TITLE_FLAT, 0 },
+	{ "Shelf", 0x2B1D12, 0xF2E4C9, 0xA58B66, 0x5A3F26, 0x7CB342, 0xE0A030, 0xE05050,
+		0xC8872B, 0x2B1D12, 0x1A110A, UI_TITLE_FLAT, 0 },
+	{ "Cover Flow", 0x101012, 0xF0F0F0, 0x9A9AA0, 0x2A2A30, 0x4CC38A, 0xF0A03C, 0xF06464,
+		0x2E5BD8, W, K, UI_TITLE_FLAT, 0 },
 };
 #define NSKINS ((int)(sizeof(g_skins) / sizeof(g_skins[0])))
 
@@ -37,6 +43,21 @@ const UiTheme *
 skin_get(int i)
 {
 	return &g_skins[i >= 0 && i < NSKINS ? i : 0];
+}
+
+int
+skin_layout(int i)
+{
+	const char *n = skin_get(i)->name;
+
+	return !strcmp(n, "Shelf") ? SKIN_LAYOUT_SHELF : !strcmp(n, "Cover Flow") ? SKIN_LAYOUT_FLOW :
+			SKIN_LAYOUT_LIST;
+}
+
+int
+skin_desktop(int i)
+{
+	return !strcmp(skin_get(i)->name, "Retro Neon") ? SKIN_DESK_NEON : SKIN_DESK_PLAIN;
 }
 
 int

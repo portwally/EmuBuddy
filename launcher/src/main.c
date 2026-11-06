@@ -807,7 +807,172 @@ draw_cover(const Profile *p, int x, int y, int w, int h)
 	}
 	ui_fill(x, y, w, h, g_ui_theme.accent);
 	ui_frame(x, y, w, h, UI_BLACK);
-	cover_icon(p, x + (w - 64) / 2, y + (h - 64) / 2);
+	if(w >= 110) {
+		cover_icon(p, x + (w - 64) / 2, y + (h - 64) / 2);
+	} else {
+		char	ch[2] = { profile_name(p)[0], 0 };
+
+		ui_draw_text(x + (w - ui_text_width(ch)) / 2, y + h / 2 - 8, ch, g_ui_theme.accent_fg);
+	}
+}
+
+/* ---- the other layouts: Shelf (a grid of covers on boards) and Cover Flow ---- */
+
+static int	g_gtop;			/* first visible shelf row */
+static Uint64	g_last_click;
+static int	g_last_idx = -1;
+#define SHELF_COLS	4
+#define SHELF_ROWS	2
+
+/* One click selects, a second click on the same one soon after plays. */
+static void
+pick_profile(int i)
+{
+	Uint64 now = SDL_GetTicks();
+
+	if(i == g_last_idx && now - g_last_click < 450) {
+		lib_play();
+	}
+	g_sel = i;
+	g_last_idx = i;
+	g_last_click = now;
+}
+
+static void
+compact_details(int cx, int cy, int y, const Profile *p)
+{
+	char	line[400], buf[6000], err[200], full[7000], *a[PROFILE_MAX_ARGS], part[200];
+	int	n, k = 0, len, w;
+	static const char *keys[] = { "ramsize", "mhz", "sl1", "sl2", "sl3", "sl4", "sl7", "scale", NULL };
+
+	ui_draw_text(cx + 14, cy + y, profile_name(p), UI_BLACK);
+	ui_draw_text(cx + 14 + ui_text_width(profile_name(p)) + 14, cy + y, profile_get(p, "description"), UI_GREY);
+	y += 22;
+	line[0] = 0;
+	for(int i = 0; keys[i]; i++) {
+		const char *v = profile_get(p, keys[i]);
+
+		if(v[0] && strcmp(v, "none")) {
+			SDL_strlcat(line, keys[i], sizeof(line));
+			SDL_strlcat(line, " ", sizeof(line));
+			SDL_strlcat(line, v, sizeof(line));
+			SDL_strlcat(line, "   ", sizeof(line));
+		}
+	}
+	ui_draw_text(cx + 14, cy + y, line, UI_BLACK);
+	y += 22;
+	n = build(p, buf, sizeof(buf), a, err, sizeof(err), 0);
+	if(n <= 0) {
+		ui_draw_text(cx + 14, cy + y, err, UI_BAD);
+		return;
+	}
+	profile_cmdline(a, n, full, sizeof(full));
+	len = (int)strlen(full);
+	while(k < len && y < 480) {
+		int m = 0;
+
+		while(k + m < len && m < 190) {
+			part[m] = full[k + m];
+			part[m + 1] = 0;
+			if(ui_text_width(part) > 750) {
+				break;
+			}
+			m++;
+		}
+		w = m ? m : 1;
+		SDL_strlcpy(part, full + k, (size_t)w + 1);
+		ui_draw_text(cx + 14, cy + y, part, UI_GREY);
+		k += w;
+		y += 16;
+	}
+}
+
+static void
+draw_shelf(UiWindow *win, int cx, int cy)
+{
+	int	rows = (g_nprof + SHELF_COLS - 1) / SHELF_COLS, cw = 184, ch = 158, i;
+
+	if(g_sel / SHELF_COLS < g_gtop) {
+		g_gtop = g_sel / SHELF_COLS;
+	}
+	if(g_sel / SHELF_COLS >= g_gtop + SHELF_ROWS) {
+		g_gtop = g_sel / SHELF_COLS - SHELF_ROWS + 1;
+	}
+	ui_fill(cx + 8, cy + 8, SHELF_COLS * cw + 4, SHELF_ROWS * ch + 4, g_ui_theme.line);
+	for(i = 0; i < SHELF_ROWS * SHELF_COLS; i++) {
+		int idx = g_gtop * SHELF_COLS + i, col = i % SHELF_COLS, row = i / SHELF_COLS;
+		int x = 10 + col * cw, y = 10 + row * ch;
+
+		if(col == 0) {			/* the board of this row */
+			ui_fill(cx + 8, cy + y + 108, SHELF_COLS * cw + 4, 8, g_ui_theme.dim);
+			ui_fill(cx + 8, cy + y + 116, SHELF_COLS * cw + 4, 3, g_ui_theme.bg);
+		}
+		if(idx >= g_nprof) {
+			continue;
+		}
+		if(idx == g_sel) {
+			ui_fill(cx + x + 2, cy + y + 2, cw - 4, 106, g_ui_theme.bg);
+			ui_frame(cx + x + 2, cy + y + 2, cw - 4, ch - 6, UI_BLACK);
+			ui_frame(cx + x + 3, cy + y + 3, cw - 6, ch - 8, UI_BLACK);
+		}
+		draw_cover(&g_prof[idx], cx + x + (cw - 120) / 2, cy + y + 12, 120, 90);
+		{
+			const char *nm = profile_name(&g_prof[idx]);
+			int tw = ui_text_width(nm);
+
+			ui_draw_text(cx + x + (cw - tw) / 2, cy + y + 126, nm, idx == g_sel ? UI_BLACK : UI_GREY);
+		}
+		if(ui_hit(win, cx, cy, x, y, cw, ch - 4)) {
+			pick_profile(idx);
+		}
+	}
+	if(rows > SHELF_ROWS) {
+		ui_vscroll(win, cx, cy, SHELF_COLS * cw + 16, 10, SHELF_ROWS * ch, rows, SHELF_ROWS, &g_gtop);
+	}
+	ui_hline(cx + 10, cy + SHELF_ROWS * ch + 20, 760, UI_LGREY);
+	if(g_nprof) {
+		compact_details(cx, cy, SHELF_ROWS * ch + 30, &g_prof[g_sel]);
+	}
+}
+
+static void
+draw_flow(UiWindow *win, int cx, int cy)
+{
+	int	centre = 389, base = 130, d;
+
+	for(d = 3; d >= 0; d--) {
+		for(int side = -1; side <= 1; side += 2) {
+			int idx = g_sel + side * d, w, h, x;
+
+			if(d == 0 && side == 1) {
+				continue;
+			}
+			if(idx < 0 || idx >= g_nprof) {
+				continue;
+			}
+			w = d == 0 ? 220 : 160 - (d - 1) * 38;
+			h = w * 3 / 4;
+			x = d == 0 ? centre : centre + side * (150 + (d - 1) * 80 + (d > 1 ? 20 : 0));
+			draw_cover(&g_prof[idx], cx + x - w / 2, cy + base - h / 2 - 10, w, h);
+			if(d > 0 && ui_hit(win, cx, cy, x - w / 2, base - h / 2 - 10, w, h)) {
+				g_sel = idx;
+			}
+			/* a dim "reflection" strip under every cover */
+			ui_fill(cx + x - w / 2, cy + base + h / 2 - 6, w, 3, g_ui_theme.line);
+		}
+	}
+	if(g_nprof) {
+		const char *nm = profile_name(&g_prof[g_sel]);
+		const char *ds = profile_get(&g_prof[g_sel], "description");
+
+		ui_draw_text(cx + centre - ui_text_width(nm) / 2, cy + 218, nm, UI_BLACK);
+		ui_draw_text(cx + centre - ui_text_width(ds) / 2, cy + 238, ds, UI_GREY);
+		if(ui_hit(win, cx, cy, centre - 110, base - 90, 220, 165)) {
+			pick_profile(g_sel);
+		}
+		ui_hline(cx + 10, cy + 266, 760, UI_LGREY);
+		compact_details(cx, cy, 278, &g_prof[g_sel]);
+	}
 }
 
 static void
@@ -822,6 +987,11 @@ lib_draw(UiWindow *win, int cx, int cy)
 		{ NULL, NULL } };
 	int	i, y = 10, r;
 
+	if(skin_layout(g_skin) == SKIN_LAYOUT_SHELF) {
+		draw_shelf(win, cx, cy);
+	} else if(skin_layout(g_skin) == SKIN_LAYOUT_FLOW) {
+		draw_flow(win, cx, cy);
+	} else {
 	for(i = 0; i < g_nprof && i < LH; i++) {
 		names[i] = profile_name(&g_prof[i]);
 	}
@@ -896,6 +1066,7 @@ lib_draw(UiWindow *win, int cx, int cy)
 		} else {
 			ui_draw_text(cx + 270, cy + y, err, UI_BAD);
 		}
+	}
 	}
 	if(ui_button(win, cx, cy, 10, 490, 70, 28, "New", 1)) {
 		new_profile();
@@ -1304,6 +1475,12 @@ static UiMenu g_menus_rw[4];
 static void
 app_command(int id)
 {
+	if(id >= C_SKIN0 && id < C_SKIN0 + skin_count()) {
+		g_skin = id - C_SKIN0;
+		skin_apply(g_skin);
+		settings_save();
+		return;
+	}
 	switch(id) {
 	case C_NEW: new_profile(); break;
 	case C_DUP: duplicate_profile(); break;
@@ -1313,12 +1490,7 @@ app_command(int id)
 	case C_PLAY: lib_play(); break;
 	case C_EDIT: if(g_nprof) { edit_open(&g_prof[g_sel], 0); } break;
 	case C_LIB: lib_open(LIB_DISK, NULL, 0); break;
-	case C_SKIN0 + 0: case C_SKIN0 + 1: case C_SKIN0 + 2: case C_SKIN0 + 3: case C_SKIN0 + 4:
-	case C_SKIN0 + 5: case C_SKIN0 + 6: case C_SKIN0 + 7: case C_SKIN0 + 8: case C_SKIN0 + 9:
-		g_skin = id - C_SKIN0;
-		skin_apply(g_skin);
-		settings_save();
-		break;
+
 	case C_ABOUT:
 		ui_message("EmuBuddy Launcher %s - 2026, Walter Tengler", LAUNCHER_VERSION_STR);
 		break;
@@ -1450,10 +1622,20 @@ window(void)
 			if(e.type == SDL_EVENT_KEY_DOWN && !g_focus && !ui_is_modal()) {
 				if(e.key.key == SDLK_RETURN) {
 					lib_play();
-				} else if(e.key.key == SDLK_DOWN && g_sel + 1 < g_nprof) {
-					g_sel++;
-				} else if(e.key.key == SDLK_UP && g_sel > 0) {
-					g_sel--;
+				} else {
+					int lay = skin_layout(g_skin), step = 0;
+
+					if(lay == SKIN_LAYOUT_LIST) {
+						step = e.key.key == SDLK_DOWN ? 1 : e.key.key == SDLK_UP ? -1 : 0;
+					} else if(lay == SKIN_LAYOUT_SHELF) {
+						step = e.key.key == SDLK_RIGHT ? 1 : e.key.key == SDLK_LEFT ? -1 :
+							e.key.key == SDLK_DOWN ? SHELF_COLS : e.key.key == SDLK_UP ? -SHELF_COLS : 0;
+					} else {
+						step = e.key.key == SDLK_RIGHT ? 1 : e.key.key == SDLK_LEFT ? -1 : 0;
+					}
+					if(step && g_sel + step >= 0 && g_sel + step < g_nprof) {
+						g_sel += step;
+					}
 				}
 			}
 		}
@@ -1462,6 +1644,32 @@ window(void)
 
 			SDL_SetRenderDrawColor(g_ren, (d >> 16) & 255, (d >> 8) & 255, d & 255, 255);
 			SDL_RenderClear(g_ren);
+			if(skin_desktop(g_skin) == SKIN_DESK_NEON) {
+				float hz = 270;				/* horizon */
+
+				SDL_SetRenderDrawColor(g_ren, 0, 240, 255, 255);
+				SDL_RenderLine(g_ren, 0, hz, LW, hz);
+				SDL_SetRenderDrawColor(g_ren, 255, 43, 214, 255);
+				for(int k = 1; k < 14; k++) {		/* horizontal lines, closer together up top */
+					float t = k / 14.0f, yy = hz + (LH - hz) * t * t;
+
+					SDL_RenderLine(g_ren, 0, yy, LW, yy);
+				}
+				for(int k = -12; k <= 12; k++) {	/* lines running to the vanishing point */
+					SDL_RenderLine(g_ren, LW / 2.0f + k * 8, hz, LW / 2.0f + k * 90.0f, LH);
+				}
+				/* a banded sun above the horizon */
+				for(int k = 0; k < 9; k++) {
+					float r = 70, yy = hz - 4 - k * 8, hw = SDL_sqrtf(SDL_max(0.0f, r * r - (r - k * 8 - 4) * (r - k * 8 - 4)));
+
+					if(k % 2 == 0 || k > 4) {
+						SDL_SetRenderDrawColor(g_ren, 255, 120 - k * 8, 40 + k * 14, 255);
+						SDL_FRect b = { LW / 2.0f - hw, yy - 6, hw * 2, 6 };
+
+						SDL_RenderFillRect(g_ren, &b);
+					}
+				}
+			}
 			if(g_ui_theme.checker) {
 				static SDL_Texture *chk;
 
