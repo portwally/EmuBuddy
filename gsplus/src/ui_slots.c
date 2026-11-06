@@ -14,6 +14,8 @@ extern int	g_slot7_scsi;
 extern int	g_uthernet2_slot;
 extern int	g_config_kegs_update_needed;
 void		cfg_file_update_ptr(char **strptr, const char *str, int need_update);
+void		scc_config_changed(int port, int cfg_changed, int remote_changed,
+						int serial_dev_changed);
 
 #define ROW_H	34
 
@@ -26,7 +28,7 @@ typedef struct {
 } SlotDef;
 
 static const SlotDef g_slots[7] = {
-	{ "Printer Port", { "Idle", "Virtual Modem", "ImageWriter" }, 3, 3, NULL },
+	{ "Printer Port", { "Idle", "Virtual Modem", "ImageWriter" }, 3, 7, NULL },
 	{ "Modem Port", { "Idle", "Virtual Modem", NULL }, 2, 3, NULL },
 	{ "Network", { "Empty", "Video Overlay", "Uthernet II" }, 3, 7, NULL },
 	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II" }, 3, 7, NULL },
@@ -44,7 +46,8 @@ static int
 slot_current(int i)
 {
 	switch(i) {
-	case 0: return g_serial_cfg[0] == 1 ? 1 : (g_serial_cfg[0] == 0 ? 0 : -1);
+	case 0: return g_serial_cfg[0] == 4 ? 2 : g_serial_cfg[0] == 1 ? 1 :
+						(g_serial_cfg[0] == 0 ? 0 : -1);
 	case 1: return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
 	case 2: return g_uthernet2_slot == 3 ? 2 : (g_voc_enable ? 1 : 0);
 	case 3: return g_uthernet2_slot == 4 ? 2 : (g_slot4_mockingboard ? 1 : 0);
@@ -83,7 +86,9 @@ apply(void)
 
 	for(p = 0; p < 2; p++) {
 		if(g_pend[p] != slot_current(p) && g_pend[p] >= 0) {
-			g_serial_cfg[p] = g_pend[p];
+			/* choice 2 = ImageWriter = serial mode 4 */
+			g_serial_cfg[p] = (g_pend[p] == 2) ? 4 : g_pend[p];
+			scc_config_changed(p, 1, 0, 0);	/* reopen in new mode */
 			if(g_pend[p] == 0) {
 				/* Idle: no real device either */
 				cfg_file_update_ptr(&g_serial_device[p], "", 1);

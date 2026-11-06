@@ -28,6 +28,11 @@ extern int g_irq_pending;
 /*	port 1 == channel B = slot 2 = c038/c03a */
 
 #include "scc.h"
+
+/* EmuBuddy virtual ImageWriter (printer_scc.c) */
+void scc_printer_open(int port);
+void scc_printer_empty_writebuf(dword64 dfcyc, int port);
+void scc_printer_fill_readbuf(dword64 dfcyc, int port, int space_left);
 #define SCC_R14_DPLL_SOURCE_BRG		0x100
 #define SCC_R14_DPLL_SOURCE_RTXC	0x200
 
@@ -371,6 +376,8 @@ scc_port_open(dword64 dfcyc, int port)
 #else
 		scc_serial_unix_open(port);
 #endif
+	} else if(cfg == 4) {		// EmuBuddy: virtual ImageWriter II
+		scc_printer_open(port);
 	} else if(cfg >= 1) {
 		scc_socket_open(dfcyc, port, cfg);
 	}
@@ -425,6 +432,9 @@ scc_get_serial_status(int get_status, int port)
 		snprintf(buf, 80, "Outgoing to %s:%d",
 			g_serial_remote_ip[port], g_serial_remote_port[port]);
 		str = buf;
+		break;
+	case 4:
+		str = "ImageWriter II printer";
 		break;
 	case 3:
 		snprintf(buf, 80, "Opened %d, sockfd:%d", 6501 + port,
@@ -510,6 +520,8 @@ scc_try_to_empty_writebuf(dword64 dfcyc, int port)
 #else
 		scc_serial_unix_empty_writebuf(port);
 #endif
+	} else if(cur_state == 4) {
+		scc_printer_empty_writebuf(dfcyc, port);
 	} else if(cur_state >= 1) {
 		scc_socket_empty_writebuf(dfcyc, port);
 	}
@@ -552,6 +564,8 @@ scc_try_fill_readbuf(dword64 dfcyc, int port)
 #else
 		scc_serial_unix_fill_readbuf(dfcyc, port, space_left);
 #endif
+	} else if(cur_state == 4) {
+		scc_printer_fill_readbuf(dfcyc, port, space_left);
 	} else if(cur_state >= 1) {
 		scc_socket_fill_readbuf(dfcyc, port, space_left);
 	}

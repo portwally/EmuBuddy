@@ -140,6 +140,9 @@ void	ui_file_browser_open(const char *title, void (*pick)(const char *path));
 
 /* ---- drives window and disk handling (ui_drives.c) ---- */
 void	ui_slots_toggle(void);
+void	ui_printer_toggle(void);
+int	ui_printer_is_open(void);
+SDL_Renderer *ui_renderer(void);
 int	ui_slots_is_open(void);
 void	ui_drives_init(void);
 void	ui_drives_toggle(void);

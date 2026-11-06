@@ -214,6 +214,12 @@ win_at(float px, float py)
 	return NULL;
 }
 
+SDL_Renderer *
+ui_renderer(void)
+{
+	return g_r;
+}
+
 int
 ui_is_modal(void)
 {

@@ -163,6 +163,8 @@ the F4 text menu. Work:
   step with the choice. Slot changes ask for a restart.
 
 ### Phase 4: Printer (S–M)
+**Status, working:** legacy GSport/GSplus `imagewriter.cpp` (GPL v2+) ported unchanged except the page output; small stand-ins (`iw_shim.h`) replace SDL 1.2 surfaces and FreeType, text is drawn as dots from the IIgs character set (`kegsfont.h`). Serial mode 4 = ImageWriter (Slots: slot 1 "ImageWriter"); idle pages eject after 3 s. Printer window (Machine > Printer, opens on the first page): preview, Save PDF to the Desktop (own PDF writer, RunLength compressed, ~40 KB/page), Print (lp / Windows opens the PDF), Open in the system viewer, Clear, Eject. Tested: Applesoft PR#1 output -> page -> PDF.
+**Open:** GS/OS graphics printing (ImageWriter driver bit images) not yet tested with a real print job; text fonts are the IIgs screen font, not the ImageWriter's own; no printer setting for paper size.
 - Port the ImageWriter II emulation from legacy GSplus/GSport (`imagewriter.cpp`,
   `scc_imagewriter.c`, `printer.cpp`, charmaps; GPL v2+). Attach it to the SCC
   printer port and as a slot 1 card.

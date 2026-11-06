@@ -201,6 +201,11 @@ if(SLIRP_FOUND)
     target_link_libraries(test_uthernet2 PRIVATE PkgConfig::SLIRP)
 endif()
 
+# Virtual ImageWriter II (C++, ported from GSport/GSplus legacy, GPL v2+)
+enable_language(CXX)
+set(EMUBUDDY_PRINTER_SOURCES imagewriter.cpp iw_font.c printer_scc.c ui_printer.c)
+set_source_files_properties(imagewriter.cpp PROPERTIES COMPILE_OPTIONS "-w;-std=c++11")
+
 add_executable(gsplus-sdl
     sdl_driver.c
     sdl_snd_driver.c
@@ -212,6 +217,7 @@ add_executable(gsplus-sdl
     ui_drives.c
     ui_slots.c
     ${EMUBUDDY_NET_SOURCES}
+    ${EMUBUDDY_PRINTER_SOURCES}
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
 if(SLIRP_FOUND)

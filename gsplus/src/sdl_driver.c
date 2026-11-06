@@ -28,6 +28,7 @@
 #include "ui.h"
 #include "uthernet2.h"
 extern int g_uthernet2_slot;
+void printer_vbl(void);
 extern int g_rom_version;
 void cfg_file_update_rom(const char *str);
 #include "protos_sdl.h"
@@ -1158,6 +1159,22 @@ sdl_dev_snapshot(Window_info *win)
 					win->main_height + 2 * UI_BAR_H);
 	}
 	sdl_dev_drops(win, frames);
+	{	/* EMUBUDDY_TYPE="frame:text" types into the IIgs ('|' = Return) */
+		const char *t = getenv("EMUBUDDY_TYPE");
+		int f2, n2;
+
+		while(t && sscanf(t, "%d:%n", &f2, &n2) == 1) {
+			const char *s = t + n2;
+
+			if(f2 == frames) {
+				for(; *s && *s != ';'; s++) {
+					adb_paste_add_buf(*s == '|' ? 13 : *s);
+				}
+			}
+			t = strchr(t + n2, ';');
+			if(t) t++;
+		}
+	}
 	if(clicks) {
 		const char *p = clicks;
 
@@ -1674,6 +1691,7 @@ main(int argc, char **argv)
 		if(g_uthernet2_slot) {
 			uthernet2_poll();	/* network in/out, once per frame */
 		}
+		printer_vbl();		/* eject an unfinished printed page */
 		if(ret != 0) {
 			printf("run_16ms returned: %d\n", ret);
 			break;
