@@ -176,6 +176,14 @@ GS/OS printing tested: Teach on System 6 -> ImageWriter driver v4.2 dialog -> bi
   **Print…** which saves a temp PDF and hands it to the OS: `open -a Preview` /
   `lp` on macOS, `ShellExecute "print"` on Windows, `lp`/`xdg-open` on Linux.
 
+### LaserWriter spike (Phase 4b)
+Findings from the GS/OS 6.0.x LaserWriter driver (`/SYSTEM/DRIVERS/LASERWRITER`, 42 KB; also present as `DC.POSTSCRIPT` on `system.hdv`):
+- It is a PostScript driver (`PostScript.GS00`). It sends a printer query (`statusdict begin revision == version == product == end`) and expects a reply, so a real printer connection needs AppleTalk (`ATALK`, `APPLETALK` drivers) over the SCC in SDLC mode. The core has none of that (`scc.c` only resets CRC bits).
+- The driver has a **"Creating PostScript file ..."** mode, so a no-AppleTalk path is likely: print to a `.ps` file on a (shared-folder) volume, then convert on the host.
+- Ghostscript is needed for the conversion (`gs` is on the dev Mac via Homebrew; AGPL, not bundled yet). macOS has no `pstopdf` any more.
+- Not yet verified: that the print-to-file mode works from the GS/OS print dialog, and what the file looks like.
+Next: (1) confirm print-to-file in the emulator and capture a `.ps`; (2) host conversion `.ps` -> PDF into the Printer window (use system `gs` if present, ask the user otherwise); (3) only then consider full LocalTalk/PAP emulation.
+
 ### Phase 5: Ethernet (M–L)
 **Status, Uthernet II working:** own W5100 emulation (`uthernet2.c`, MACRAW on socket 0, indirect bus with auto-increment and buffer wrap, reset, RMSR/TMSR) + libslirp backend (`net_slirp.c`, stub `net_none.c` when libslirp is missing). Card goes in slot 3 or slot 4 (Slots window). Network is Ample-compatible: 192.168.64.0/24, gateway+DNS 192.168.64.1, DHCP from .2. Register-level test `test_uthernet2` passes (DHCP, ARP, DNS, real TCP SYN-ACK, 300 round trips across buffer wraps). Real test: the user's Netmaster disk (Marinetti, Uthernet II link layer, slot 4) booted, did DHCP, DNS, TCP to an internet web server and SMB to the LAN. Confirmed: Marinetti's Uthernet II link layer uses MACRAW.
 **Open:** W5100 hardware TCP/UDP sockets (for IP65/A2osX-style software), Network window (port forwards, status), Windows/Linux libslirp packaging, Sweet16-era internet.2mg crashes in ProDOS stage (cause unknown).
