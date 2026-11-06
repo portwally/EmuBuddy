@@ -266,7 +266,8 @@ built and checked on every change but have had much less hands-on testing. Known
 
 ## Credits and license
 
-EmuBuddy is free software under the **GNU General Public License, version 3** (see [LICENSE](LICENSE)).
+EmuBuddy is by **Wally** ([portwally](https://github.com/portwally)). It is free software under the **GNU General Public
+License, version 3** (see [LICENSE](LICENSE)).
 
 - **KEGS**, the Apple IIgs emulator at the heart of this program, is by Kent Dickey.
 - **GSplus** by Dagen Brock (digarok) brought KEGS to SDL3 and to macOS, Windows and Linux; EmuBuddy starts from it.

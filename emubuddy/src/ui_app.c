@@ -500,6 +500,8 @@ about_draw(UiWindow *win, int cx, int cy)
 		"EmuBuddy " EMUBUDDY_VERSION,
 		"Apple IIgs emulator",
 		"",
+		"Created by Wally (portwally)",
+		"",
 		"Based on KEGS by Kent Dickey",
 		"and GSplus by Dagen Brock.",
 		"GPL v3.",
@@ -526,7 +528,7 @@ about_open(void)
 {
 	snprintf(g_about_win.title, sizeof(g_about_win.title), "About EmuBuddy");
 	g_about_win.w = 300;
-	g_about_win.h = 250;
+	g_about_win.h = 286;
 	g_about_win.closable = 1;
 	g_about_win.modal = 1;
 	g_about_win.draw = about_draw;
