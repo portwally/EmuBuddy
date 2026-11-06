@@ -81,10 +81,10 @@ skin_font(int i, int *ppem)
 	} else if(!strcmp(n, "Commodore 64") || !strcmp(n, "Retro Neon")) {
 		return "PetMe642Y.ttf";
 	} else if(!strcmp(n, "MacOS 7")) {
-		/* Apple's Geneva, from the Mac itself (not shipped with the launcher);
-		 * elsewhere the built-in font is used. */
+		/* A Chicago-style font dropped into the fonts folder as MacOS7.ttf;
+		 * if there is none, see skin_font_fallback. */
 		*ppem = 12;
-		return "/System/Library/Fonts/Geneva.ttf";
+		return "MacOS7.ttf";
 	} else if(!strcmp(n, "ZX Spectrum")) {
 		*ppem = 12;
 		return "zx_spectrum-7.ttf";
@@ -93,6 +93,15 @@ skin_font(int i, int *ppem)
 		return "amstrad_cpc464.ttf";
 	}
 	return NULL;
+}
+
+/* Used when the skin's own font file is missing: Apple's Geneva from the Mac
+ * itself (not shipped with the launcher) for MacOS 7. */
+const char *
+skin_font_fallback(int i, int *ppem)
+{
+	*ppem = 12;
+	return !strcmp(skin_get(i)->name, "MacOS 7") ? "/System/Library/Fonts/Geneva.ttf" : NULL;
 }
 
 int

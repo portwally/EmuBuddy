@@ -871,7 +871,11 @@ skin_switch(int i)
 		snprintf(path, sizeof(path), "%sfonts/%s", base ? base : "", file);
 	}
 	if(ui_font_load_file(path, ppem) != 0) {
-		ui_font_load_file(NULL, 16);	/* font file missing: the built-in one */
+		const char *fb = skin_font_fallback(i, &ppem);
+
+		if(!fb || ui_font_load_file(fb, ppem) != 0) {
+			ui_font_load_file(NULL, 16);	/* font file missing: the built-in one */
+		}
 	}
 }
 
