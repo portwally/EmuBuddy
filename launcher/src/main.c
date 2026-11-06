@@ -270,6 +270,7 @@ static char		*g_focus;
 static int		g_focus_cap;
 
 static int	g_caret;		/* byte offset of the cursor in the focused field */
+static int	g_pending_unfocus;	/* a click landed; unfocus unless a field takes it */
 
 static int
 utf8_prev(const char *t, int i)
@@ -356,6 +357,7 @@ field(UiWindow *win, int cx, int cy, int x, int y, int w, char *buf, int cap)
 		g_focus = buf;
 		g_focus_cap = cap;
 		g_caret = best;
+		g_pending_unfocus = 0;
 		SDL_StartTextInput(g_win);
 		return 1;
 	}
@@ -374,6 +376,56 @@ focus_insert(const char *text)
 	memmove(g_focus + g_caret + m, g_focus + g_caret, (size_t)(len - g_caret + 1));
 	memcpy(g_focus + g_caret, text, (size_t)m);
 	g_caret += m;
+}
+
+/* Clipboard commands for the focused field (keys and the Edit menu). */
+static void
+clip_paste(void)
+{
+	char	*t;
+
+	if(!g_focus) {
+		ui_message("Click in a text field first");
+		return;
+	}
+	t = SDL_HasClipboardText() ? SDL_GetClipboardText() : NULL;
+	if(t && t[0]) {
+		char	clean[700];
+		int	n = 0;
+
+		for(char *q = t; *q && n < (int)sizeof(clean) - 1; q++) {
+			if((unsigned char)*q >= 32) {
+				clean[n++] = *q;
+			}
+		}
+		int before = (int)strlen(g_focus);
+
+		clean[n] = 0;
+		focus_insert(clean);
+		if(n > 0 && (int)strlen(g_focus) == before) {
+			ui_message("Too long for this field");
+		} else {
+			ui_message("Pasted %d characters", n);
+		}
+	} else {
+		ui_message("The clipboard has no text (copy some text first)");
+	}
+	SDL_free(t);
+}
+
+static void
+clip_copy(int cut)
+{
+	if(!g_focus) {
+		ui_message("Click in a text field first");
+		return;
+	}
+	SDL_SetClipboardText(g_focus);
+	if(cut) {
+		g_focus[0] = 0;
+		g_caret = 0;
+	}
+	ui_message("%s %d characters", cut ? "Cut" : "Copied", (int)strlen(g_focus));
 }
 
 static void
@@ -1682,7 +1734,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -1692,6 +1744,12 @@ static const UiMenuItem m_file[] = {
 	{ "Show Profiles Folder", C_FOLDER, NULL, 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Quit", C_QUIT, "Cmd-Q", 0 },
+};
+static const UiMenuItem m_edit[] = {
+	{ "Cut", C_CUT, "Cmd-X", 0 },
+	{ "Copy", C_COPY, "Cmd-C", 0 },
+	{ "Paste", C_PASTE, "Cmd-V", 0 },
+	{ "Select All", C_SELALL, "Cmd-A", 0 },
 };
 static const UiMenuItem m_prof[] = {
 	{ "Play", C_PLAY, "Return", 0 },
@@ -1704,9 +1762,10 @@ static const UiMenuItem m_help[] = {
 };
 static UiMenuItem m_skin[16];
 static const UiMenu g_menus[] = {
-	{ "File", m_file, 7 }, { "Profile", m_prof, 4 }, { "Skin", m_skin, 0 }, { "Help", m_help, 1 },
+	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "Skin", m_skin, 0 },
+	{ "Help", m_help, 1 },
 };
-static UiMenu g_menus_rw[4];
+static UiMenu g_menus_rw[5];
 
 static void
 app_command(int id)
@@ -1718,6 +1777,10 @@ app_command(int id)
 		return;
 	}
 	switch(id) {
+	case C_CUT: clip_copy(1); break;
+	case C_COPY: clip_copy(0); break;
+	case C_PASTE: clip_paste(); break;
+	case C_SELALL: if(g_focus) { g_caret = (int)strlen(g_focus); } break;
 	case C_NEW: new_profile(); break;
 	case C_DUP: duplicate_profile(); break;
 	case C_DEL: delete_profile(); break;
@@ -1766,7 +1829,7 @@ app_tick(void)
 	}
 }
 
-static UiApp g_app = { g_menus_rw, 4, app_state, app_command, app_status, app_tick,
+static UiApp g_app = { g_menus_rw, 5, app_state, app_command, app_status, app_tick,
 	NULL, NULL, NULL };
 
 static void
@@ -1789,7 +1852,7 @@ window(void)
 		m_skin[i].id = C_SKIN0 + i;
 	}
 	memcpy(g_menus_rw, g_menus, sizeof(g_menus));
-	g_menus_rw[2].n_items = skin_count();
+	g_menus_rw[3].n_items = skin_count();
 	{
 		SDL_Surface *ic = SDL_CreateSurfaceFrom(launcher_icon_size, launcher_icon_size,
 				SDL_PIXELFORMAT_RGBA32, (void *)launcher_icon_rgba, launcher_icon_size * 4);
@@ -1855,21 +1918,10 @@ window(void)
 					focus_clear();
 					continue;
 				} else if(k == SDLK_V && cmd) {
-					char *t = SDL_GetClipboardText();
-
-					if(t) {
-						char clean[700];
-						int n = 0;
-
-						for(char *q = t; *q && n < (int)sizeof(clean) - 1; q++) {
-							if((unsigned char)*q >= 32) {
-								clean[n++] = *q;
-							}
-						}
-						clean[n] = 0;
-						focus_insert(clean);
-						SDL_free(t);
-					}
+					clip_paste();
+					continue;
+				} else if((k == SDLK_C || k == SDLK_X) && cmd) {
+					clip_copy(k == SDLK_X);
 					continue;
 				} else if(k == SDLK_A && cmd) {
 					g_caret = len;		/* no selection: go to the end */
@@ -1895,7 +1947,12 @@ window(void)
 				}
 			}
 			if(e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-				focus_clear();
+				float lx, ly;
+
+				SDL_RenderCoordinatesFromWindow(g_ren, e.button.x, e.button.y, &lx, &ly);
+				if(!ui_menu_is_open() && ly >= UI_BAR_H) {
+					g_pending_unfocus = 1;	/* unless a field takes the click */
+				}
 			}
 			if(ui_handle_event(&e)) {
 				continue;
@@ -1968,6 +2025,10 @@ window(void)
 			}
 		}
 		ui_draw(LW, LH);
+		if(g_pending_unfocus) {
+			g_pending_unfocus = 0;
+			focus_clear();
+		}
 		{	/* developer aids: LAUNCHER_EDIT=1 opens the editor, LAUNCHER_SHOT=<file.bmp> saves a picture and quits */
 			static int frame;
 
@@ -2035,7 +2096,14 @@ window(void)
 					ce.button.x = 161;
 					ce.button.y = 60;
 					SDL_PushEvent(&ce);
-				} else if(frame == 14 || frame == 18) {
+				} else if(frame == 14 && getenv("LAUNCHER_PASTE")) {
+					SDL_SetClipboardText(getenv("LAUNCHER_PASTE"));
+					ce.type = SDL_EVENT_KEY_DOWN;
+					ce.key.key = SDLK_V;
+					ce.key.mod = SDL_KMOD_GUI;
+					ce.key.down = true;
+					SDL_PushEvent(&ce);
+				} else if((frame == 14 || frame == 18) && !getenv("LAUNCHER_PASTE")) {
 					ce.type = SDL_EVENT_KEY_DOWN;
 					ce.key.key = frame == 14 ? SDLK_LEFT : SDLK_DELETE;
 					ce.key.down = true;

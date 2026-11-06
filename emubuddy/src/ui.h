@@ -89,6 +89,8 @@ int	ui_handle_event(SDL_Event *ev);
 void	ui_draw(int logical_w, int logical_h);
 /* True while a menu is open or a modal window is up. */
 int	ui_is_modal(void);
+/* True while a drop-down menu is open. */
+int	ui_menu_is_open(void);
 /* True while the pointer is over the menu bar, status bar or a window. */
 int	ui_pointer_over_ui(void);
 

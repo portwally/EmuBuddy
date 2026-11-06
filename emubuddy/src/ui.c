@@ -266,6 +266,13 @@ ui_renderer(void)
 	return g_r;
 }
 
+/* True while a drop-down menu is open. */
+int
+ui_menu_is_open(void)
+{
+	return g_menu_open >= 0;
+}
+
 int
 ui_is_modal(void)
 {
