@@ -15,6 +15,8 @@ static float		g_pos;			/* animated position in the row */
 static int		g_info, g_pad_hints;
 static char		g_search[64];
 static Uint64		g_last;
+static int		g_idle_sec, g_busy, g_attract;
+static Uint64		g_act, g_next_slide;
 static float		g_bg_fade = 1;		/* 0..1, 1 = the current background is fully in */
 static char		g_bg_cur[1200], g_bg_prev[1200];
 
@@ -518,6 +520,64 @@ draw_tile(const Profile *p, float x, float y, float w, float h, float sel, int a
 }
 
 void
+fe_set_idle(int seconds)
+{
+	g_idle_sec = seconds < 0 ? 0 : seconds;
+	g_attract = 0;
+}
+
+void
+fe_activity(void)
+{
+	g_act = SDL_GetTicks();
+	g_attract = 0;
+}
+
+void
+fe_set_busy(int busy)
+{
+	g_busy = busy;
+	if(busy) {
+		g_act = SDL_GetTicks();
+		g_attract = 0;
+	}
+}
+
+int
+fe_idle_active(void)
+{
+	return g_attract;
+}
+
+/* The slideshow: a random other game every 5 seconds once nothing happened for g_idle_sec. */
+static void
+idle_tick(int n)
+{
+	Uint64	now = SDL_GetTicks();
+
+	if(!g_idle_sec || g_busy || n < 2 || g_info) {
+		g_attract = 0;
+		return;
+	}
+	if(!g_attract) {
+		if(now - g_act >= (Uint64)g_idle_sec * 1000) {
+			g_attract = 1;
+			g_next_slide = now;
+		}
+		return;
+	}
+	if(now >= g_next_slide && g_d.sel) {
+		int s = *g_d.sel;
+
+		do {
+			s = rand() % n;
+		} while(s == *g_d.sel);
+		*g_d.sel = s;
+		g_next_slide = now + 5000;
+	}
+}
+
+void
 fe_draw(int W, int H)
 {
 	Uint64	now = SDL_GetTicks();
@@ -541,6 +601,8 @@ fe_draw(int W, int H)
 	if(sel >= n) {
 		sel = n - 1;
 	}
+	idle_tick(n);
+	sel = g_d.sel ? *g_d.sel : 0;
 	/* the position follows the selection smoothly */
 	g_pos += ((float)sel - g_pos) * SDL_min(1.0f, dt * 11.0f);
 	if(fabsf(g_pos - sel) < 0.002f) {

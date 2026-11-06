@@ -126,6 +126,8 @@ Set/Remove Picture.
 
 **Favourites and sorting (done):** star on favourites, sort by A-Z / favourites first / last played / most played, favourites-only filter; play count and last played are stored in the profile (`plays`, `last_played`, `favorite`).
 
-**Not done yet:** idle slideshow; portrait layout; German texts;
+**Idle slideshow (done):** after 60 seconds without input (and no menu or dialog open) the Arcade row moves to a random game every 5 seconds; any key, click, wheel or controller input stops it. View > Idle Slideshow switches it off (`idle = 60` or `0` in Launcher.settings). Test aid: `LAUNCHER_IDLE=<seconds>`.
+
+**Not done yet:** portrait layout; German texts;
 automatic snapshot when EmuBuddy quits;
 JPG pictures (PNG and BMP load now).

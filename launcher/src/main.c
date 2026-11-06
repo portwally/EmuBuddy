@@ -331,6 +331,7 @@ cli(int argc, char **argv)
 #define AH	720
 
 static void lib_open(int kind, char *target, int cap);
+static int		g_idle = 60;	/* seconds before the slideshow, 0 = off */
 static int		g_arcade = 1, g_bw = LW, g_bh = LH;	/* the Arcade view or the Classic one; logical size */
 static char		g_art_root[1100];
 static int		g_skin, g_wscale = 100, g_full;	/* window size in percent of 800x640 */
@@ -1372,6 +1373,11 @@ settings_load(void)
 			}
 		} else if(!strncmp(line, "favonly = ", 10)) {
 			g_favonly = atoi(line + 10) != 0;
+		} else if(!strncmp(line, "idle = ", 7)) {
+			g_idle = atoi(line + 7);
+			if(g_idle < 0 || g_idle > 3600) {
+				g_idle = 60;
+			}
 		} else if(!strncmp(line, "sound = ", 8)) {
 			snd_enable(atoi(line + 8) != 0);
 		}
@@ -1393,8 +1399,8 @@ settings_save(void)
 	f = fopen(path, "w");
 	if(f) {
 		fprintf(f, "skin = %s\n", skin_get(g_skin)->name);
-		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\nsound = %d\nsort = %d\nfavonly = %d\n", g_wscale, g_full,
-			g_arcade ? "arcade" : "classic", g_art_root, snd_enabled(), g_sort, g_favonly);
+		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\nsound = %d\nsort = %d\nfavonly = %d\nidle = %d\n", g_wscale, g_full,
+			g_arcade ? "arcade" : "classic", g_art_root, snd_enabled(), g_sort, g_favonly, g_idle);
 		fclose(f);
 	}
 }
@@ -2224,7 +2230,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FAV = 85, C_SORT0 = 80, C_SORT1, C_SORT2, C_SORT3, C_FAVONLY = 84, C_SORT = 86, C_SOUND = 78, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FAV = 85, C_SORT0 = 80, C_SORT1, C_SORT2, C_SORT3, C_FAVONLY = 84, C_SORT = 86, C_SOUND = 78, C_IDLE = 77, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -2251,6 +2257,7 @@ static const UiMenuItem m_view[] = {
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Full Screen", C_FULL, "F11", 0 },
 	{ "Sounds", C_SOUND, NULL, 0 },
+	{ "Idle Slideshow", C_IDLE, NULL, 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Sort: A-Z", C_SORT0, NULL, 0 },
 	{ "Sort: Favourites First", C_SORT1, NULL, 0 },
@@ -2693,6 +2700,12 @@ app_command(int id)
 		snd_play(SND_SELECT);
 		settings_save();
 		break;
+	case C_IDLE:
+		g_idle = g_idle ? 0 : 60;
+		fe_set_idle(g_idle);
+		snd_play(SND_SELECT);
+		settings_save();
+		break;
 	case C_CUT: clip_copy(1); break;
 	case C_COPY: clip_copy(0); break;
 	case C_PASTE: clip_paste(); break;
@@ -2722,6 +2735,9 @@ app_state(int id)
 	}
 	if(id == C_FULL) {
 		return g_full ? UI_MI_CHECKED : 0;
+	}
+	if(id == C_IDLE) {
+		return g_idle ? UI_MI_CHECKED : 0;
 	}
 	if(id == C_SOUND) {
 		return snd_enabled() ? UI_MI_CHECKED : 0;
@@ -2954,12 +2970,19 @@ window(void)
 	if(g_wscale != 100 && !g_full && !size_fits(g_wscale)) {
 		g_wscale = 100;
 	}
+	fe_set_idle(getenv("LAUNCHER_IDLE") ? atoi(getenv("LAUNCHER_IDLE")) : g_idle);
 	set_view(g_arcade);		/* sets the size, the logical size and the Profiles window */
 	while(g_running) {
 		SDL_Event e;
 
 		pad_tick();
+		fe_set_busy(g_ovl.open || ui_is_modal() || g_focus != NULL);
 		while(SDL_PollEvent(&e)) {
+			if(e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_WHEEL ||
+					e.type == SDL_EVENT_TEXT_INPUT || e.type == SDL_EVENT_MOUSE_MOTION ||
+					(e.type >= SDL_EVENT_GAMEPAD_AXIS_MOTION && e.type <= SDL_EVENT_GAMEPAD_BUTTON_UP)) {
+				fe_activity();
+			}
 			if(e.type == SDL_EVENT_QUIT) {
 				g_running = 0;
 				continue;

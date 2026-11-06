@@ -35,4 +35,12 @@ int	fe_info_open(void);
 /* 1: show the controller hints (A play, X details, Y menu) instead of the key hints. */
 void	fe_set_pad_hints(int on);
 
+/* Idle slideshow: after `seconds` without input the row moves to a random game every few seconds
+ * (0 = off). main.c calls fe_activity() on every input event and fe_set_busy(1) while a menu or
+ * dialog is open. */
+void	fe_set_idle(int seconds);
+void	fe_activity(void);
+void	fe_set_busy(int busy);
+int	fe_idle_active(void);
+
 #endif
