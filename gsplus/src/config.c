@@ -2719,6 +2719,55 @@ cfg_inspect_maybe_insert_file(const char *filename)
 	}
 }
 
+/* Slot (5, 6 or 7) a disk image file probably belongs in, or 0 if unknown. */
+int
+cfg_guess_slot(const char *filename)
+{
+	size_t	len = strlen(filename);
+
+	/* .hdv is always a hard disk image, whatever its size */
+	if(len > 4 && !cfgcasecmp(".hdv", &filename[len - 4]) &&
+					cfg_guess_image_size(filename) >= 0) {
+		return 7;
+	}
+	switch(cfg_guess_image_size(filename)) {
+	case 0: return 7;
+	case 1: return 6;
+	case 2: return 5;
+	case 3: return 7;
+	}
+	return 0;
+}
+
+/* Partition chooser access for the EmuBuddy UI (replaces the text panel). */
+int
+cfg_ui_partition_count(void)
+{
+	return g_cfg_partitionlist.last;
+}
+
+const char *
+cfg_ui_partition_name(int i)
+{
+	if(i < 0 || i >= g_cfg_partitionlist.last) {
+		return "";
+	}
+	return g_cfg_partitionlist.direntptr[i].name;
+}
+
+/* Choose entry 'pos'. Returns 1 if a disk was inserted, 0 if the list changed
+ * (entered a directory inside the image). */
+int
+cfg_ui_partition_choose(int pos, int slot, int drive, const char *path)
+{
+	snprintf(&g_cfg_file_path[0], CFG_PATH_MAX, "%s", path);
+	g_cfg_slotdrive = (slot << 8) | drive;
+	g_cfg_select_partition = 1;
+	g_cfg_partitionlist.curent = pos;
+	cfg_partition_selected();
+	return g_cfg_select_partition < 0;
+}
+
 int
 cfg_stat(char *path, struct stat *sb, int do_lstat)
 {

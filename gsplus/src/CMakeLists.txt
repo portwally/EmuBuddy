@@ -187,6 +187,7 @@ add_executable(gsplus-sdl
     ui_font.c
     ui_font_data.c
     ui_app.c
+    ui_drives.c
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
 

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 static SDL_Renderer	*g_r;
 static SDL_Window	*g_sdlwin;
@@ -19,6 +20,8 @@ static int	g_down, g_pressed, g_released, g_dblclick;
 static float	g_wheel;
 static int	g_press_owned;		/* the current press began on the UI */
 static int	g_over_ui;
+static int	g_drop_active;
+static float	g_drop_x, g_drop_y;
 
 /* What the current press is doing. */
 enum { CAP_NONE, CAP_DRAG, CAP_CLOSE, CAP_WIDGET, CAP_MENU };
@@ -535,6 +538,36 @@ ui_handle_event(SDL_Event *ev)
 		return ui_is_modal();
 	case SDL_EVENT_TEXT_INPUT:
 		return ui_is_modal();
+	case SDL_EVENT_DROP_BEGIN:
+	case SDL_EVENT_DROP_POSITION:
+	case SDL_EVENT_DROP_COMPLETE:
+	case SDL_EVENT_DROP_FILE: {
+		SDL_Event	t = *ev;
+		UiWindow	*w;
+
+		if(!g_lw) {
+			return 0;
+		}
+		if(ev->type == SDL_EVENT_DROP_COMPLETE) {
+			g_drop_active = 0;
+			return 0;
+		}
+		SDL_ConvertEventToRenderCoordinates(g_r, &t);
+		if(ev->type != SDL_EVENT_DROP_FILE) {
+			g_drop_active = 1;
+			g_drop_x = t.drop.x;
+			g_drop_y = t.drop.y;
+			return 0;
+		}
+		g_drop_active = 0;
+		w = win_at(t.drop.x, t.drop.y);
+		if(w && w->on_drop && ev->drop.data) {
+			return w->on_drop(w, (int)t.drop.x - w->x - 1,
+				(int)t.drop.y - w->y - UI_TITLE_H,
+				ev->drop.data);
+		}
+		return 0;
+	}
 	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
 		g_over_ui = 0;
 		g_mx = g_my = -1;
@@ -647,20 +680,11 @@ ui_list(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
 	int	rows = (h - 2) / ROW_H, i, result = 0, max_top;
 	int	lx = cx + x, ly = cy + y;
 	int	inside = ui_mouse_in(win, cx, cy, x, y, w - SB_W, h);
-	long	id = widget_id(x, y);
-	int	tx, ty, th, trk;
 
 	max_top = n_items > rows ? n_items - rows : 0;
 	if(*top > max_top) *top = max_top;
 	if(*top < 0) *top = 0;
 
-	/* wheel */
-	if(g_wheel != 0 && ui_mouse_in(win, cx, cy, x, y, w, h)) {
-		*top -= (int)(g_wheel * 3);
-		g_wheel = 0;
-		if(*top > max_top) *top = max_top;
-		if(*top < 0) *top = 0;
-	}
 	/* click on a row */
 	if(inside && g_pressed) {
 		int row = ((int)g_my - (ly + 1)) / ROW_H + *top;
@@ -697,58 +721,117 @@ ui_list(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
 		}
 	}
 
-	/* scroll bar */
-	tx = lx + w - SB_W;
-	ui_vline(tx, ly, h, UI_BLACK);
-	trk = h - 2 * SB_W;			/* track between the arrows */
-	ui_frame(tx, ly, SB_W, SB_W, UI_BLACK);
-	ui_frame(tx, ly + h - SB_W, SB_W, SB_W, UI_BLACK);
-	/* arrows drawn as tiny triangles instead of font glyphs */
-	ui_fill(tx + 1, ly + 1, SB_W - 2, SB_W - 2, UI_WHITE);
-	ui_fill(tx + 1, ly + h - SB_W + 1, SB_W - 2, SB_W - 2, UI_WHITE);
-	for(i = 0; i < 4; i++) {
-		ui_hline(tx + 7 - i - 1, ly + 4 + i, 2 * i + 2, UI_BLACK);
-		ui_hline(tx + 7 - i - 1, ly + h - SB_W + 9 - i, 2 * i + 2,
-								UI_BLACK);
+	ui_vscroll(win, cx, cy, x + w - SB_W, y, h, n_items, rows, top);
+	return result;
+}
+
+int
+ui_vscroll(UiWindow *win, int cx, int cy, int x, int y, int h,
+		int total, int visible, int *top)
+{
+	int	max_top = total > visible ? total - visible : 0;
+	int	tx = cx + x, ty0 = cy + y, trk = h - 2 * SB_W, th = 0, ty = 0, i;
+	long	id = widget_id(x, y) ^ 0x5555;
+	int	changed = 0, old = *top;
+
+	if(*top > max_top) *top = max_top;
+	if(*top < 0) *top = 0;
+	if(g_wheel != 0 && ui_mouse_in(win, cx, cy, 0, 0, win->w - 2,
+						win->h - UI_TITLE_H - 1)) {
+		*top -= (g_wheel > 0 ? 1 : -1) * 2;
+		g_wheel = 0;
 	}
-	if(n_items > rows && trk > 8) {
-		th = trk * rows / n_items;
+	if(total > visible && trk > 8) {
+		th = trk * visible / total;
 		if(th < 8) th = 8;
-		ty = ly + SB_W + (trk - th) * (*top) / max_top;
-		ui_fill(tx + 1, ty, SB_W - 2, th, UI_BLACK);
+		ty = ty0 + SB_W + (trk - th) * (*top) / max_top;
 	}
-	/* arrows and track: click handling */
-	if(g_pressed && ui_mouse_in(win, cx, cy, x + w - SB_W, y, SB_W, h)) {
-		if(g_my < ly + SB_W) {
+	if(g_pressed && ui_mouse_in(win, cx, cy, x, y, SB_W, h)) {
+		if(g_my < ty0 + SB_W) {
 			*top -= 1;
-		} else if(g_my >= ly + h - SB_W) {
+		} else if(g_my >= ty0 + h - SB_W) {
 			*top += 1;
-		} else if(n_items > rows) {
-			th = trk * rows / n_items;
-			ty = ly + SB_W + (trk - (th < 8 ? 8 : th)) * (*top) /
-								max_top;
-			if(g_my < ty) *top -= rows - 1;
-			else if(g_my >= ty + th) *top += rows - 1;
+		} else if(th > 0) {
+			if(g_my < ty) *top -= visible - 1;
+			else if(g_my >= ty + th) *top += visible - 1;
 			else {
 				g_active_widget = win;
 				g_active_id = id;
 			}
 		}
-		if(*top > max_top) *top = max_top;
-		if(*top < 0) *top = 0;
 	}
 	if(g_active_widget == win && g_active_id == id) {
-		if(g_down && n_items > rows && trk > 0) {
-			*top = (int)(((g_my - ly - SB_W) * max_top) /
-					(trk - (trk * rows / n_items))) ;
-			if(*top > max_top) *top = max_top;
-			if(*top < 0) *top = 0;
+		if(g_down && th > 0 && trk > th) {
+			*top = (int)(((g_my - ty0 - SB_W - th / 2) * max_top) /
+								(trk - th));
 		}
 		if(g_released) {
 			g_active_widget = NULL;
 		}
 	}
+	if(*top > max_top) *top = max_top;
+	if(*top < 0) *top = 0;
+	changed = (*top != old);
+
+	/* draw */
+	ui_fill(tx, ty0, SB_W, h, UI_WHITE);
+	ui_vline(tx, ty0, h, UI_BLACK);
+	ui_hline(tx, ty0, SB_W, UI_BLACK);
+	ui_hline(tx, ty0 + h - 1, SB_W, UI_BLACK);
+	ui_frame(tx, ty0, SB_W, SB_W, UI_BLACK);
+	ui_frame(tx, ty0 + h - SB_W, SB_W, SB_W, UI_BLACK);
+	for(i = 0; i < 4; i++) {
+		ui_hline(tx + 7 - i - 1, ty0 + 4 + i, 2 * i + 2, UI_BLACK);
+		ui_hline(tx + 7 - i - 1, ty0 + h - SB_W + 9 - i, 2 * i + 2,
+								UI_BLACK);
+	}
+	if(th > 0) {
+		ui_fill(tx + 1, ty, SB_W - 2, th, UI_BLACK);
+	}
+	return changed;
+}
+
+int
+ui_hit(UiWindow *win, int cx, int cy, int x, int y, int w, int h)
+{
+	int	inside = ui_mouse_in(win, cx, cy, x, y, w, h);
+	long	id = widget_id(x, y) ^ 0x3333;
+	int	result = 0;
+
+	if(inside && g_pressed) {
+		g_active_widget = win;
+		g_active_id = id;
+	}
+	if(g_active_widget == win && g_active_id == id && g_released) {
+		result = inside;
+		g_active_widget = NULL;
+	}
 	return result;
+}
+
+int
+ui_drop_hover(UiWindow *win, int cx, int cy, int *x, int *y)
+{
+	if(!g_drop_active || win_at(g_drop_x, g_drop_y) != win) {
+		return 0;
+	}
+	*x = (int)g_drop_x - cx;
+	*y = (int)g_drop_y - cy;
+	return 1;
+}
+
+static char	g_msg[96];
+static Uint64	g_msg_until;
+
+void
+ui_message(const char *fmt, ...)
+{
+	va_list	ap;
+
+	va_start(ap, fmt);
+	vsnprintf(g_msg, sizeof(g_msg), fmt, ap);
+	va_end(ap);
+	g_msg_until = SDL_GetTicks() + 3000;
 }
 
 /* ------------------------------------------------------------------ */
@@ -890,6 +973,9 @@ draw_status_bar(void)
 	ui_hline(0, y, g_lw, UI_BLACK);
 	if(g_app->status) {
 		g_app->status(l, c, r, 96);
+	}
+	if(SDL_GetTicks() < g_msg_until) {
+		snprintf(c, sizeof(c), "%s", g_msg);
 	}
 	ui_draw_text(8, y + 3, l, UI_BLACK);
 	ui_draw_text((g_lw - ui_text_width(c)) / 2, y + 3, c, UI_BLACK);

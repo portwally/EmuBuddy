@@ -1,5 +1,6 @@
 /* EmuBuddy app layer: menus, commands, status bar, About window and the
  * in-skin file browser. Built on the toolkit in ui.c. */
+#include "defc.h"
 #include "ui.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +13,7 @@ extern int	g_zip_speed_mhz;
 extern double	g_eff_mhz;
 extern int	g_fullscreen;
 extern int	g_crt;
+extern int	g_status_enable;
 extern int	g_scanline_simulator;
 extern int	g_ui_pause;
 extern int	g_rom_version;
@@ -19,23 +21,35 @@ void		do_reset(void);
 void		cfg_file_update_rom(const char *str);
 void		cfg_set_config_panel(int panel);
 extern int	g_config_control_panel;
-void		cfg_inspect_maybe_insert_file(const char *filename);
+int		iwm_motor_busy(void);
+int		cfg_guess_slot(const char *filename);
+int		cfg_ui_partition_count(void);
+const char	*cfg_ui_partition_name(int i);
+int		cfg_ui_partition_choose(int pos, int slot, int drive, const char *path);
+extern int	g_cfg_select_partition;
+extern int	g_cfg_slotdrive;
 /* sdl_driver.c */
 void		sdl_request_screenshot(void);
 
 #define EMUBUDDY_VERSION	"0.1"
 
 enum {
-	CMD_OPEN_DISK = 1, CMD_QUIT, CMD_CHOOSE_ROM,
+	CMD_OPEN_DISK = 1, CMD_QUIT, CMD_CHOOSE_ROM, CMD_DRIVES, CMD_EJECT_ALL,
 	CMD_RESET = 10, CMD_PAUSE,
 	CMD_SPEED_1 = 20, CMD_SPEED_28, CMD_ZIP_8, CMD_ZIP_16, CMD_ZIP_32,
 	CMD_ZIP_64, CMD_ZIP_128, CMD_UNLIMITED,
-	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT,
+	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT, CMD_CORE_STATUS,
 	CMD_ABOUT = 40,
+	CMD_RECENT0 = 60,		/* 60..69 */
 };
+#define N_RECENT 10
 
-static const UiMenuItem file_items[] = {
+static UiMenuItem disks_items[5 + N_RECENT] = {
+	{ "Drives Window", CMD_DRIVES, NULL, 0 },
 	{ "Open Disk Image...", CMD_OPEN_DISK, NULL, 0 },
+	{ "Eject All", CMD_EJECT_ALL, NULL, 0 },
+};
+static const UiMenuItem file_items[] = {
 	{ "Choose ROM File...", CMD_CHOOSE_ROM, NULL, 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Quit EmuBuddy", CMD_QUIT, NULL, 0 },
@@ -62,14 +76,16 @@ static const UiMenuItem view_items[] = {
 	{ "Scanlines", CMD_SCANLINES, "Shift-F11", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Save Screenshot", CMD_SCREENSHOT, "F10", 0 },
+	{ "Core Debug Lines", CMD_CORE_STATUS, NULL, 0 },
 };
 static const UiMenuItem help_items[] = {
 	{ "About EmuBuddy", CMD_ABOUT, NULL, 0 },
 };
 
 #define N(a)	((int)(sizeof(a) / sizeof((a)[0])))
-static const UiMenu g_menus[] = {
+static UiMenu g_menus[] = {
 	{ "File", file_items, N(file_items) },
+	{ "Disks", disks_items, 3 },
 	{ "Machine", machine_items, N(machine_items) },
 	{ "Speed", speed_items, N(speed_items) },
 	{ "View", view_items, N(view_items) },
@@ -258,8 +274,8 @@ fb_draw(UiWindow *win, int cx, int cy)
 	}
 }
 
-static void
-file_browser_open(const char *title, void (*pick)(const char *))
+void
+ui_file_browser_open(const char *title, void (*pick)(const char *))
 {
 	const char	*h;
 
@@ -332,7 +348,7 @@ about_open(void)
 static void
 disk_picked(const char *path)
 {
-	cfg_inspect_maybe_insert_file(path);
+	ui_insert_auto(path);
 }
 
 /* ---- ROM handling: no valid ROM -> "ROM Required" window, picture blanked */
@@ -374,7 +390,7 @@ rom_draw(UiWindow *win, int cx, int cy)
 	}
 	if(ui_button(win, cx, cy, (win->w - 2 - 160) / 2, win->h - UI_TITLE_H - 40,
 						160, 26, "Choose ROM File...", 1)) {
-		file_browser_open("Choose ROM File", rom_picked);
+		ui_file_browser_open("Choose ROM File", rom_picked);
 	}
 }
 
@@ -391,8 +407,10 @@ static void
 app_command(int id)
 {
 	switch(id) {
-	case CMD_OPEN_DISK: file_browser_open("Open Disk Image", disk_picked); break;
-	case CMD_CHOOSE_ROM: file_browser_open("Choose ROM File", rom_picked); break;
+	case CMD_OPEN_DISK: ui_file_browser_open("Open Disk Image", disk_picked); break;
+	case CMD_CHOOSE_ROM: ui_file_browser_open("Choose ROM File", rom_picked); break;
+	case CMD_DRIVES: ui_drives_toggle(); break;
+	case CMD_EJECT_ALL: ui_eject_all(); break;
 	case CMD_QUIT: {
 		SDL_Event q;
 
@@ -416,7 +434,12 @@ app_command(int id)
 		g_scanline_simulator = g_scanline_simulator ? 0 : 50;
 		break;
 	case CMD_SCREENSHOT: sdl_request_screenshot(); break;
+	case CMD_CORE_STATUS: g_status_enable = !g_status_enable; break;
 	case CMD_ABOUT: about_open(); break;
+	default:
+		if(id >= CMD_RECENT0 && id < CMD_RECENT0 + N_RECENT) {
+			ui_recent_activate(id - CMD_RECENT0);
+		}
 	}
 }
 
@@ -427,6 +450,7 @@ app_item_state(int id)
 
 	switch(id) {
 	case CMD_PAUSE: return g_ui_pause ? UI_MI_CHECKED : 0;
+	case CMD_DRIVES: return ui_drives_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_SPEED_1: return g_limit_speed == 1 ? UI_MI_CHECKED : 0;
 	case CMD_SPEED_28: return g_limit_speed == 2 ? UI_MI_CHECKED : 0;
 	case CMD_ZIP_8: return zip == 8 ? UI_MI_CHECKED : 0;
@@ -437,6 +461,7 @@ app_item_state(int id)
 	case CMD_UNLIMITED: return g_limit_speed == 0 ? UI_MI_CHECKED : 0;
 	case CMD_FULLSCREEN: return g_fullscreen ? UI_MI_CHECKED : 0;
 	case CMD_CRT: return g_crt ? UI_MI_CHECKED : 0;
+	case CMD_CORE_STATUS: return g_status_enable ? UI_MI_CHECKED : 0;
 	case CMD_SCANLINES: return g_scanline_simulator ? UI_MI_CHECKED : 0;
 	}
 	return 0;
@@ -464,9 +489,32 @@ app_status(char *left, char *center, char *right, int n)
 	snprintf(right, n, "%s", limit);
 }
 
+/* Disks menu: fixed items, then the recent disks. */
+static void
+menu_rebuild_recent(void)
+{
+	int	i, k = 3, n = ui_recent_count();
+
+	if(n > 0) {
+		disks_items[k].label = "";
+		disks_items[k].id = 0;
+		disks_items[k].shortcut = NULL;
+		disks_items[k].flags = UI_MI_SEP;
+		k++;
+	}
+	for(i = 0; i < n && k < 5 + N_RECENT; i++, k++) {
+		disks_items[k].label = ui_recent_label(i);
+		disks_items[k].id = CMD_RECENT0 + i;
+		disks_items[k].shortcut = NULL;
+		disks_items[k].flags = 0;
+	}
+	g_menus[1].n_items = k;
+}
+
 static void
 app_tick(void)
 {
+	menu_rebuild_recent();
 	if(rom_missing()) {
 		if(!g_rom_win.open) {
 			snprintf(g_rom_win.title, sizeof(g_rom_win.title),
@@ -511,8 +559,20 @@ ui_app_init(SDL_Window *w, SDL_Renderer *r)
 	const char *t;
 
 	ui_init(w, r, &g_app);
+	ui_drives_init();
 	/* Developer aid for headless UI snapshots. */
 	t = getenv("EMUBUDDY_OPEN");
 	if(t && !strcmp(t, "about")) app_command(CMD_ABOUT);
 	if(t && !strcmp(t, "open")) app_command(CMD_OPEN_DISK);
+	if(t && !strcmp(t, "drives")) app_command(CMD_DRIVES);
+	t = getenv("EMUBUDDY_INSERT");		/* developer aid: path;path;.. */
+	if(t) {
+		char *copy = strdup(t), *save = NULL, *p;
+
+		for(p = strtok_r(copy, ";", &save); p;
+					p = strtok_r(NULL, ";", &save)) {
+			ui_insert_auto(p);
+		}
+		free(copy);
+	}
 }

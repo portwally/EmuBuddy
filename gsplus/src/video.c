@@ -116,8 +116,8 @@ int	g_red_right_shift = 0;
 int	g_green_right_shift = 0;
 int	g_blue_right_shift = 0;
 
-int	g_status_enable = 1;
-int	g_status_enable_previous = 1;
+int	g_status_enable = 0;		// EmuBuddy has its own status bar
+int	g_status_enable_previous = 0;
 int	g_video_center_a2 = 1;		/* center 560-wide 8-bit modes in the */
 					/*  640-wide SHR frame (0: left-align */
 					/*  like upstream KEGS) */

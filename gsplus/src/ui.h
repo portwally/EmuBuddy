@@ -30,6 +30,9 @@ struct UiWindow {
 	/* Draws the window content. (cx,cy) is the content origin. */
 	void	(*draw)(UiWindow *win, int cx, int cy);
 	void	(*on_close)(UiWindow *win);
+	/* A file was dropped on the window. (x,y) are content coordinates.
+	 * Return 1 if handled. */
+	int	(*on_drop)(UiWindow *win, int x, int y, const char *path);
 	void	*user;
 };
 
@@ -101,6 +104,18 @@ int	ui_checkbox(UiWindow *win, int cx, int cy, int x, int y, const char *label,
  * row. Returns 1 when a row is clicked, 2 on a double-click. */
 int	ui_list(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
 		const char **items, int n_items, int *sel, int *top);
+/* Invisible click area. Returns 1 when the user clicks it. */
+int	ui_hit(UiWindow *win, int cx, int cy, int x, int y, int w, int h);
+/* Vertical scroll bar at (x,y), SB width 14, height h. Scrolls *top within
+ * [0, total-visible]. Wheel works over the window content. Always call it
+ * with the same (x,y) each frame. */
+int	ui_vscroll(UiWindow *win, int cx, int cy, int x, int y, int h,
+		int total, int visible, int *top);
+/* True while a file is being dragged over the window; gives its position in
+ * window content coordinates. */
+int	ui_drop_hover(UiWindow *win, int cx, int cy, int *x, int *y);
+/* Short message in the status bar for about 3 seconds. */
+void	ui_message(const char *fmt, ...);
 /* Mouse position in window content coordinates, or 0 if the window is not
  * under the mouse. */
 int	ui_mouse_in(UiWindow *win, int cx, int cy, int x, int y, int w, int h);
@@ -116,5 +131,17 @@ int	ui_mouse_in(UiWindow *win, int cx, int cy, int x, int y, int w, int h);
 
 /* ---- EmuBuddy app layer (ui_app.c) ---- */
 void	ui_app_init(SDL_Window *w, SDL_Renderer *r);
+/* Put a dropped/chosen disk image into the first suitable empty drive. */
+void	ui_insert_auto(const char *path);
+void	ui_file_browser_open(const char *title, void (*pick)(const char *path));
+
+/* ---- drives window and disk handling (ui_drives.c) ---- */
+void	ui_drives_init(void);
+void	ui_drives_toggle(void);
+int	ui_drives_is_open(void);
+void	ui_eject_all(void);
+int	ui_recent_count(void);
+const char *ui_recent_label(int i);
+void	ui_recent_activate(int i);
 
 #endif

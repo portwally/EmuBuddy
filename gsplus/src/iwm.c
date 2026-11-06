@@ -3531,6 +3531,20 @@ iwm_eject_named_disk(int slot, int drive, const char *name,
 	}
 }
 
+/* 1 if a drive motor is running. Ejecting then makes the core halt, so the
+ * UI checks this first and asks the user to try again. */
+int
+iwm_motor_busy(void)
+{
+	word32	state = g_iwm.state;
+	int	motor_on = state & IWM_STATE_MOTOR_ON;
+
+	if(state & IWM_STATE_C031_APPLE35SEL) {
+		motor_on = state & IWM_STATE_MOTOR_ON35;
+	}
+	return motor_on != 0;
+}
+
 void
 iwm_eject_disk_by_num(int slot, int drive)
 {

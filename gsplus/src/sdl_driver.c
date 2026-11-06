@@ -947,7 +947,7 @@ sdl_poll_events(void)
 				cfg_file_update_rom(ev.drop.data);
 				video_set_x_refresh_needed(win->kimage_ptr, 1);
 			} else if(ev.drop.data) {
-				cfg_inspect_maybe_insert_file(ev.drop.data);
+				ui_insert_auto(ev.drop.data);
 				video_set_x_refresh_needed(win->kimage_ptr, 1);
 			}
 			break;
@@ -1107,6 +1107,39 @@ sdl_push_click(Window_info *win, float lx, float ly)
 	SDL_PushEvent(&e);
 }
 
+/* EMUBUDDY_DROPS="frame:x:y:path;..." injects a file drop at logical x,y
+ * (a hover position event one frame earlier). */
+static void
+sdl_dev_drops(Window_info *win, int frames)
+{
+	const char	*p = getenv("EMUBUDDY_DROPS");
+	int		f, x, y, n;
+	char		path[1024];
+
+	while(p && sscanf(p, "%d:%d:%d:%1023[^;]%n", &f, &x, &y, path, &n) == 4) {
+		if(f == frames || f - 1 == frames) {
+			SDL_Event e;
+			float wx, wy;
+
+			SDL_RenderCoordinatesToWindow(win->renderer, (float)x,
+								(float)y, &wx, &wy);
+			SDL_zero(e);
+			e.type = (f == frames) ? SDL_EVENT_DROP_FILE :
+							SDL_EVENT_DROP_POSITION;
+			e.drop.x = wx;
+			e.drop.y = wy;
+			e.drop.data = (f == frames) ? strdup(path) : NULL;
+			SDL_PushEvent(&e);
+		}
+		p += n;
+		if(*p == ';') {
+			p++;
+		} else {
+			break;
+		}
+	}
+}
+
 static void
 sdl_dev_snapshot(Window_info *win)
 {
@@ -1118,6 +1151,11 @@ sdl_dev_snapshot(Window_info *win)
 	int		f, x, y, n;
 
 	frames++;
+	if(frames == 2 && getenv("EMUBUDDY_DROPS")) {
+		printf("EMUBUDDY logical %dx%d\n", win->width_req,
+					win->main_height + 2 * UI_BAR_H);
+	}
+	sdl_dev_drops(win, frames);
 	if(clicks) {
 		const char *p = clicks;
 

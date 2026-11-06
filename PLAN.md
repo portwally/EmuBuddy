@@ -136,6 +136,8 @@ the F4 text menu. Work:
   Unlimited speed will be measured on a real Windows/Linux/Apple Silicon run.
 
 ### Phase 2: Drives window and disk swapping (M)
+**Status: done except disk sets.** Drives window (S5 3.5", S6 5.25", S7 = SCSI card with 7 hard drives), click a drive to choose a disk, drop on a row, drop anywhere to auto-place, lock toggle, eject, Eject All, recent disks in the Disks menu, part chooser for multi-partition images, `.hdv` always goes to the hard disk slot. **Open:** disk sets (needs a text field for the name), drag a row out to eject, drive activity lights.
+**SCSI note:** slot 7 is the core's SmartPort/ProDOS block controller shown as a 7-drive SCSI card. A real Apple High-Speed SCSI card ROM is not emulated; GS/OS sees seven hard disks either way.
 - **Drives** window: one row per drive: S5D1–2 (3.5"), S6D1–2 (5.25"), S7D1–12
   (SmartPort). Icon by type, image name, write-protect badge, eject button.
 - **Drop an image onto a row** to insert it there. Drop on the emulator picture
