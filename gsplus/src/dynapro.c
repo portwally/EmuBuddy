@@ -1555,6 +1555,29 @@ dynapro_new_unix_file(const char *path, Dynapro_file *parent_ptr,
 	return fileptr;
 }
 
+/* EmuBuddy: remembers the first creation date given to each folder volume
+ * during this run, so re-mounting the folder keeps the same volume identity. */
+static word32
+dynapro_stable_volume_time(const char *path, word32 now_time)
+{
+	static char	*paths[16];
+	static word32	times[16];
+	static int	n;
+	int		i;
+
+	for(i = 0; i < n; i++) {
+		if(!strcmp(paths[i], path)) {
+			return times[i];
+		}
+	}
+	if(n < 16) {
+		paths[n] = kegs_malloc_str(path);
+		times[n] = now_time;
+		n++;
+	}
+	return now_time;
+}
+
 int
 dynapro_create_dir(Disk *dsk, char *unix_path, Dynapro_file *parent_ptr,
 				word32 dir_byte)
@@ -1607,6 +1630,14 @@ dynapro_create_dir(Disk *dsk, char *unix_path, Dynapro_file *parent_ptr,
 	}
 	head_ptr->creation_time = dynapro_unix_to_prodos_time(
 							&stat_buf.st_ctime);
+	if(storage_type >= 0xf0) {
+		// EmuBuddy: keep the volume's creation date the same for this
+		//  folder while the app runs. Adding a file changes the folder's
+		//  ctime; GS/OS would then see a "different" volume with the
+		//  same name when the folder is re-mounted to show new files.
+		head_ptr->creation_time = dynapro_stable_volume_time(unix_path,
+						head_ptr->creation_time);
+	}
 
 	dir_byte = dynapro_add_file_entry(dsk, head_ptr, 0, dir_byte, 0);
 

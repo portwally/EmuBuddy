@@ -216,6 +216,8 @@ add_executable(gsplus-sdl
     ui_app.c
     ui_drives.c
     ui_slots.c
+    ui_browser.c
+    prodos_img.c
     ${EMUBUDDY_NET_SOURCES}
     ${EMUBUDDY_PRINTER_SOURCES}
 )
@@ -237,7 +239,7 @@ if(APPLE)
     # a universal build (CMAKE_OSX_ARCHITECTURES=arm64;x86_64) errors with
     # "CMAKE_OBJC_COMPILE_OBJECT not set" unless OBJC is enabled.
     enable_language(OBJC)
-    target_sources(gsplus-sdl PRIVATE sdl_mac_menu.m)
+    target_sources(gsplus-sdl PRIVATE sdl_mac_menu.m ui_mac_drag.m)
     target_link_libraries(gsplus-sdl PRIVATE "-framework Cocoa")
 endif()
 

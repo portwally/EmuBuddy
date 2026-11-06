@@ -36,6 +36,7 @@ void		sdl_request_screenshot(void);
 
 enum {
 	CMD_OPEN_DISK = 1, CMD_QUIT, CMD_CHOOSE_ROM, CMD_DRIVES, CMD_EJECT_ALL,
+	CMD_SHARE, CMD_BROWSER,
 	CMD_RESET = 10, CMD_PAUSE, CMD_SLOTS, CMD_PRINTER,
 	CMD_SPEED_1 = 20, CMD_SPEED_28, CMD_ZIP_8, CMD_ZIP_16, CMD_ZIP_32,
 	CMD_ZIP_64, CMD_ZIP_128, CMD_UNLIMITED,
@@ -45,9 +46,12 @@ enum {
 };
 #define N_RECENT 10
 
-static UiMenuItem disks_items[5 + N_RECENT] = {
+#define DISKS_FIXED	5
+static UiMenuItem disks_items[DISKS_FIXED + 2 + N_RECENT] = {
 	{ "Drives Window", CMD_DRIVES, NULL, 0 },
 	{ "Open Disk Image...", CMD_OPEN_DISK, NULL, 0 },
+	{ "Share a Folder...", CMD_SHARE, NULL, 0 },
+	{ "Disk Browser", CMD_BROWSER, NULL, 0 },
 	{ "Eject All", CMD_EJECT_ALL, NULL, 0 },
 };
 static const UiMenuItem file_items[] = {
@@ -89,7 +93,7 @@ static const UiMenuItem help_items[] = {
 #define N(a)	((int)(sizeof(a) / sizeof((a)[0])))
 static UiMenu g_menus[] = {
 	{ "File", file_items, N(file_items) },
-	{ "Disks", disks_items, 3 },
+	{ "Disks", disks_items, DISKS_FIXED },
 	{ "Machine", machine_items, N(machine_items) },
 	{ "Speed", speed_items, N(speed_items) },
 	{ "View", view_items, N(view_items) },
@@ -107,6 +111,7 @@ static int	g_fb_isdir[FB_MAX];
 static int	g_fb_n, g_fb_sel = -1, g_fb_top;
 static void	(*g_fb_pick)(const char *path);
 static char	g_fb_last_dir[1024];
+static int	g_fb_folder_mode;	/* choosing a folder, not a file */
 
 static int
 fb_cmp(const void *a, const void *b)
@@ -134,6 +139,9 @@ fb_enum(void *ud, const char *dirname, const char *fname)
 		return SDL_ENUM_CONTINUE;
 	}
 	g_fb_isdir[g_fb_n] = (info.type == SDL_PATHTYPE_DIRECTORY);
+	if(g_fb_folder_mode && !g_fb_isdir[g_fb_n]) {
+		return SDL_ENUM_CONTINUE;	/* choosing a folder: hide files */
+	}
 	if(g_fb_isdir[g_fb_n]) {
 		size_t n = strlen(fname) + 2;
 		g_fb_names[g_fb_n] = malloc(n);
@@ -209,6 +217,34 @@ fb_up(void)
 	fb_read_dir(g_fb_dir);
 }
 
+/* Folder mode: choose the selected folder, or the one being shown. */
+static void
+fb_choose_folder(void)
+{
+	char	full[1536], name[1024];
+	size_t	n;
+
+	if(g_fb_sel >= 0 && g_fb_sel < g_fb_n) {
+		snprintf(name, sizeof(name), "%s", g_fb_names[g_fb_sel]);
+		n = strlen(name);
+		if(n && name[n - 1] == '/') {
+			name[n - 1] = 0;
+		}
+		snprintf(full, sizeof(full), "%s%s", g_fb_dir, name);
+	} else {
+		snprintf(full, sizeof(full), "%s", g_fb_dir);
+		n = strlen(full);
+		if(n > 1 && full[n - 1] == '/') {
+			full[n - 1] = 0;
+		}
+	}
+	snprintf(g_fb_last_dir, sizeof(g_fb_last_dir), "%s", g_fb_dir);
+	ui_window_close(&g_fb_win);
+	if(g_fb_pick) {
+		g_fb_pick(full);
+	}
+}
+
 static void
 fb_accept(void)
 {
@@ -271,7 +307,12 @@ fb_draw(UiWindow *win, int cx, int cy)
 								"Cancel", 1)) {
 			ui_window_close(win);
 		}
-		if(ui_button(win, cx, cy, w - 8 - 70, by, 70, 24, "Open",
+		if(g_fb_folder_mode) {
+			if(ui_button(win, cx, cy, w - 8 - 70, by, 70, 24, "Choose",
+									1)) {
+				fb_choose_folder();
+			}
+		} else if(ui_button(win, cx, cy, w - 8 - 70, by, 70, 24, "Open",
 				g_fb_sel >= 0)) {
 			fb_accept();
 		}
@@ -279,10 +320,40 @@ fb_draw(UiWindow *win, int cx, int cy)
 }
 
 void
+ui_folder_browser_open(const char *title, void (*pick)(const char *))
+{
+	g_fb_folder_mode = 1;
+	ui_file_browser_open(title, pick);
+	g_fb_folder_mode = 1;		/* (cleared by the plain opener) */
+	fb_read_dir(g_fb_dir);
+}
+
+int
+ui_is_disk_image(const char *path)
+{
+	static const char *exts[] = { "po", "hdv", "2mg", "2img", "dsk", "do",
+		"woz", "nib", "dc", "dc42", "image", "img", "raw", "shk", "sdk",
+		"gz", NULL };
+	const char	*dot = strrchr(path, '.'), *slash = strrchr(path, '/');
+	int		i;
+
+	if(!dot || (slash && dot < slash)) {
+		return 0;
+	}
+	for(i = 0; exts[i]; i++) {
+		if(!strcasecmp(dot + 1, exts[i])) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void
 ui_file_browser_open(const char *title, void (*pick)(const char *))
 {
 	const char	*h;
 
+	g_fb_folder_mode = 0;
 	snprintf(g_fb_win.title, sizeof(g_fb_win.title), "%s", title);
 	g_fb_win.w = 440;
 	g_fb_win.h = 330;
@@ -417,6 +488,8 @@ app_command(int id)
 	case CMD_SLOTS: ui_slots_toggle(); break;
 	case CMD_PRINTER: ui_printer_toggle(); break;
 	case CMD_EJECT_ALL: ui_eject_all(); break;
+	case CMD_SHARE: ui_shared_folder_choose(); break;
+	case CMD_BROWSER: ui_browser_toggle(); break;
 	case CMD_QUIT: {
 		SDL_Event q;
 
@@ -457,6 +530,7 @@ app_item_state(int id)
 	switch(id) {
 	case CMD_PAUSE: return g_ui_pause ? UI_MI_CHECKED : 0;
 	case CMD_DRIVES: return ui_drives_is_open() ? UI_MI_CHECKED : 0;
+	case CMD_BROWSER: return ui_browser_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_SLOTS: return ui_slots_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_PRINTER: return ui_printer_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_SPEED_1: return g_limit_speed == 1 ? UI_MI_CHECKED : 0;
@@ -508,7 +582,7 @@ app_status(char *left, char *center, char *right, int n)
 static void
 menu_rebuild_recent(void)
 {
-	int	i, k = 3, n = ui_recent_count();
+	int	i, k = DISKS_FIXED, n = ui_recent_count();
 
 	if(n > 0) {
 		disks_items[k].label = "";
@@ -517,7 +591,7 @@ menu_rebuild_recent(void)
 		disks_items[k].flags = UI_MI_SEP;
 		k++;
 	}
-	for(i = 0; i < n && k < 5 + N_RECENT; i++, k++) {
+	for(i = 0; i < n && k < DISKS_FIXED + 1 + N_RECENT; i++, k++) {
 		disks_items[k].label = ui_recent_label(i);
 		disks_items[k].id = CMD_RECENT0 + i;
 		disks_items[k].shortcut = NULL;
@@ -530,6 +604,7 @@ static void
 app_tick(void)
 {
 	menu_rebuild_recent();
+	ui_drives_tick();
 	if(rom_missing()) {
 		if(!g_rom_win.open) {
 			snprintf(g_rom_win.title, sizeof(g_rom_win.title),
@@ -582,6 +657,9 @@ ui_app_init(SDL_Window *w, SDL_Renderer *r)
 	if(t && !strcmp(t, "drives")) app_command(CMD_DRIVES);
 	if(t && !strcmp(t, "slots")) app_command(CMD_SLOTS);
 	if(t && !strcmp(t, "printer")) app_command(CMD_PRINTER);
+	if(t && !strcmp(t, "browser")) app_command(CMD_BROWSER);
+	t = getenv("EMUBUDDY_BROWSE");		/* developer aid: image path */
+	if(t) ui_browser_open_image(t);
 	t = getenv("EMUBUDDY_INSERT");		/* developer aid: path;path;.. */
 	if(t) {
 		char *copy = strdup(t), *save = NULL, *p;

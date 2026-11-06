@@ -107,6 +107,9 @@ int	ui_list(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
 /* Row of choices; see ui.c. Returns 1 when the selection changes. */
 int	ui_segment(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
 		const char **labels, int n, int *sel, unsigned enabled);
+/* 1 once when a press inside the rect turns into a drag. */
+int	ui_drag_started(UiWindow *win, int cx, int cy, int x, int y, int w, int h);
+void	ui_reset_press(void);
 /* Invisible click area. Returns 1 when the user clicks it. */
 int	ui_hit(UiWindow *win, int cx, int cy, int x, int y, int w, int h);
 /* Vertical scroll bar at (x,y), SB width 14, height h. Scrolls *top within
@@ -119,6 +122,8 @@ int	ui_vscroll(UiWindow *win, int cx, int cy, int x, int y, int h,
 int	ui_drop_hover(UiWindow *win, int cx, int cy, int *x, int *y);
 /* Short message in the status bar for about 3 seconds. */
 void	ui_message(const char *fmt, ...);
+/* Column x offsets for the next ui_list call (items split on tabs). */
+void	ui_list_columns(const int *xs, int n);
 /* Mouse position in window content coordinates, or 0 if the window is not
  * under the mouse. */
 int	ui_mouse_in(UiWindow *win, int cx, int cy, int x, int y, int w, int h);
@@ -137,6 +142,16 @@ void	ui_app_init(SDL_Window *w, SDL_Renderer *r);
 /* Put a dropped/chosen disk image into the first suitable empty drive. */
 void	ui_insert_auto(const char *path);
 void	ui_file_browser_open(const char *title, void (*pick)(const char *path));
+/* Same browser, but it picks a folder. */
+void	ui_folder_browser_open(const char *title, void (*pick)(const char *path));
+/* Disk images by extension (.po .2mg .hdv .dsk .woz ...). */
+int	ui_is_disk_image(const char *path);
+/* Shared Folder and Disk Browser (ui_drives.c / ui_browser.c) */
+void	ui_shared_folder_choose(void);
+int	ui_drop_regular_file(const char *path);
+void	ui_browser_toggle(void);
+int	ui_browser_is_open(void);
+void	ui_browser_open_image(const char *path);
 
 /* ---- drives window and disk handling (ui_drives.c) ---- */
 void	ui_slots_toggle(void);
@@ -145,6 +160,7 @@ int	ui_printer_is_open(void);
 SDL_Renderer *ui_renderer(void);
 int	ui_slots_is_open(void);
 void	ui_drives_init(void);
+void	ui_drives_tick(void);		/* once per frame */
 void	ui_drives_toggle(void);
 int	ui_drives_is_open(void);
 void	ui_eject_all(void);

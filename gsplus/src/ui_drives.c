@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 /* core */
 int		iwm_motor_busy(void);
@@ -208,6 +209,48 @@ part_open(int slot, int drive, const char *path)
 	ui_window_open(&g_part_win);
 }
 
+static int
+is_folder(const char *path)
+{
+	struct stat	sb;
+
+	return stat(path, &sb) == 0 && S_ISDIR(sb.st_mode);
+}
+
+/* Blocks for a folder volume in this kind of drive. */
+static unsigned
+folder_blocks(int slot)
+{
+	return slot == 5 ? 1600 : slot == 6 ? 280 : 65535;
+}
+
+/* Mount a Mac/PC folder as a live ProDOS volume in a drive. */
+static void
+folder_mount(int slot, int drive, const char *path)
+{
+	Disk	*dsk = iwm_get_dsk_from_slot_drive(slot, drive);
+	char	clean[1100];
+	size_t	n;
+
+	snprintf(clean, sizeof(clean), "%s", path);
+	n = strlen(clean);
+	while(n > 1 && clean[n - 1] == '/') {
+		clean[--n] = 0;
+	}
+	if(iwm_motor_busy() && dsk->fd >= 0) {
+		ui_message("Drive is busy - try again in a moment");
+		return;
+	}
+	insert_disk(slot, drive, clean, 0, 0, -1, folder_blocks(slot));
+	if(dsk->fd >= 0) {
+		ui_message("Shared folder %s is in S%dD%d", base_name(clean),
+							slot, drive + 1);
+	} else {
+		ui_message("Can't share %s (too big for a %s volume?)",
+			base_name(clean), slot == 7 ? "32 MB" : "floppy");
+	}
+}
+
 /* Put a disk image into a specific drive. Returns 1 (handled). */
 static int
 drive_insert(int slot, int drive, const char *path)
@@ -221,6 +264,18 @@ drive_insert(int slot, int drive, const char *path)
 	}
 	if(slot == 7 && !g_slot7_scsi) {
 		ui_message("No SCSI card - plug it in under Machine > Slots");
+		return 1;
+	}
+	if(S_ISDIR(sb.st_mode)) {
+		folder_mount(slot, drive, path);
+		return 1;
+	}
+	if(!ui_is_disk_image(path)) {
+		/* a plain file: copy it into the folder in this drive */
+		if(dsk->fd >= 0 && dsk->dynapro_info_ptr) {
+			return ui_drop_regular_file(path);
+		}
+		ui_message("%s is not a disk image", base_name(path));
 		return 1;
 	}
 	if(iwm_motor_busy() && (dsk->fd >= 0 || path_mounted_anywhere(path))) {
@@ -241,7 +296,31 @@ drive_insert(int slot, int drive, const char *path)
 void
 ui_insert_auto(const char *path)
 {
-	int	slot = cfg_guess_slot(path), d, nd;
+	int	slot, d, nd;
+
+	if(is_folder(path)) {
+		/* a folder becomes a hard disk volume on the SCSI card */
+		if(!g_slot7_scsi) {
+			ui_message("No SCSI card - plug it in under Machine > Slots");
+			return;
+		}
+		for(d = 0; d < SCSI_DRIVES; d++) {
+			if(iwm_get_dsk_from_slot_drive(7, d)->fd < 0) {
+				break;
+			}
+		}
+		if(d == SCSI_DRIVES) {
+			ui_message("All 7 SCSI drives are in use");
+			return;
+		}
+		folder_mount(7, d, path);
+		return;
+	}
+	if(!ui_is_disk_image(path)) {
+		ui_drop_regular_file(path);
+		return;
+	}
+	slot = cfg_guess_slot(path);
 
 	if(slot == 0) {
 		ui_message("Not a disk image: %s", base_name(path));
@@ -488,8 +567,109 @@ drives_draw(UiWindow *win, int cx, int cy)
 	if(ui_button(win, cx, cy, 8, bottom, 80, 24, "Eject All", 1)) {
 		ui_eject_all();
 	}
-	ui_draw_text(cx + 96, cy + bottom + 4,
-			"Click a drive or drop a disk on it.", UI_GREY);
+	if(ui_button(win, cx, cy, 96, bottom, 120, 24, "Share Folder", 1)) {
+		ui_shared_folder_choose();
+	}
+	ui_draw_text(cx + 226, cy + bottom + 4, "Drop disks or folders here.",
+								UI_GREY);
+}
+
+/* A shared folder being refreshed: ejected now, put back after a pause so
+ * GS/OS sees the disk go away first (an instant swap makes the Finder
+ * think there are two volumes with the same name). */
+#define REMOUNT_FRAMES	180		/* 3 seconds */
+static struct {
+	int		active, slot, drive, frames;
+	unsigned	blocks;
+	char		path[1100];
+} g_remount;
+
+void
+ui_drives_tick(void)
+{
+	if(!g_remount.active || --g_remount.frames > 0) {
+		return;
+	}
+	if(iwm_motor_busy()) {
+		g_remount.frames = 30;		/* try again shortly */
+		return;
+	}
+	g_remount.active = 0;
+	insert_disk(g_remount.slot, g_remount.drive, g_remount.path, 0, 0, -1,
+							g_remount.blocks);
+	ui_message("%s is back with the new files", base_name(g_remount.path));
+}
+
+/* Copy a plain Mac/PC file into the first shared folder and refresh that
+ * volume so the IIgs sees the file. Returns 1 (handled). */
+int
+ui_drop_regular_file(const char *path)
+{
+	int	slot, d = 0, nd, i, found = 0;
+
+	if(g_remount.active) {
+		/* the folder is being refreshed already: just add the file */
+		char dst2[1400];
+
+		snprintf(dst2, sizeof(dst2), "%s/%s", g_remount.path,
+							base_name(path));
+		if(SDL_CopyFile(path, dst2)) {
+			g_remount.frames = REMOUNT_FRAMES;
+			ui_message("Copied %s", base_name(path));
+		}
+		return 1;
+	}
+	Disk	*dsk = NULL;
+	char	dst[1400], folder[1100];
+	unsigned blocks;
+
+	for(slot = 7; slot >= 5 && !found; slot--) {
+		nd = (slot == 7) ? MAX_C7_DISKS : 2;
+		for(d = 0; d < nd; d++) {
+			dsk = iwm_get_dsk_from_slot_drive(slot, d);
+			if(dsk->fd >= 0 && dsk->dynapro_info_ptr && dsk->name_ptr) {
+				found = 1;
+				break;
+			}
+		}
+	}
+	if(!found) {
+		ui_message("To copy files in, share a folder first (Disks menu)");
+		return 1;
+	}
+	slot++;				/* undo the loop's last step */
+	snprintf(folder, sizeof(folder), "%s", dsk->name_ptr);
+	snprintf(dst, sizeof(dst), "%s/%s", folder, base_name(path));
+	for(i = 2; access(dst, F_OK) == 0 && i < 100; i++) {
+		snprintf(dst, sizeof(dst), "%s/%d %s", folder, i, base_name(path));
+	}
+	if(!SDL_CopyFile(path, dst)) {
+		ui_message("Could not copy %s", base_name(path));
+		return 1;
+	}
+	if(iwm_motor_busy()) {
+		ui_message("Copied %s - it shows up after the disk is re-read",
+							base_name(path));
+		return 1;
+	}
+	/* re-mount so the new file appears on the volume */
+	blocks = dsk->dynapro_blocks;
+	iwm_eject_disk(dsk);
+	g_remount.active = 1;
+	g_remount.slot = slot;
+	g_remount.drive = d;
+	g_remount.blocks = blocks;
+	g_remount.frames = REMOUNT_FRAMES;
+	snprintf(g_remount.path, sizeof(g_remount.path), "%s", folder);
+	ui_message("Copied %s - refreshing %s...", base_name(path),
+							base_name(folder));
+	return 1;
+}
+
+void
+ui_shared_folder_choose(void)
+{
+	ui_folder_browser_open("Choose a Folder to Share", ui_insert_auto);
 }
 
 int

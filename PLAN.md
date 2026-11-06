@@ -191,6 +191,8 @@ GS/OS printing tested: Teach on System 6 -> ImageWriter driver v4.2 dialog -> bi
   auto-detects it.
 
 ### Phase 6: Files between desktop and emulator (M–L)
+**Status, working:** (1) Share a Folder (Disks menu, Drives window button, or drop a folder): a Mac/PC folder becomes a live ProDOS volume (32 MB on the SCSI card, or floppy size in S5/S6). (2) Dropping a plain file onto the window copies it into the shared folder; the volume is ejected and put back after 3 s, and keeps its creation date (dynapro change) so GS/OS treats it as the same disk. (3) Disk Browser (Disks menu, or drop an image on it): lists ProDOS images (.po .hdv .2mg .dsk/.do), folders, types, sizes; Export to Desktop (file or whole folder); on macOS drag a file straight out (native AppKit drag, `ui_mac_drag.m`). Exported names use the dynapro convention (`NAME,t$TT,a$AAAA`, `.txt`, AppleSingle for forked files) so they round-trip. Tested: TEACH exported as AppleSingle, shared back in, shows as an S16 app in the GS/OS Finder; a file dropped while running appears on the volume.
+**Open:** a real Finder drop for drag-out still needs a manual check; Windows/Linux drag-out; writing into disk images from the Disk Browser; HFS images.
 1. **Shared Folder drive** (works on every OS, builds on `dynapro.c`): pick a host
    folder, it mounts as a live ProDOS volume in slot 7. Files put in the folder
    appear in GS/OS and the other way round.

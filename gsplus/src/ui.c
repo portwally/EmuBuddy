@@ -21,6 +21,8 @@ static float	g_wheel;
 static int	g_press_owned;		/* the current press began on the UI */
 static int	g_over_ui;
 static int	g_drop_active;
+static float	g_press_x, g_press_y;
+static int	g_drag_taken;
 static float	g_drop_x, g_drop_y;
 
 /* What the current press is doing. */
@@ -212,6 +214,12 @@ win_at(float px, float py)
 		}
 	}
 	return NULL;
+}
+
+SDL_Window *
+ui_window(void)
+{
+	return g_sdlwin;
 }
 
 SDL_Renderer *
@@ -463,6 +471,9 @@ handle_mouse(SDL_Event *ev)
 			g_cap = CAP_WIDGET;
 			g_cap_win = w;
 			g_pressed = 1;
+			g_press_x = g_mx;
+			g_press_y = g_my;
+			g_drag_taken = 0;
 		}
 		return 1;
 
@@ -677,6 +688,42 @@ ui_checkbox(UiWindow *win, int cx, int cy, int x, int y, const char *label,
 }
 
 #define SB_W	14		/* scroll bar width */
+
+/* Optional columns for ui_list: items with tabs are split and each part is
+ * drawn at the next column offset. Set before ui_list, cleared after. */
+static const int	*g_list_cols;
+static int		g_list_ncols;
+
+void
+ui_list_columns(const int *xs, int n)
+{
+	g_list_cols = xs;
+	g_list_ncols = n;
+}
+
+static void
+list_text(int x, int y, const char *s, Uint32 rgb)
+{
+	char	part[256];
+	int	col = 0, n;
+	const char *tab;
+
+	if(!g_list_cols) {
+		ui_draw_text(x, y, s, rgb);
+		return;
+	}
+	while(s) {
+		tab = strchr(s, '\t');
+		n = tab ? (int)(tab - s) : (int)strlen(s);
+		if(n > 255) n = 255;
+		memcpy(part, s, (size_t)n);
+		part[n] = 0;
+		ui_draw_text(x + (col < g_list_ncols ? g_list_cols[col] : 0), y,
+							part, rgb);
+		col++;
+		s = tab ? tab + 1 : NULL;
+	}
+}
 #define ROW_H	18
 
 int
@@ -715,9 +762,9 @@ ui_list(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
 
 			if(idx == *sel) {
 				ui_fill(lx + 1, ry, w - SB_W - 1, ROW_H, UI_BLACK);
-				ui_draw_text(lx + 4, ry + 1, items[idx], UI_WHITE);
+				list_text(lx + 4, ry + 1, items[idx], UI_WHITE);
 			} else {
-				ui_draw_text(lx + 4, ry + 1, items[idx], UI_BLACK);
+				list_text(lx + 4, ry + 1, items[idx], UI_BLACK);
 			}
 		}
 		if(had) {
@@ -829,6 +876,37 @@ ui_segment(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
 				chosen ? UI_WHITE : (on ? UI_BLACK : UI_LGREY));
 	}
 	return changed;
+}
+
+/* 1 once, when a press that began inside the rect has moved far enough to
+ * count as a drag (the pointer may have left the window since). */
+int
+ui_drag_started(UiWindow *win, int cx, int cy, int x, int y, int w, int h)
+{
+	float	dx = g_mx - g_press_x, dy = g_my - g_press_y;
+
+	if(!g_down || g_drag_taken || g_cap != CAP_WIDGET || g_cap_win != win) {
+		return 0;
+	}
+	if(!in_rect(g_press_x, g_press_y, cx + x, cy + y, w, h)) {
+		return 0;
+	}
+	if(dx * dx + dy * dy < 36) {
+		return 0;
+	}
+	g_drag_taken = 1;
+	return 1;
+}
+
+/* Forget the current press (a native drag took over the mouse). */
+void
+ui_reset_press(void)
+{
+	g_down = 0;
+	g_press_owned = 0;
+	g_cap = CAP_NONE;
+	g_cap_win = NULL;
+	g_active_widget = NULL;
 }
 
 int
