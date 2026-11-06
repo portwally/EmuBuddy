@@ -41,4 +41,19 @@ int	pimg_export(PImg *img, const PEntry *e, const char *dir, char *out_path,
 /* Short type name ("TXT", "BIN", "S16", or "$C1"). */
 const char *pimg_type_name(int type);
 
+
+/* ---- writing (used to install the IIgs helper into a disk image) ----
+ * Only for a 512-byte-block image (.po .hdv .2mg ProDOS order) that nothing is
+ * using at the moment. */
+int	pimg_open_rw(PImg *img, const char *path, const char **err);
+/* Looks up a folder like "SYSTEM/SYSTEM.SETUP" (names are not case sensitive).
+ * Returns its key block, or 0 if there is none. */
+unsigned pimg_find_dir(PImg *img, const char *path);
+/* Adds a file (up to 128 KB) to the folder with the given key block. The name
+ * is stored in upper case. Returns 0, or -1 with the reason in *err. */
+int	pimg_add_file(PImg *img, unsigned dir_key, const char *name, int ftype,
+		unsigned aux, const uint8_t *data, unsigned len, const char **err);
+/* 1 if the folder has an entry with that name. */
+int	pimg_has_entry(PImg *img, unsigned dir_key, const char *name);
+
 #endif

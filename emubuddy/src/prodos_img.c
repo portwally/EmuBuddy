@@ -5,6 +5,7 @@
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
+#include <time.h>
 
 /* ProDOS sector -> DOS 3.3 sector, for 5.25" images stored in DOS order */
 static const int g_p2d[16] = { 0, 13, 11, 9, 7, 5, 3, 1,
@@ -46,8 +47,8 @@ ext_of(const char *path)
 	return d ? d + 1 : "";
 }
 
-int
-pimg_open(PImg *img, const char *path, const char **err)
+static int
+pimg_open_mode(PImg *img, const char *path, const char **err, const char *mode)
 {
 	uint8_t		hdr[64], vd[512];
 	long		size;
@@ -56,7 +57,7 @@ pimg_open(PImg *img, const char *path, const char **err)
 
 	memset(img, 0, sizeof(*img));
 	*err = "Cannot open the file";
-	img->f = fopen(path, "rb");
+	img->f = fopen(path, mode);
 	if(!img->f) {
 		return -1;
 	}
@@ -100,6 +101,26 @@ pimg_open(PImg *img, const char *path, const char **err)
 	memcpy(img->volume, vd + 5, (size_t)n);
 	img->volume[n] = 0;
 	*err = "";
+	return 0;
+}
+
+int
+pimg_open(PImg *img, const char *path, const char **err)
+{
+	return pimg_open_mode(img, path, err, "rb");
+}
+
+int
+pimg_open_rw(PImg *img, const char *path, const char **err)
+{
+	if(pimg_open_mode(img, path, err, "r+b") != 0) {
+		return -1;
+	}
+	if(img->dos_order) {
+		*err = "This image is in DOS order";
+		pimg_close(img);
+		return -1;
+	}
 	return 0;
 }
 
@@ -360,4 +381,306 @@ pimg_export(PImg *img, const PEntry *e, const char *dir, char *out, int outlen)
 	free(data);
 	free(rsrc);
 	return ok ? 0 : -1;
+}
+
+/* ---- writing ---- */
+
+static int
+write_block(PImg *img, unsigned blk, const uint8_t *buf)
+{
+	if(blk >= img->blocks || img->dos_order) {
+		return -1;
+	}
+	if(fseek(img->f, img->offset + (long)blk * 512, SEEK_SET) != 0) {
+		return -1;
+	}
+	return fwrite(buf, 1, 512, img->f) == 512 ? 0 : -1;
+}
+
+static int
+name_eq(const char *a, const char *b)
+{
+	for(; *a && *b; a++, b++) {
+		if(toupper((unsigned char)*a) != toupper((unsigned char)*b)) {
+			return 0;
+		}
+	}
+	return *a == 0 && *b == 0;
+}
+
+unsigned
+pimg_find_dir(PImg *img, const char *path)
+{
+	unsigned	key = 2;
+	char		comp[32];
+	const char	*p = path;
+	PEntry		*list = malloc(sizeof(PEntry) * 512);
+	int		n, i;
+
+	if(!list) {
+		return 0;
+	}
+	while(*p) {
+		size_t l = strcspn(p, "/");
+
+		if(l == 0) {
+			p++;
+			continue;
+		}
+		snprintf(comp, sizeof(comp), "%.*s", (int)(l > 30 ? 30 : l), p);
+		p += l;
+		n = pimg_list(img, key, list, 512);
+		for(i = 0; i < n; i++) {
+			if(list[i].storage == 0xD && name_eq(list[i].name, comp)) {
+				break;
+			}
+		}
+		if(i >= n) {
+			free(list);
+			return 0;
+		}
+		key = list[i].key;
+	}
+	free(list);
+	return key;
+}
+
+int
+pimg_has_entry(PImg *img, unsigned dir_key, const char *name)
+{
+	PEntry	*list = malloc(sizeof(PEntry) * 512);
+	int	n, i, found = 0;
+
+	if(!list) {
+		return 0;
+	}
+	n = pimg_list(img, dir_key, list, 512);
+	for(i = 0; i < n; i++) {
+		if(name_eq(list[i].name, name)) {
+			found = 1;
+		}
+	}
+	free(list);
+	return found;
+}
+
+/* The volume bitmap: bit set = block free. */
+typedef struct {
+	uint8_t		*map;
+	unsigned	first, nblk;		/* first bitmap block, how many */
+	unsigned	total;
+} Bitmap;
+
+static int
+bitmap_load(PImg *img, Bitmap *bm)
+{
+	uint8_t	vd[512];
+	unsigned i;
+
+	if(read_block(img, 2, vd) != 0) {
+		return -1;
+	}
+	bm->first = vd[0x27] | (vd[0x28] << 8);
+	bm->total = vd[0x29] | (vd[0x2a] << 8);
+	if(bm->total > img->blocks || bm->total == 0) {
+		bm->total = img->blocks;
+	}
+	bm->nblk = (bm->total + 4095) / 4096;
+	bm->map = malloc((size_t)bm->nblk * 512);
+	if(!bm->map) {
+		return -1;
+	}
+	for(i = 0; i < bm->nblk; i++) {
+		if(read_block(img, bm->first + i, bm->map + i * 512) != 0) {
+			free(bm->map);
+			return -1;
+		}
+	}
+	return 0;
+}
+
+static int
+bm_is_free(const Bitmap *bm, unsigned blk)
+{
+	return (bm->map[blk >> 3] >> (7 - (blk & 7))) & 1;
+}
+
+static void
+bm_set(Bitmap *bm, unsigned blk, int free_it)
+{
+	uint8_t mask = (uint8_t)(1 << (7 - (blk & 7)));
+
+	if(free_it) {
+		bm->map[blk >> 3] |= mask;
+	} else {
+		bm->map[blk >> 3] &= (uint8_t)~mask;
+	}
+}
+
+static unsigned
+bm_alloc(Bitmap *bm)
+{
+	unsigned b;
+
+	for(b = 3; b < bm->total; b++) {
+		if(bm_is_free(bm, b)) {
+			bm_set(bm, b, 0);
+			return b;
+		}
+	}
+	return 0;
+}
+
+int
+pimg_add_file(PImg *img, unsigned dir_key, const char *name, int ftype,
+		unsigned aux, const uint8_t *data, unsigned len, const char **err)
+{
+	Bitmap		bm;
+	uint8_t		blk[512], idx[512], ent[39];
+	unsigned	ndata = (len + 511) / 512, key = 0, i, b, blkno, slot_blk = 0;
+	int		slot = -1, storage, nlen = (int)strlen(name);
+	unsigned	alloc[256], na = 0, guard = 0, count;
+	time_t		t = time(NULL);
+	struct tm	*tm = localtime(&t);
+	unsigned	date, tim;
+
+	if(nlen < 1 || nlen > 15 || len > 128 * 1024 || dir_key == 0) {
+		*err = "Bad name or size";
+		return -1;
+	}
+	if(pimg_has_entry(img, dir_key, name)) {
+		*err = "A file with that name exists";
+		return -1;
+	}
+	if(bitmap_load(img, &bm) != 0) {
+		*err = "Can't read the volume bitmap";
+		return -1;
+	}
+	/* a free slot in the folder */
+	blkno = dir_key;
+	while(blkno && guard++ < 2000) {
+		if(read_block(img, blkno, blk) != 0) {
+			free(bm.map);
+			*err = "Can't read the folder";
+			return -1;
+		}
+		for(i = (blkno == dir_key) ? 1 : 0; i < 13; i++) {
+			if((blk[4 + i * 39] >> 4) == 0) {
+				slot = (int)i;
+				slot_blk = blkno;
+				break;
+			}
+		}
+		if(slot >= 0) {
+			break;
+		}
+		blkno = blk[2] | (blk[3] << 8);
+	}
+	if(slot < 0) {
+		free(bm.map);
+		*err = "The folder is full";
+		return -1;
+	}
+	/* blocks: seedling = 1 data block; sapling = index + data blocks */
+	storage = ndata <= 1 ? 1 : 2;
+	if(storage == 2) {
+		key = bm_alloc(&bm);
+		if(!key) {
+			free(bm.map);
+			*err = "The disk is full";
+			return -1;
+		}
+		alloc[na++] = key;
+	}
+	memset(idx, 0, sizeof(idx));
+	for(i = 0; i < (ndata ? ndata : 1); i++) {
+		b = bm_alloc(&bm);
+		if(!b) {
+			free(bm.map);
+			*err = "The disk is full";
+			return -1;
+		}
+		alloc[na++] = b;
+		if(storage == 1) {
+			key = b;
+		} else {
+			idx[i] = (uint8_t)(b & 0xff);
+			idx[256 + i] = (uint8_t)(b >> 8);
+		}
+		memset(blk, 0, sizeof(blk));
+		if(i * 512 < len) {
+			memcpy(blk, data + i * 512, (len - i * 512) < 512 ? len - i * 512 : 512);
+		}
+		if(write_block(img, b, blk) != 0) {
+			free(bm.map);
+			*err = "Write error";
+			return -1;
+		}
+	}
+	if(storage == 2 && write_block(img, key, idx) != 0) {
+		free(bm.map);
+		*err = "Write error";
+		return -1;
+	}
+	/* the bitmap */
+	for(i = 0; i < bm.nblk; i++) {
+		if(write_block(img, bm.first + i, bm.map + i * 512) != 0) {
+			free(bm.map);
+			*err = "Write error";
+			return -1;
+		}
+	}
+	free(bm.map);
+	/* the folder entry */
+	date = tm ? (((unsigned)(tm->tm_year % 100) << 9) | ((unsigned)(tm->tm_mon + 1) << 5) |
+			(unsigned)tm->tm_mday) : 0;
+	tim = tm ? (((unsigned)tm->tm_hour << 8) | (unsigned)tm->tm_min) : 0;
+	memset(ent, 0, sizeof(ent));
+	ent[0] = (uint8_t)((storage << 4) | nlen);
+	for(i = 0; i < (unsigned)nlen; i++) {
+		ent[1 + i] = (uint8_t)toupper((unsigned char)name[i]);
+	}
+	ent[0x10] = (uint8_t)ftype;
+	ent[0x11] = (uint8_t)(key & 0xff);
+	ent[0x12] = (uint8_t)(key >> 8);
+	ent[0x13] = (uint8_t)(na & 0xff);
+	ent[0x14] = (uint8_t)(na >> 8);
+	ent[0x15] = (uint8_t)(len & 0xff);
+	ent[0x16] = (uint8_t)((len >> 8) & 0xff);
+	ent[0x17] = (uint8_t)((len >> 16) & 0xff);
+	ent[0x18] = (uint8_t)(date & 0xff);
+	ent[0x19] = (uint8_t)(date >> 8);
+	ent[0x1a] = (uint8_t)(tim & 0xff);
+	ent[0x1b] = (uint8_t)(tim >> 8);
+	ent[0x1e] = 0xe3;			/* read, write, rename, destroy */
+	ent[0x1f] = (uint8_t)(aux & 0xff);
+	ent[0x20] = (uint8_t)(aux >> 8);
+	ent[0x21] = ent[0x18]; ent[0x22] = ent[0x19];
+	ent[0x23] = ent[0x1a]; ent[0x24] = ent[0x1b];
+	ent[0x25] = (uint8_t)(dir_key & 0xff);
+	ent[0x26] = (uint8_t)(dir_key >> 8);
+	if(read_block(img, slot_blk, blk) != 0) {
+		*err = "Can't read the folder";
+		return -1;
+	}
+	memcpy(blk + 4 + slot * 39, ent, 39);
+	if(write_block(img, slot_blk, blk) != 0) {
+		*err = "Write error";
+		return -1;
+	}
+	/* the file count in the folder's header (first block) */
+	if(read_block(img, dir_key, blk) != 0) {
+		*err = "Can't read the folder";
+		return -1;
+	}
+	count = blk[0x25] | (blk[0x26] << 8);
+	count++;
+	blk[0x25] = (uint8_t)(count & 0xff);
+	blk[0x26] = (uint8_t)(count >> 8);
+	if(write_block(img, dir_key, blk) != 0) {
+		*err = "Write error";
+		return -1;
+	}
+	fflush(img->f);
+	return 0;
 }

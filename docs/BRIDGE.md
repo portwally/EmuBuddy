@@ -113,8 +113,13 @@ a folder on **another** disk (for example `:Boot.Disk:Dragtests`), EmuBuddy and 
    - `Inbox/NNNN/target.txt` holds the GS/OS path of the folder (`:Boot.Disk:Dragtests`) and a CR. It is written last, so a
      drop that is still being copied is skipped.
    - Files with a resource fork (`.applesingle`) are not staged.
-2. You run **Receive** in the IIgs (Disks > Copy Receive to Shared Folder puts it on the shared disk as an S16 program).
-   It lists `Inbox`, and for every drop with a target it creates the file in that folder (data fork, with type and aux
+2. In the IIgs the **EmuBuddy helper** picks the drop up by itself. It is a permanent init
+   (`SYSTEM/SYSTEM.SETUP/EMUBUDDYHELPER`, type $B6) that checks `Inbox` about once a second from the heartbeat
+   interrupt, using the Scheduler so GS/OS calls are safe. EmuBuddy installs it once, after asking, into the startup disk
+   (S7D1) while the disk is not in use, then restarts the IIgs. The bridge folder is made automatically
+   (`EmuBuddy/Bridge` in the application data folder) unless you chose one or switched the bridge off. The same copy
+   engine is also available as the program **Receive** (`tools/receive`), which you run by hand
+   (Disks > Copy Receive to Shared Folder). Either one lists `Inbox`, and for every drop with a target it creates the file in that folder (data fork, with type and aux
    type), copies the data in 16 KB pieces, removes the staged files, and leaves a note in `Outbox/NNNN.txt`.
 3. EmuBuddy reads the notes once a second and shows them in the status bar: `OK :Boot.Disk:Dragtests:NAME`, or
    `ERR $xx path`.
@@ -123,5 +128,5 @@ Errors keep the staged files in `Inbox` so nothing is lost: `$47` the name exist
 (or was closed), `$48` the disk is full, `$4E` write protected. Receive reports them again the next time it runs. Delete the
 `Inbox/NNNN` folder on the computer to forget a drop.
 
-Receive needs nothing else: it only uses the bridge and GS/OS. Its source is in `tools/receive/` (Merlin 32); a desk
-accessory that does the same without being started by hand can reuse the same steps.
+The helper and Receive need nothing else: it only uses the bridge and GS/OS. Its source is in `tools/receive/` (Merlin 32); the helper is
+in `tools/helper/` and shares `engine.s`.

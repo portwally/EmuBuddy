@@ -168,6 +168,8 @@ extern Cfg_menu g_cfg_sdl_video_menu[];
  * the main menu table so they are saved in config.kegs. */
 int	g_slot4_mockingboard = 0;	/* slot 4: 1 Mockingboard, 0 empty */
 extern char *g_bridge_root;		/* bridge.c: the bridge folder */
+int	g_helper_ask = 1;			/* offer to install the IIgs drop helper */
+int	g_bridge_off = 0;			/* the user switched the bridge off */
 int	g_auto_share = 1;			/* make and mount a shared folder when none is */
 int	g_skin = 0;				/* 0 = IIgs look, 1 = System (macOS menu bar, native choosers) */
 int	g_window_scale = 1;		/* EmuBuddy window size: 1x..4x */
@@ -445,6 +447,8 @@ Cfg_menu g_cfg_main_menu[] = {
 { "Bridge folder", KNMP(g_bridge_root), CFGTYPE_STR },
 { "Skin,0,IIgs,1,System", KNMP(g_skin), CFGTYPE_INT },
 { "Automatic shared folder,0,Off,1,On", KNMP(g_auto_share), CFGTYPE_INT },
+{ "Ask to install the IIgs helper,0,Never,1,Ask", KNMP(g_helper_ask), CFGTYPE_INT },
+{ "Bridge switched off,0,No,1,Yes", KNMP(g_bridge_off), CFGTYPE_INT },
 { "Uthernet II slot,0,None,3,Slot 3,4,Slot 4", KNMP(g_uthernet2_slot),
 		CFGTYPE_INT },
 { "Speed,0,Unlimited,1,1.0MHz,2,2.8MHz,3,8.0MHz (Zip)",

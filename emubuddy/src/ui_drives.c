@@ -6,6 +6,8 @@
 #include "ui.h"
 #include "bridge.h"
 #include "receive_bin.h"
+#include "helper_bin.h"
+#include "prodos_img.h"
 int	ui_bridge_is_on(void);
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +25,7 @@ int		cfg_ui_partition_choose(int pos, int slot, int drive,
 extern int	g_cfg_select_partition;
 extern int	g_cfg_slotdrive;
 extern int	g_slot7_scsi;
+extern int	g_bridge_off;
 
 #define N_RECENT	10
 #define SCSI_DRIVES	7	/* the SCSI card has 7 hard drives (S7D1-S7D7) */
@@ -936,6 +939,7 @@ bridge_folder_picked(const char *path)
 		return;
 	}
 	cfg_file_update_ptr(&g_bridge_root, (char *)path, 1);
+	g_bridge_off = 0;
 	ui_message("Bridge folder: %s", base_name(path));
 }
 
@@ -949,6 +953,8 @@ void
 ui_bridge_off(void)
 {
 	cfg_file_update_ptr(&g_bridge_root, "", 1);
+	g_bridge_off = 1;
+	config_write_config_kegs_file(0);
 	ui_message("Bridge off");
 }
 
@@ -1232,4 +1238,147 @@ ui_drives_init(void)
 {
 	bridge_overlap_check = bridge_overlaps_share;
 	recent_load();
+}
+
+/* ---- The IIgs helper ----
+ * A small program (tools/helper) that runs in the background in the IIgs and
+ * copies files that were dropped on the EmuBuddy window into the Finder window
+ * they were dropped on. It lives in the boot disk's /SYSTEM/SYSTEM.SETUP
+ * folder. EmuBuddy installs it once, after asking. */
+
+extern int	g_helper_ask, g_bridge_off, g_ui_pause;
+
+
+
+#define HELPER_NAME	"EMUBUDDYHELPER"
+#define HELPER_DIR	"SYSTEM/SYSTEM.SETUP"
+
+/* Is the helper in that image? -1: not a disk this can handle, 0: no, 1: yes */
+static int
+helper_present(const char *path, unsigned *dirkey)
+{
+	PImg		img;
+	const char	*err;
+	int		r;
+
+	if(pimg_open_rw(&img, path, &err) != 0) {
+		return -1;
+	}
+	*dirkey = pimg_find_dir(&img, HELPER_DIR);
+	r = !*dirkey ? -1 : pimg_has_entry(&img, *dirkey, HELPER_NAME);
+	pimg_close(&img);
+	return r;
+}
+
+/* Write the helper into the image; the caller has ejected the disk. */
+static int
+helper_write(const char *path, const char **err)
+{
+	PImg		img;
+	unsigned	dir;
+	int		r;
+
+	if(pimg_open_rw(&img, path, err) != 0) {
+		return -1;
+	}
+	dir = pimg_find_dir(&img, HELPER_DIR);
+	if(!dir) {
+		pimg_close(&img);
+		*err = "No SYSTEM/SYSTEM.SETUP folder";
+		return -1;
+	}
+	r = pimg_add_file(&img, dir, HELPER_NAME, 0xB6, 0, helper_bin,
+						sizeof(helper_bin), err);
+	pimg_close(&img);
+	return r;
+}
+
+/* Asks, at start, whether to put the helper into the boot disk (S7D1). */
+void
+ui_helper_offer(void)
+{
+	Disk		*dsk;
+	char		path[1100];
+	unsigned	dir;
+	int		have, was_paused = g_ui_pause, pick;
+	const char	*err = "";
+	SDL_MessageBoxButtonData btn[3];
+	SDL_MessageBoxData box;
+
+	if(!g_helper_ask || !g_slot7_scsi || getenv("EMUBUDDY_NOHELPER")) {
+		return;
+	}
+	dsk = iwm_get_dsk_from_slot_drive(7, 0);
+	if(dsk->fd < 0 || !dsk->name_ptr || dsk->dynapro_info_ptr) {
+		return;
+	}
+	snprintf(path, sizeof(path), "%s", dsk->name_ptr);
+	have = helper_present(path, &dir);
+	if(have != 0) {				/* installed, or not suitable */
+		return;
+	}
+	g_ui_pause = 1;
+	SDL_zero(btn);
+	btn[0].flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT;
+	btn[0].buttonID = 1;
+	btn[0].text = "Install";
+	btn[1].buttonID = 2;
+	btn[1].text = "Not Now";
+	btn[2].flags = SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
+	btn[2].buttonID = 3;
+	btn[2].text = "Never";
+	SDL_zero(box);
+	box.flags = SDL_MESSAGEBOX_INFORMATION;
+	box.title = "EmuBuddy";
+	box.message = "Install the EmuBuddy helper in your startup disk?\n\n"
+		"It lets you drop files from your computer on any Finder window in "
+		"the Apple IIgs and have them copied there. It is one small file in "
+		"the SYSTEM/SYSTEM.SETUP folder of the disk, and you can delete it "
+		"at any time.";
+	box.numbuttons = 3;
+	box.buttons = btn;
+	pick = 2;
+	if(getenv("EMUBUDDY_HELPER_ANSWER")) {		/* test aid */
+		pick = atoi(getenv("EMUBUDDY_HELPER_ANSWER"));
+	} else if(!SDL_ShowMessageBox(&box, &pick)) {
+		pick = 2;
+	}
+	if(pick == 3) {
+		g_helper_ask = 0;
+		config_write_config_kegs_file(0);
+	}
+	if(pick == 1) {
+		iwm_eject_disk_by_num(7, 0);
+		if(helper_write(path, &err) == 0) {
+			ui_message("Helper installed - restarting the IIgs");
+		} else {
+			ui_message("Could not install the helper: %s", err);
+		}
+		ui_insert_auto(path);
+		load_roms_init_memory();
+		do_reset();
+	}
+	g_ui_pause = was_paused;
+}
+
+/* The bridge folder is made by itself: if none is set, use a folder in the
+ * application's own data folder. */
+void
+ui_auto_bridge(void)
+{
+	char		*pref, path[1300];
+
+	if(ui_bridge_is_on() || g_bridge_off || !g_slot7_scsi) {
+		return;
+	}
+	pref = SDL_GetPrefPath("EmuBuddy", "Bridge");
+	if(!pref) {
+		return;
+	}
+	snprintf(path, sizeof(path), "%s", pref);
+	SDL_free(pref);
+	if(bridge_overlaps_share(path)) {
+		return;
+	}
+	cfg_file_update_ptr(&g_bridge_root, path, 0);	/* this run; not saved */
 }

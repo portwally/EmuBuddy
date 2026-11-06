@@ -106,6 +106,8 @@ static int g_cursor_hidden = 0;		/* current SDL cursor state we last set */
 static int g_scanline_saved = 50;	/* intensity to restore when toggled back on */
 extern int g_ui_pause;
 void ui_auto_share(void);
+void ui_auto_bridge(void);
+void ui_helper_offer(void);
 extern int g_skin;
 #ifdef __APPLE__
 void mac_native_menu_enable(int on);
@@ -1760,6 +1762,8 @@ sdl_apply_cli(void)
 		ui_insert_auto(emubuddy_cli_later(i));
 	}
 	ui_auto_share();
+	ui_auto_bridge();
+	ui_helper_offer();
 	if(g_config_session_only) {
 		ui_message("This run only");
 	}
