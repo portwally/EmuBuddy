@@ -695,8 +695,22 @@ lib_draw(UiWindow *win, int cx, int cy)
 				while(*t && ui_text_width(t) > 360) {
 					t++;
 				}
+				int	is_path = !strcmp(keys[i][0], "rom") || !strncmp(keys[i][0], "hard", 4) ||
+						!strncmp(keys[i][0], "flop", 4) || !strcmp(keys[i][0], "share");
+				int	missing = 0;
+
+				if(is_path) {
+					char	full[1200];
+					SDL_PathInfo	pi;
+
+					profile_expand_path(v, full, sizeof(full));
+					missing = !SDL_GetPathInfo(full, &pi);
+				}
 				ui_draw_text(cx + 270, cy + y, keys[i][1], UI_GREY);
-				ui_draw_text(cx + 380, cy + y, t, UI_BLACK);
+				ui_draw_text(cx + 380, cy + y, t, missing ? UI_BAD : UI_BLACK);
+				if(missing) {
+					ui_draw_text(cx + 380 + ui_text_width(t) + 8, cy + y, "(missing)", UI_BAD);
+				}
 				y += 18;
 			}
 		}
@@ -761,6 +775,8 @@ static int	g_ltab, g_lsel, g_ltop;
 static char	*g_lpick;		/* when choosing for an editor field */
 static int	g_lpick_cap;
 static char	g_addpath[1300];
+static char	g_lsearch[100], g_ltag[100];
+static int	g_ltag_for = -2;
 static SDL_AtomicInt g_add_ready;
 
 static void
@@ -806,9 +822,20 @@ lfold_save(void)
 }
 
 static void
+tags_path(char *out, size_t n)
+{
+	snprintf(out, n, "%s/Library.tags", g_dir);
+}
+
+static void
 lib_rescan(void)
 {
+	char	tp[1300];
+
 	lib_scan(&g_library, g_lfold, g_nlfold);
+	tags_path(tp, sizeof(tp));
+	lib_tags_apply(&g_library, tp);
+	g_ltag_for = -2;
 	g_lib_scanned = 1;
 	ui_message("Library: %d files in %d folder%s", g_library.n, g_nlfold,
 						g_nlfold == 1 ? "" : "s");
@@ -847,6 +874,88 @@ used_by(const char *path, char *out, size_t n)
 	}
 }
 
+/* A private copy of a disk for the selected profile: the profile then uses the
+ * copy and can change it without touching the original. */
+static void
+private_copy(const LibItem *it)
+{
+	SDL_MessageBoxButtonData btn[2];
+	SDL_MessageBoxData box;
+	Profile		p;
+	char		msg[600], dir[1300], dst[1500], key[16], full[1200];
+	const char	*kind;
+	int		pick = 2, nmax, base, i, n = 0;
+	SDL_PathInfo	info;
+
+	if(!g_nprof) {
+		return;
+	}
+	p = g_prof[g_sel];
+	if(strstr(it->label, "5.25")) {
+		kind = "flop"; base = 1; nmax = 2;
+	} else if(strstr(it->label, "3.5")) {
+		kind = "flop"; base = 3; nmax = 2;
+	} else {
+		kind = "hard"; base = 1; nmax = 7;
+	}
+	key[0] = 0;
+	for(i = 0; i < nmax; i++) {
+		snprintf(full, sizeof(full), "%s%d", kind, base + i);
+		if(!profile_get(&p, full)[0]) {
+			snprintf(key, sizeof(key), "%s", full);
+			break;
+		}
+	}
+	if(!key[0]) {
+		ui_message("No free drive in %s for this disk", profile_name(&p));
+		return;
+	}
+	SDL_zero(btn);
+	btn[0].buttonID = 1;
+	btn[0].text = "Make Copy";
+	btn[1].buttonID = 2;
+	btn[1].text = "Cancel";
+	btn[1].flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
+	snprintf(msg, sizeof(msg), "Make a copy of \"%s\" (%ld MB) for the profile \"%s\" and use it as %s?\n"
+		"The original stays as it is.", it->name, it->size / (1024 * 1024), profile_name(&p), key);
+	SDL_zero(box);
+	box.title = "EmuBuddy Launcher";
+	box.message = msg;
+	box.numbuttons = 2;
+	box.buttons = btn;
+	if(!SDL_ShowMessageBox(&box, &pick) || pick != 1) {
+		return;
+	}
+	snprintf(dir, sizeof(dir), "%s/%s.data/disks", g_dir, profile_name(&p));
+	SDL_CreateDirectory(g_dir);
+	snprintf(dst, sizeof(dst), "%s/%s.data", g_dir, profile_name(&p));
+	SDL_CreateDirectory(dst);
+	SDL_CreateDirectory(dir);
+	snprintf(dst, sizeof(dst), "%s/%s", dir, it->name);
+	while(SDL_GetPathInfo(dst, &info) && n < 99) {
+		n++;
+		snprintf(dst, sizeof(dst), "%s/%d %s", dir, n + 1, it->name);
+	}
+	if(!SDL_CopyFile(it->path, dst)) {
+		ui_message("Copy failed: %s", SDL_GetError());
+		return;
+	}
+	profile_set(&p, key, dst);
+	if(profile_save(&p, p.path) == 0) {
+		char	keep[1100];
+
+		snprintf(keep, sizeof(keep), "%s", p.path);
+		load_profiles();
+		for(i = 0; i < g_nprof; i++) {
+			if(!strcmp(g_prof[i].path, keep)) {
+				g_sel = i;
+			}
+		}
+		g_lib_scanned = 0;
+		ui_message("%s now uses its own copy as %s", profile_name(&p), key);
+	}
+}
+
 static char	g_lline[LIB_MAX_ITEMS][160];
 static const char *g_lnames[LIB_MAX_ITEMS];
 static int	g_lmap[LIB_MAX_ITEMS];
@@ -866,15 +975,22 @@ libwin_draw(UiWindow *win, int cx, int cy)
 	} else {
 		ui_draw_text(cx + 10, cy + 10, tab == LIB_ROM ? "Choose a ROM" : "Choose a disk", UI_BLACK);
 	}
+	ui_draw_text(cx + 226, cy + 10, "Search", UI_BLACK);
+	field(win, cx, cy, 290, 9, 240, g_lsearch, sizeof(g_lsearch));
+	if(ui_button(win, cx, cy, 540, 8, 120, 22, "Check files", 1)) {
+		lib_check(&g_library);
+		ui_message("Checked %d files", g_library.n);
+	}
 	for(i = 0; i < g_library.n; i++) {
 		const LibItem *it = &g_library.items[i];
 
-		if(it->kind != tab) {
+		if(it->kind != tab || !lib_matches(it, g_lsearch)) {
 			continue;
 		}
 		used_by(it->path, used, sizeof(used));
-		snprintf(g_lline[n], sizeof(g_lline[0]), "%.40s\t%s\t%s\t%s", it->name,
-				it->label, it->volume, used[0] ? used : "(not used)");
+		snprintf(g_lline[n], sizeof(g_lline[0]), "%.40s\t%s\t%s\t%.50s%s", it->name,
+				it->label, it->volume, used[0] ? used : "(not used)",
+				it->flags ? " !" : "");
 		g_lnames[n] = g_lline[n];
 		g_lmap[n++] = i;
 	}
@@ -893,7 +1009,7 @@ libwin_draw(UiWindow *win, int cx, int cy)
 
 		ui_list_columns(cols, 4);
 	}
-	i = ui_list(win, cx, cy, 10, 36, 740, 270, g_lnames, n, &g_lsel, &g_ltop);
+	i = ui_list(win, cx, cy, 10, 36, 740, 246, g_lnames, n, &g_lsel, &g_ltop);
 	if(i == 2 && g_lpick && g_lsel >= 0) {
 		SDL_strlcpy(g_lpick, g_library.items[g_lmap[g_lsel]].path, (size_t)g_lpick_cap);
 		g_lpick = NULL;
@@ -902,6 +1018,7 @@ libwin_draw(UiWindow *win, int cx, int cy)
 	}
 	if(g_lsel >= 0 && g_lsel < n) {
 		const LibItem *it = &g_library.items[g_lmap[g_lsel]];
+		int	idx = g_lmap[g_lsel];
 
 		used_by(it->path, used, sizeof(used));
 		snprintf(line, sizeof(line), "%s", it->path);
@@ -909,16 +1026,38 @@ libwin_draw(UiWindow *win, int cx, int cy)
 		while(*t && ui_text_width(t) > 730) {
 			t++;
 		}
-		ui_draw_text(cx + 12, cy + 314, t, UI_BLACK);
+		ui_draw_text(cx + 12, cy + 290, t, UI_BLACK);
 		snprintf(line, sizeof(line), "%s, %ld KB%s%s%s", it->label, it->size / 1024,
 			it->volume[0] ? ", volume " : "", it->volume,
 			it->writable ? "" : ", write-protected");
-		ui_draw_text(cx + 12, cy + 332, line, UI_GREY);
+		ui_draw_text(cx + 12, cy + 308, line, UI_GREY);
 		snprintf(line, sizeof(line), "Used by: %s", used[0] ? used : "no profile");
-		ui_draw_text(cx + 12, cy + 350, line, used[0] ? UI_BLACK : UI_WARN);
+		ui_draw_text(cx + 12, cy + 326, line, used[0] ? UI_BLACK : UI_WARN);
+		if(it->flags) {
+			snprintf(line, sizeof(line), "Check: %s", it->note);
+			ui_draw_text(cx + 300, cy + 326, line, UI_BAD);
+		}
+		if(g_ltag_for != idx) {
+			g_ltag_for = idx;
+			snprintf(g_ltag, sizeof(g_ltag), "%s", it->tags);
+		}
+		ui_draw_text(cx + 12, cy + 348, "Tags", UI_BLACK);
+		if(field(win, cx, cy, 60, 346, 300, g_ltag, sizeof(g_ltag)) || g_focus != g_ltag) {
+			/* typing changes the buffer; save when it differs */
+		}
+		if(strcmp(g_ltag, it->tags) != 0 && g_focus != g_ltag) {
+			char	tp[1300];
+
+			tags_path(tp, sizeof(tp));
+			lib_tags_set(&g_library, idx, g_ltag, tp);
+		}
+		if(!g_lpick && it->kind == LIB_DISK && ui_button(win, cx, cy, 560, 344, 190, 22,
+				"Private Copy for Profile...", g_nprof > 0)) {
+			private_copy(it);
+		}
 	}
 	ui_hline(cx + 10, cy + 374, 740, UI_LGREY);
-	ui_draw_text(cx + 12, cy + 382, "Library folders", UI_GREY);
+	ui_draw_text(cx + 12, cy + 380, "Library folders", UI_GREY);
 	{
 		static const char *fn[16];
 

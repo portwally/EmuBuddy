@@ -44,6 +44,30 @@ main(void)
 	CHECK(lib_classify("x.txt", 5, label, sizeof(label)) == -1);
 	lib_scan(&l, folders, 1);		/* again: no duplicates, no growth */
 	CHECK(l.n == 5);
+	/* duplicates, damage, tags, search */
+	system("cp /tmp/eblib/sub/System6.hdv \"/tmp/eblib/sub/Copy of System6.hdv\"");
+	mk("/tmp/eblib/sub/bad.po", 1000);
+	lib_scan(&l, folders, 1);
+	lib_check(&l);
+	{
+		int dups = 0, bad = 0, i;
+
+		for(i = 0; i < l.n; i++) {
+			dups += !!(l.items[i].flags & LIB_DUP);
+			bad += !!(l.items[i].flags & LIB_BAD);
+		}
+		CHECK(dups == 1);
+		CHECK(bad >= 1);
+	}
+	lib_tags_set(&l, 0, "web, work", "/tmp/eblib_tags.txt");
+	lib_scan(&l, folders, 1);
+	lib_tags_apply(&l, "/tmp/eblib_tags.txt");
+	CHECK(!strcmp(l.items[0].tags, "web, work"));
+	CHECK(lib_matches(&l.items[0], "WORK"));
+	CHECK(lib_matches(&l.items[0], "rom work"));
+	CHECK(!lib_matches(&l.items[0], "nothing"));
+	CHECK(lib_matches(&l.items[0], ""));
+	remove("/tmp/eblib_tags.txt");
 	lib_free(&l);
 	system("rm -rf /tmp/eblib");
 	printf(fails ? "%d FAILED\n" : "all passed\n", fails);
