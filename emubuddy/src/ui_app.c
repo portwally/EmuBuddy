@@ -13,6 +13,9 @@ extern int	g_limit_speed;		/* 0 unlimited, 1 1MHz, 2 2.8MHz, 3 ZipGS */
 extern int	g_zip_speed_mhz;
 extern double	g_eff_mhz;
 extern int	g_fullscreen;
+extern int	g_window_scale;
+int		sdl_scale_fits(int s);
+void		sdl_set_window_scale(int s);
 extern int	g_crt;
 extern int	g_status_enable;
 extern dword64	g_cur_dfcyc;
@@ -44,6 +47,7 @@ enum {
 	CMD_ZIP_64, CMD_ZIP_128, CMD_UNLIMITED,
 	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT, CMD_CORE_STATUS,
 	CMD_PASTE = 45, CMD_COPY_SCREEN,
+	CMD_SIZE_1 = 50, CMD_SIZE_2, CMD_SIZE_3, CMD_SIZE_4,
 	CMD_ABOUT = 40,
 	CMD_RECENT0 = 60,		/* 60..69 */
 };
@@ -82,6 +86,11 @@ static const UiMenuItem speed_items[] = {
 	{ "Unlimited (maximum)", CMD_UNLIMITED, NULL, 0 },
 };
 static const UiMenuItem view_items[] = {
+	{ "Window Size 1x", CMD_SIZE_1, NULL, 0 },
+	{ "Window Size 2x", CMD_SIZE_2, NULL, 0 },
+	{ "Window Size 3x", CMD_SIZE_3, NULL, 0 },
+	{ "Window Size 4x", CMD_SIZE_4, NULL, 0 },
+	{ "", 0, NULL, UI_MI_SEP },
 	{ "Full Screen", CMD_FULLSCREEN, "F11", 0 },
 	{ "CRT Effect", CMD_CRT, "Ctrl-F11", 0 },
 	{ "Scanlines", CMD_SCANLINES, "Shift-F11", 0 },
@@ -541,6 +550,9 @@ app_command(int id)
 	case CMD_ZIP_64: set_limit(3, 64); break;
 	case CMD_ZIP_128: set_limit(3, 128); break;
 	case CMD_UNLIMITED: set_limit(0, 0); break;
+	case CMD_SIZE_1: case CMD_SIZE_2: case CMD_SIZE_3: case CMD_SIZE_4:
+		sdl_set_window_scale(id - CMD_SIZE_1 + 1);
+		break;
 	case CMD_FULLSCREEN: g_fullscreen = !g_fullscreen; break;
 	case CMD_CRT: g_crt = !g_crt; break;
 	case CMD_SCANLINES:
@@ -580,6 +592,12 @@ app_item_state(int id)
 	case CMD_ZIP_64: return zip == 64 ? UI_MI_CHECKED : 0;
 	case CMD_ZIP_128: return zip == 128 ? UI_MI_CHECKED : 0;
 	case CMD_UNLIMITED: return g_limit_speed == 0 ? UI_MI_CHECKED : 0;
+	case CMD_SIZE_1: case CMD_SIZE_2: case CMD_SIZE_3: case CMD_SIZE_4: {
+		int n = id - CMD_SIZE_1 + 1;
+
+		return (g_window_scale == n && !g_fullscreen ? UI_MI_CHECKED : 0) |
+			(sdl_scale_fits(n) ? 0 : UI_MI_DISABLED);
+	}
 	case CMD_FULLSCREEN: return g_fullscreen ? UI_MI_CHECKED : 0;
 	case CMD_CRT: return g_crt ? UI_MI_CHECKED : 0;
 	case CMD_CORE_STATUS: return g_status_enable ? UI_MI_CHECKED : 0;

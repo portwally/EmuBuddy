@@ -87,3 +87,7 @@ window like ImageWriter pages. Ghostscript is not bundled.
 Save PDF writes a vector PDF (sharp text, a few KB per page) when all pages came from PostScript jobs; ImageWriter pages are saved as bitmaps.
 
 If Ghostscript is missing, EmuBuddy keeps the print job and shows a "Ghostscript Needed" window (Download Page / Try Again / Cancel). Install: macOS `brew install ghostscript`; Windows installer from ghostscript.com; Linux `sudo apt install ghostscript` (or your package manager). `EMUBUDDY_GS=none` pretends it is missing (testing).
+
+## Window size
+
+View > Window Size 1x / 2x / 3x / 4x resizes the window; sizes that don't fit the screen are greyed out. The choice is saved. `-scale n` does the same for one run (and steps down if it doesn't fit). Full Screen is F11.

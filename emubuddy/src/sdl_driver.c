@@ -1323,7 +1323,7 @@ sdl_dev_snapshot(Window_info *win)
 }
 
 /* Window size and disks from the command line (cli.c), after start-up. */
-static int	g_cli_scale = 1;
+extern int	g_window_scale;		/* 1..4, saved in the config */
 static int	g_cli_fixed_size = 0;
 
 /* Largest scale <= want whose window fits the screen's usable area. */
@@ -1333,13 +1333,42 @@ sdl_fit_scale(Window_info *win, int want)
 	SDL_Rect	r;
 	int		s = want;
 
-	if(SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(win->window), &r)) {
+	if(getenv("EMUBUDDY_USABLE") &&		/* test aid: "WxH" pretends this screen */
+			sscanf(getenv("EMUBUDDY_USABLE"), "%dx%d", &r.w, &r.h) == 2) {
+		while(s > 1 && (win->width_req * s > r.w ||
+			(win->main_height + 2 * UI_BAR_H) * s + 40 > r.h)) {
+			s--;
+		}
+	} else if(SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(win->window), &r)) {
 		while(s > 1 && (win->width_req * s > r.w ||
 			(win->main_height + 2 * UI_BAR_H) * s + 40 > r.h)) {
 			s--;
 		}
 	}
 	return s;
+}
+
+/* View > Window Size: does this scale fit the screen? */
+int
+sdl_scale_fits(int s)
+{
+	return sdl_fit_scale(&g_mainwin_info, s) == s;
+}
+
+/* View > Window Size: resize the window to s times the IIgs picture. */
+void
+sdl_set_window_scale(int s)
+{
+	Window_info	*win = &g_mainwin_info;
+
+	g_window_scale = sdl_fit_scale(win, s);
+	g_cli_fixed_size = 0;
+	if(g_fullscreen) {
+		g_fullscreen = 0;		/* leave fullscreen first */
+		sdl_sync_fullscreen(win);
+	}
+	SDL_SetWindowSize(win->window, win->width_req * g_window_scale,
+			(win->main_height + 2 * UI_BAR_H) * g_window_scale);
 }
 
 static void
@@ -1349,13 +1378,21 @@ sdl_apply_cli(void)
 	int		w, h, scale, i;
 
 	emubuddy_cli_window(&w, &h, &scale);
-	if(scale > 1) {
-		g_cli_scale = sdl_fit_scale(win, scale);
-		if(g_cli_scale < scale) {
-			printf("EmuBuddy: -scale %d doesn't fit the screen, using %d\n",
-							scale, g_cli_scale);
+	if(scale > 0) {
+		g_window_scale = scale;			/* -scale n */
+	}
+	if(g_window_scale > 1 && !g_fullscreen) {
+		scale = sdl_fit_scale(win, g_window_scale);
+		if(scale < g_window_scale) {
+			SDL_Rect r;
+
+			SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(
+							win->window), &r);
+			printf("EmuBuddy: window size %dx doesn't fit the screen "
+				"(%dx%d usable), using %dx\n", g_window_scale,
+				r.w, r.h, scale);
 		}
-		scale = g_cli_scale;
+		g_window_scale = scale;
 		SDL_SetWindowSize(win->window, win->width_req * scale,
 				(win->main_height + 2 * UI_BAR_H) * scale);
 	}
@@ -1654,7 +1691,7 @@ sdl_update_display(Window_info *win)
 		win->pixels_per_line = w;
 		video_update_scale(win->kimage_ptr, w, h, 1);
 		if(!g_cli_fixed_size) {
-			int sc = sdl_fit_scale(win, g_cli_scale);
+			int sc = sdl_fit_scale(win, g_window_scale);
 
 			SDL_SetWindowSize(win->window, w * sc,
 					(h + 2 * UI_BAR_H) * sc);
