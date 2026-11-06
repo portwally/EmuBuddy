@@ -11,6 +11,7 @@ extern char	*g_serial_device[2];
 extern int	g_voc_enable;
 extern int	g_slot4_mockingboard;
 extern int	g_slot7_scsi;
+extern int	g_uthernet2_slot;
 extern int	g_config_kegs_update_needed;
 void		cfg_file_update_ptr(char **strptr, const char *str, int need_update);
 
@@ -27,8 +28,8 @@ typedef struct {
 static const SlotDef g_slots[7] = {
 	{ "Printer Port", { "Idle", "Virtual Modem", "ImageWriter" }, 3, 3, NULL },
 	{ "Modem Port", { "Idle", "Virtual Modem", NULL }, 2, 3, NULL },
-	{ "Expansion", { "Empty", "Video Overlay", "Uthernet" }, 3, 3, NULL },
-	{ "Sound Card", { "Empty", "Mockingboard", NULL }, 2, 3, NULL },
+	{ "Network", { "Empty", "Video Overlay", "Uthernet II" }, 3, 7, NULL },
+	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II" }, 3, 7, NULL },
 	{ "3.5\" Drives", { NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
 	{ "5.25\" Drives", { NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
 	{ "Storage", { "Empty", "SCSI Card", NULL }, 2, 3, NULL },
@@ -45,8 +46,8 @@ slot_current(int i)
 	switch(i) {
 	case 0: return g_serial_cfg[0] == 1 ? 1 : (g_serial_cfg[0] == 0 ? 0 : -1);
 	case 1: return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
-	case 2: return g_voc_enable ? 1 : 0;
-	case 3: return g_slot4_mockingboard ? 1 : 0;
+	case 2: return g_uthernet2_slot == 3 ? 2 : (g_voc_enable ? 1 : 0);
+	case 3: return g_uthernet2_slot == 4 ? 2 : (g_slot4_mockingboard ? 1 : 0);
 	case 6: return g_slot7_scsi ? 1 : 0;
 	}
 	return 0;
@@ -89,8 +90,9 @@ apply(void)
 			}
 		}
 	}
-	g_voc_enable = g_pend[2] > 0;
-	g_slot4_mockingboard = g_pend[3] > 0;
+	g_voc_enable = g_pend[2] == 1;
+	g_slot4_mockingboard = g_pend[3] == 1;
+	g_uthernet2_slot = (g_pend[2] == 2) ? 3 : (g_pend[3] == 2) ? 4 : 0;
 	g_slot7_scsi = g_pend[6] > 0;
 	g_config_kegs_update_needed = 1;
 	if(restart) {
@@ -121,8 +123,15 @@ slots_draw(UiWindow *win, int cx, int cy)
 			ui_draw_text(cx + 196, cy + y + 6, s->fixed, UI_GREY);
 			continue;
 		}
-		ui_segment(win, cx, cy, 196, y + 2, cw - 196 - 10, 24, s->labels,
-				s->n, &g_pend[i], s->enabled);
+		if(ui_segment(win, cx, cy, 196, y + 2, cw - 196 - 10, 24,
+				s->labels, s->n, &g_pend[i], s->enabled)) {
+			/* there is one Uthernet II card: slot 3 or slot 4 */
+			if(i == 2 && g_pend[2] == 2 && g_pend[3] == 2) {
+				g_pend[3] = 0;
+			} else if(i == 3 && g_pend[3] == 2 && g_pend[2] == 2) {
+				g_pend[2] = 0;
+			}
+		}
 	}
 	by = 6 + 7 * ROW_H + 4;
 	ui_draw_text(cx + 10, cy + by,

@@ -179,6 +179,28 @@ target_compile_options(gsplus_core_sdl PRIVATE -Wall)
 # The portable executable: SDL driver + SDL audio backend, linked against the
 # SDL-flavoured core and SDL3 itself. (PUBLIC SDL_AUDIO from the core propagates
 # to these sources too, keeping the audio routing consistent.)
+# Networking for the Uthernet II card: libslirp (user-mode NAT) when available,
+# otherwise a stub backend so the build still works (card present, no network).
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(SLIRP IMPORTED_TARGET slirp)
+endif()
+if(SLIRP_FOUND)
+    set(EMUBUDDY_NET_SOURCES uthernet2.c net_slirp.c)
+    message(STATUS "EmuBuddy: networking via libslirp ${SLIRP_VERSION}")
+else()
+    set(EMUBUDDY_NET_SOURCES uthernet2.c net_none.c)
+    message(STATUS "EmuBuddy: libslirp not found - Uthernet II without network")
+endif()
+
+# Register-level test for the Uthernet II card + network (not built by default):
+#   cmake --build build --target test_uthernet2 && build/test_uthernet2
+add_executable(test_uthernet2 EXCLUDE_FROM_ALL tests/test_uthernet2.c
+    ${EMUBUDDY_NET_SOURCES})
+if(SLIRP_FOUND)
+    target_link_libraries(test_uthernet2 PRIVATE PkgConfig::SLIRP)
+endif()
+
 add_executable(gsplus-sdl
     sdl_driver.c
     sdl_snd_driver.c
@@ -189,8 +211,12 @@ add_executable(gsplus-sdl
     ui_app.c
     ui_drives.c
     ui_slots.c
+    ${EMUBUDDY_NET_SOURCES}
 )
 target_link_libraries(gsplus-sdl PRIVATE gsplus_core_sdl SDL3::SDL3)
+if(SLIRP_FOUND)
+    target_link_libraries(gsplus-sdl PRIVATE PkgConfig::SLIRP)
+endif()
 
 if(UNIX AND NOT APPLE)
     # paddles.c uses sqrt(); glibc keeps it in libm

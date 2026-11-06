@@ -173,6 +173,8 @@ the F4 text menu. Work:
   `lp` on macOS, `ShellExecute "print"` on Windows, `lp`/`xdg-open` on Linux.
 
 ### Phase 5: Ethernet (M–L)
+**Status, Uthernet II working:** own W5100 emulation (`uthernet2.c`, MACRAW on socket 0, indirect bus with auto-increment and buffer wrap, reset, RMSR/TMSR) + libslirp backend (`net_slirp.c`, stub `net_none.c` when libslirp is missing). Card goes in slot 3 or slot 4 (Slots window). Network is Ample-compatible: 192.168.64.0/24, gateway+DNS 192.168.64.1, DHCP from .2. Register-level test `test_uthernet2` passes (DHCP, ARP, DNS, real TCP SYN-ACK, 300 round trips across buffer wraps). Real test: the user's Netmaster disk (Marinetti, Uthernet II link layer, slot 4) booted, did DHCP, DNS, TCP to an internet web server and SMB to the LAN. Confirmed: Marinetti's Uthernet II link layer uses MACRAW.
+**Open:** W5100 hardware TCP/UDP sockets (for IP65/A2osX-style software), Network window (port forwards, status), Windows/Linux libslirp packaging, Sweet16-era internet.2mg crashes in ProDOS stage (cause unknown).
 - Slot 3 **Uthernet (CS8900a)** with a libslirp backend, as proven by the spike.
   libslirp is BSD-licensed and builds on all three platforms (needs glib: bundle
   it, or build static in CI).

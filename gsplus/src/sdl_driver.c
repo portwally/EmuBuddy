@@ -26,6 +26,8 @@
 
 #include "defc.h"
 #include "ui.h"
+#include "uthernet2.h"
+extern int g_uthernet2_slot;
 extern int g_rom_version;
 void cfg_file_update_rom(const char *str);
 #include "protos_sdl.h"
@@ -1666,8 +1668,12 @@ main(int argc, char **argv)
 	sdl_debugger_init();
 
 	/* Main loop: run_16ms() runs one video frame's worth of CPU + video. */
+	uthernet2_reset();
 	while(!g_quit_requested) {
 		ret = run_16ms();
+		if(g_uthernet2_slot) {
+			uthernet2_poll();	/* network in/out, once per frame */
+		}
 		if(ret != 0) {
 			printf("run_16ms returned: %d\n", ret);
 			break;
@@ -1677,6 +1683,7 @@ main(int argc, char **argv)
 		sdl_update_display(&g_mainwin_info);
 	}
 
+	net_shutdown();
 	sdl_snd_shutdown();
 	SDL_Quit();
 	return 0;

@@ -67,6 +67,9 @@ word32	g_c068_statereg = 0;	// [7]=ALTZP, [6]=PAGE2, [5]=RAMRD, [4]=RAMWRT
 word32	g_c06d_val = 0;
 word32	g_c06f_val = 0;
 extern int g_slot4_mockingboard;
+extern int g_uthernet2_slot;
+int uthernet2_read(int reg);
+void uthernet2_write(int reg, int val);
 word32	g_zipgs_unlock = 0;
 word32	g_zipgs_reg_c059 = 0x5f;
 	// 7=LC cache dis, 6==5ms paddle del en, 5==5ms ext del en,
@@ -1009,6 +1012,10 @@ io_read(word32 loc, dword64 *cyc_ptr)
 	word32	new_lcbank2, new_wrdefram, new_prewrite, new_rdrom, tmp;
 	int	i;
 
+	if(g_uthernet2_slot && ((loc & 0xff0) == (0x80 + (g_uthernet2_slot << 4)))) {
+		return uthernet2_read(loc & 0xf);	// Uthernet II card
+	}
+
 	dfcyc = *cyc_ptr;
 
 /* IO space */
@@ -1470,6 +1477,12 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 	word32	new_lcbank2, new_wrdefram, new_rdrom, new_prewrite, tmp;
 	word32	new_tmp;
 	int	fixup;
+
+	if(g_uthernet2_slot && ((loc & 0xff0) == (0x80 + (g_uthernet2_slot << 4)))) {
+		uthernet2_write(loc & 0xf, val & 0xff);	// Uthernet II card
+		return;
+	}
+
 
 	dfcyc = *cyc_ptr;
 

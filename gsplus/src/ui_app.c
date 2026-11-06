@@ -2,6 +2,7 @@
  * in-skin file browser. Built on the toolkit in ui.c. */
 #include "defc.h"
 #include "ui.h"
+#include "uthernet2.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -488,6 +489,13 @@ app_status(char *left, char *center, char *right, int n)
 	}
 	if(g_eff_mhz > 0.0) {
 		snprintf(left, n, "%.1f MHz", g_eff_mhz);
+	}
+	if(uthernet2_active()) {
+		unsigned tx, rx;
+		size_t l = strlen(left);
+
+		uthernet2_counters(&tx, &rx);
+		snprintf(left + l, (size_t)n - l, "   Net out %u in %u", tx, rx);
 	}
 	snprintf(center, n, "%s", g_ui_pause ? "PAUSED" : "");
 	snprintf(right, n, "%s", limit);
