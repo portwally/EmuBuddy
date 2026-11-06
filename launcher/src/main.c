@@ -873,7 +873,13 @@ skin_switch(int i)
 	if(ui_font_load_file(path, ppem) != 0) {
 		const char *fb = skin_font_fallback(i, &ppem);
 
+		if(getenv("LAUNCHER_DEBUG")) {
+			fprintf(stderr, "font %s did not load; fallback %s\n", path, fb ? fb : "(built-in)");
+		}
 		if(!fb || ui_font_load_file(fb, ppem) != 0) {
+			if(getenv("LAUNCHER_DEBUG")) {
+				fprintf(stderr, "fallback did not load either\n");
+			}
 			ui_font_load_file(NULL, 16);	/* font file missing: the built-in one */
 		}
 	}

@@ -20,7 +20,7 @@ static int	g_ppem = 16;
 
 static const unsigned char	*g_ttf = g_ui_font_ttf;
 static size_t			g_len;
-static unsigned	g_glyf, g_loca, g_hmtx, g_cmap4;
+static unsigned	g_glyf, g_loca, g_hmtx, g_cmap4, g_cmap12;
 static int	g_locfmt, g_nglyphs, g_nhm, g_upem, g_asc_px;
 
 typedef struct { float x0, y0, x1, y1; } Edge;
@@ -77,6 +77,23 @@ glyph_for_cp(unsigned cp)
 {
 	unsigned	segx2, i, end, start, delta, range, o;
 
+	if(g_cmap12) {				/* format 12 (Apple's system fonts) */
+		unsigned	ng = u32(g_cmap12 + 12), lo = 0, hi = ng, mid, a, b;
+
+		while(lo < hi) {
+			mid = (lo + hi) / 2;
+			a = u32(g_cmap12 + 16 + mid * 12);
+			b = u32(g_cmap12 + 16 + mid * 12 + 4);
+			if(cp < a) {
+				hi = mid;
+			} else if(cp > b) {
+				lo = mid + 1;
+			} else {
+				return (int)(u32(g_cmap12 + 16 + mid * 12 + 8) + (cp - a));
+			}
+		}
+		return 0;
+	}
 	if(!g_cmap4 || cp > 0xffff) {
 		return 0;
 	}
@@ -529,10 +546,14 @@ font_setup(void)
 	g_nhm = (int)u16(hhea + 34);
 	g_asc_px = (int)((s16(hhea + 4) * PPEM) / (float)g_upem + 0.5f);
 	g_cmap4 = 0;
+	g_cmap12 = 0;
 	n = u16(cmap + 2);
 	for(i = 0; i < n; i++) {
 		o = cmap + 4 + i * 8;
 		sub = cmap + u32(o + 4);
+		if(u16(sub) == 12 && (u16(o) == 3 || u16(o) == 0) && !g_cmap12) {
+			g_cmap12 = sub;
+		}
 		if(u16(sub) == 4 && (u16(o) == 3 || u16(o) == 0)) {
 			g_cmap4 = sub;
 			if(u16(o) == 3 && u16(o + 2) == 1) {
@@ -540,7 +561,7 @@ font_setup(void)
 			}
 		}
 	}
-	if(!g_upem || !g_nglyphs || !g_nhm || !g_cmap4) {
+	if(!g_upem || !g_nglyphs || !g_nhm || (!g_cmap4 && !g_cmap12)) {
 		return -1;
 	}
 	free(g_cache);
