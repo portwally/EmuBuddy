@@ -66,6 +66,7 @@ word32	g_c068_statereg = 0;	// [7]=ALTZP, [6]=PAGE2, [5]=RAMRD, [4]=RAMWRT
 			//	[10]=INTC8ROM
 word32	g_c06d_val = 0;
 word32	g_c06f_val = 0;
+extern int g_slot4_mockingboard;
 word32	g_zipgs_unlock = 0;
 word32	g_zipgs_reg_c059 = 0x5f;
 	// 7=LC cache dis, 6==5ms paddle del en, 5==5ms ext del en,
@@ -1435,6 +1436,9 @@ io_read(word32 loc, dword64 *cyc_ptr)
 	case 3:	// c300
 		return c3xx_read(dfcyc, loc);
 	case 4:
+		if(!g_slot4_mockingboard) {
+			return float_bus(dfcyc);	// slot 4 is empty
+		}
 		return mockingboard_read(loc, dfcyc);
 	case 8: case 9: case 0xa: case 0xb: case 0xc: case 0xd: case 0xe:
 		return float_bus(dfcyc);
@@ -2089,7 +2093,8 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 		}
 		return;
 	case 4:
-		if((g_c02d_int_crom & 0x10) && !(g_c068_statereg & 1)) {
+		if(g_slot4_mockingboard && (g_c02d_int_crom & 0x10) &&
+					!(g_c068_statereg & 1)) {
 			// Slot 4 is set to Your Card and not INTCX
 			mockingboard_write(loc, val, dfcyc);
 			return;

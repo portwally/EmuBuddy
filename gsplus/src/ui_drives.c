@@ -19,6 +19,7 @@ int		cfg_ui_partition_choose(int pos, int slot, int drive,
 							const char *path);
 extern int	g_cfg_select_partition;
 extern int	g_cfg_slotdrive;
+extern int	g_slot7_scsi;
 
 #define N_RECENT	10
 #define SCSI_DRIVES	7	/* the SCSI card has 7 hard drives (S7D1-S7D7) */
@@ -218,6 +219,10 @@ drive_insert(int slot, int drive, const char *path)
 		ui_message("Cannot open %s", base_name(path));
 		return 1;
 	}
+	if(slot == 7 && !g_slot7_scsi) {
+		ui_message("No SCSI card - plug it in under Machine > Slots");
+		return 1;
+	}
 	if(iwm_motor_busy() && (dsk->fd >= 0 || path_mounted_anywhere(path))) {
 		ui_message("Drive is busy - try again in a moment");
 		return 1;
@@ -240,6 +245,10 @@ ui_insert_auto(const char *path)
 
 	if(slot == 0) {
 		ui_message("Not a disk image: %s", base_name(path));
+		return;
+	}
+	if(slot == 7 && !g_slot7_scsi) {
+		ui_message("No SCSI card - plug it in under Machine > Slots");
 		return;
 	}
 	nd = (slot == 7) ? SCSI_DRIVES : 2;
@@ -326,9 +335,10 @@ rows_build(void)
 		g_rows[g_nrows].slot = 6; g_rows[g_nrows++].drive = d;
 	}
 	for(d = 0; d < MAX_C7_DISKS && g_nrows < 40; d++) {
-		/* the 7 SCSI drives always; others only if a saved setup has one */
-		if(d < SCSI_DRIVES ||
-				iwm_get_dsk_from_slot_drive(7, d)->fd >= 0) {
+		/* the 7 SCSI drives always; others only if a saved setup has one;
+		 * none if the SCSI card is unplugged (Machine > Slots) */
+		if(g_slot7_scsi && (d < SCSI_DRIVES ||
+				iwm_get_dsk_from_slot_drive(7, d)->fd >= 0)) {
 			g_rows[g_nrows].slot = 7;
 			g_rows[g_nrows++].drive = d;
 		}
@@ -466,6 +476,12 @@ drives_draw(UiWindow *win, int cx, int cy)
 							"Eject", occupied)) {
 			drive_eject(slot, drive);
 		}
+	}
+	if(!g_slot7_scsi) {
+		y = DR_TOP + g_nrows * DR_ROW_H + 14;
+		ui_draw_text(cx + 20, cy + y, "Slot 7 is empty: no SCSI card.", UI_GREY);
+		ui_draw_text(cx + 20, cy + y + 18,
+				"Plug it in under Machine > Slots.", UI_GREY);
 	}
 	ui_vscroll(win, cx, cy, cw - DR_SB_W, DR_TOP, DR_VISIBLE * DR_ROW_H,
 			g_nrows, DR_VISIBLE, &g_drives_top);

@@ -791,6 +791,40 @@ ui_vscroll(UiWindow *win, int cx, int cy, int x, int y, int h,
 	return changed;
 }
 
+/* A row of n equal buttons; the selected one is drawn black. Bit i of
+ * 'enabled' set means choice i can be clicked. Returns 1 when *sel changes. */
+int
+ui_segment(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
+	const char **labels, int n, int *sel, unsigned enabled)
+{
+	int	i, cw = w / n, changed = 0;
+
+	for(i = 0; i < n; i++) {
+		int	bx = x + i * cw, bw = (i == n - 1) ? w - i * cw : cw;
+		int	on = (enabled >> i) & 1, chosen = (i == *sel);
+		long	id = widget_id(bx, y) ^ 0x7777;
+		int	inside = on && ui_mouse_in(win, cx, cy, bx, y, bw, h);
+
+		if(inside && g_pressed) {
+			g_active_widget = win;
+			g_active_id = id;
+		}
+		if(g_active_widget == win && g_active_id == id && g_released) {
+			if(inside && !chosen) {
+				*sel = i;
+				chosen = 1;
+				changed = 1;
+			}
+			g_active_widget = NULL;
+		}
+		ui_fill(cx + bx, cy + y, bw, h, chosen ? UI_BLACK : UI_WHITE);
+		ui_frame(cx + bx, cy + y, bw, h, on ? UI_BLACK : UI_LGREY);
+		text_centered(cx + bx, cy + y, bw, h, labels[i],
+				chosen ? UI_WHITE : (on ? UI_BLACK : UI_LGREY));
+	}
+	return changed;
+}
+
 int
 ui_hit(UiWindow *win, int cx, int cy, int x, int y, int w, int h)
 {

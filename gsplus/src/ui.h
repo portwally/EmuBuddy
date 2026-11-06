@@ -104,6 +104,9 @@ int	ui_checkbox(UiWindow *win, int cx, int cy, int x, int y, const char *label,
  * row. Returns 1 when a row is clicked, 2 on a double-click. */
 int	ui_list(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
 		const char **items, int n_items, int *sel, int *top);
+/* Row of choices; see ui.c. Returns 1 when the selection changes. */
+int	ui_segment(UiWindow *win, int cx, int cy, int x, int y, int w, int h,
+		const char **labels, int n, int *sel, unsigned enabled);
 /* Invisible click area. Returns 1 when the user clicks it. */
 int	ui_hit(UiWindow *win, int cx, int cy, int x, int y, int w, int h);
 /* Vertical scroll bar at (x,y), SB width 14, height h. Scrolls *top within
@@ -136,6 +139,8 @@ void	ui_insert_auto(const char *path);
 void	ui_file_browser_open(const char *title, void (*pick)(const char *path));
 
 /* ---- drives window and disk handling (ui_drives.c) ---- */
+void	ui_slots_toggle(void);
+int	ui_slots_is_open(void);
 void	ui_drives_init(void);
 void	ui_drives_toggle(void);
 int	ui_drives_is_open(void);

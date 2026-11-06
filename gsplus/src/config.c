@@ -164,6 +164,11 @@ extern Cfg_menu g_cfg_sdl_video_menu[];
  * and the command line (KEGS style, e.g. "-g_fullscreen 1"). The SDL driver
  * reads them; the X11 and native macOS drivers ignore them. (Window size and
  * position use KEGS's existing g_mainwin_width/height/xpos/ypos.) */
+/* Which emulated cards are plugged in (EmuBuddy "Slots" window). They live in
+ * the main menu table so they are saved in config.kegs. */
+int	g_slot4_mockingboard = 1;	/* slot 4: 1 Mockingboard, 0 empty */
+int	g_slot7_scsi = 1;		/* slot 7: 1 SCSI card (7 hard drives), 0 empty */
+
 int	g_fullscreen = 0;	/* fullscreen state; applied live, F11 also toggles it */
 int	g_borderless = 0;	/* no window title bar / border */
 int	g_noaspect = 0;		/* stretch to fill instead of keeping the ratio */
@@ -428,6 +433,9 @@ Cfg_menu g_cfg_main_menu[] = {
 { "Video Settings", g_cfg_video_menu, 0, 0, CFGTYPE_SUBMENU },
 { "Auto-update config.kegs,0,Manual,1,Immediately",
 		KNMP(g_config_kegs_auto_update), CFGTYPE_INT },
+{ "Slot 4 Mockingboard,0,Empty,1,Mockingboard",
+		KNMP(g_slot4_mockingboard), CFGTYPE_INT },
+{ "Slot 7 SCSI card,0,Empty,1,SCSI card", KNMP(g_slot7_scsi), CFGTYPE_INT },
 { "Speed,0,Unlimited,1,1.0MHz,2,2.8MHz,3,8.0MHz (Zip)",
 		KNMP(g_limit_speed), CFGTYPE_INT },
 { "ZipGS Speed,8,8MHz,16,16MHz,32,32MHz,64,64MHz,128,128MHz",
@@ -1326,8 +1334,8 @@ config_load_roms()
 
 	memset(&g_rom_cards_ptr[0], 0, 256*16);
 
-	for(i = 0; i < 256; i++) {
-		// Place HD PROM in slot 7
+	for(i = 0; g_slot7_scsi && i < 256; i++) {
+		// Place HD PROM in slot 7 (only if the SCSI card is plugged in)
 		g_rom_cards_ptr[0x700 + i] = g_rom_c700[i];
 		// g_rom_cards_ptr[0x500 + i] = g_rom_c700[i];
 	}

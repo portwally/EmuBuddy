@@ -149,6 +149,8 @@ the F4 text menu. Work:
 - New Blank Disk dialog (size and type) using the existing image-creation code.
 
 ### Phase 3: Slot configuration (M–L, core work)
+**Status, first version done:** Slots window (Machine > Slots...) with staged changes and Apply/Revert. Slot 1/2: Idle or Virtual Modem. Slot 3: Empty or Video Overlay Card. Slot 4: Mockingboard on/off. Slot 7: SCSI card on/off (Apply reloads the card ROM and restarts). Settings saved in config.kegs. ImageWriter (slot 1) and Uthernet (slot 3) are shown greyed until Phases 4/5.
+**Open:** the IIgs "Your Card" battery-RAM setting is not changed automatically (its byte layout wasn't confirmed, and guessing could corrupt saved settings); users set it in the IIgs Control Panel. Serial TCP/real-device setups need text fields.
 - **Slots** window with a popup per slot:
   - Slot 1: Printer (ImageWriter II) · Serial · Empty
   - Slot 2: Modem · Serial · Empty
