@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "profile.h"
+#include "library.h"
 
 #define MAX_PROFILES	64
 
@@ -254,6 +255,7 @@ cli(int argc, char **argv)
 #define LW	800
 #define LH	640
 
+static void lib_open(int kind, char *target, int cap);
 static SDL_Window	*g_win;
 static SDL_Renderer	*g_ren;
 static int		g_sel, g_top, g_running = 1;
@@ -471,7 +473,10 @@ edit_draw(UiWindow *win, int cx, int cy)
 		PathField *f = &g_pf[i];
 
 		ui_draw_text(cx + 10, cy + y + 1, f->label, UI_BLACK);
-		field(win, cx, cy, 110, y, 460, f->buf, sizeof(f->buf));
+		field(win, cx, cy, 110, y, f->folder ? 460 : 390, f->buf, sizeof(f->buf));
+		if(!f->folder && ui_button(win, cx, cy, 504, y - 1, 70, 20, "Library", 1)) {
+			lib_open(i == 0 ? LIB_ROM : LIB_DISK, f->buf, (int)sizeof(f->buf));
+		}
 		if(ui_button(win, cx, cy, 578, y - 1, 60, 20, "Choose...", 1)) {
 			choose(f);
 		}
@@ -734,6 +739,9 @@ lib_draw(UiWindow *win, int cx, int cy)
 	if(ui_button(win, cx, cy, 172, 490, 78, 28, "Delete", g_nprof > 0)) {
 		delete_profile();
 	}
+	if(ui_button(win, cx, cy, 300, 490, 100, 28, "Library...", 1)) {
+		lib_open(LIB_DISK, NULL, 0);
+	}
 	if(ui_button(win, cx, cy, 540, 490, 100, 28, "Edit...", g_nprof > 0)) {
 		edit_open(&g_prof[g_sel], 0);
 	}
@@ -742,9 +750,240 @@ lib_draw(UiWindow *win, int cx, int cy)
 	}
 }
 
+/* ---- the library window ---- */
+
+static Library	g_library;
+static int	g_lib_scanned;
+static char	g_lfold[16][1100];
+static int	g_nlfold, g_lfsel = -1, g_lftop;
+static UiWindow	g_libwin;
+static int	g_ltab, g_lsel, g_ltop;
+static char	*g_lpick;		/* when choosing for an editor field */
+static int	g_lpick_cap;
+static char	g_addpath[1300];
+static SDL_AtomicInt g_add_ready;
+
+static void
+lfold_path(char *out, size_t n)
+{
+	snprintf(out, n, "%s/Library.folders", g_dir);
+}
+
+static void
+lfold_load(void)
+{
+	char	path[1300], line[1200];
+	FILE	*f;
+
+	lfold_path(path, sizeof(path));
+	g_nlfold = 0;
+	f = fopen(path, "r");
+	while(f && fgets(line, sizeof(line), f) && g_nlfold < 16) {
+		line[strcspn(line, "\r\n")] = 0;
+		if(line[0]) {
+			snprintf(g_lfold[g_nlfold++], sizeof(g_lfold[0]), "%s", line);
+		}
+	}
+	if(f) {
+		fclose(f);
+	}
+}
+
+static void
+lfold_save(void)
+{
+	char	path[1300];
+	FILE	*f;
+
+	lfold_path(path, sizeof(path));
+	f = fopen(path, "w");
+	for(int i = 0; f && i < g_nlfold; i++) {
+		fprintf(f, "%s\n", g_lfold[i]);
+	}
+	if(f) {
+		fclose(f);
+	}
+}
+
+static void
+lib_rescan(void)
+{
+	lib_scan(&g_library, g_lfold, g_nlfold);
+	g_lib_scanned = 1;
+	ui_message("Library: %d files in %d folder%s", g_library.n, g_nlfold,
+						g_nlfold == 1 ? "" : "s");
+}
+
+static void SDLCALL
+add_cb(void *ud, const char * const *list, int filter)
+{
+	(void)ud; (void)filter;
+	if(list && list[0]) {
+		SDL_strlcpy(g_addpath, list[0], sizeof(g_addpath));
+		SDL_SetAtomicInt(&g_add_ready, 1);
+	}
+}
+
+/* Which profiles use this file (or folder)? */
+static void
+used_by(const char *path, char *out, size_t n)
+{
+	static const char *keys[] = { "rom", "hard1", "hard2", "hard3", "hard4", "hard5",
+		"hard6", "hard7", "flop1", "flop2", "flop3", "flop4", NULL };
+	char	full[1200];
+
+	out[0] = 0;
+	for(int i = 0; i < g_nprof; i++) {
+		for(int k = 0; keys[k]; k++) {
+			profile_expand_path(profile_get(&g_prof[i], keys[k]), full, sizeof(full));
+			if(full[0] && !strcmp(full, path)) {
+				if(out[0]) {
+					SDL_strlcat(out, ", ", n);
+				}
+				SDL_strlcat(out, profile_name(&g_prof[i]), n);
+				break;
+			}
+		}
+	}
+}
+
+static char	g_lline[LIB_MAX_ITEMS][160];
+static const char *g_lnames[LIB_MAX_ITEMS];
+static int	g_lmap[LIB_MAX_ITEMS];
+
+static void
+libwin_draw(UiWindow *win, int cx, int cy)
+{
+	static const char *tabs[] = { "ROMs", "Disks" };
+	int	i, n = 0, tab = g_lpick ? g_ltab : g_ltab;
+	char	used[300], line[400];
+
+	if(!g_lib_scanned) {
+		lib_rescan();
+	}
+	if(!g_lpick) {
+		ui_segment(win, cx, cy, 10, 8, 200, 22, tabs, 2, &g_ltab, 3);
+	} else {
+		ui_draw_text(cx + 10, cy + 10, tab == LIB_ROM ? "Choose a ROM" : "Choose a disk", UI_BLACK);
+	}
+	for(i = 0; i < g_library.n; i++) {
+		const LibItem *it = &g_library.items[i];
+
+		if(it->kind != tab) {
+			continue;
+		}
+		used_by(it->path, used, sizeof(used));
+		snprintf(g_lline[n], sizeof(g_lline[0]), "%.40s\t%s\t%s\t%s", it->name,
+				it->label, it->volume, used[0] ? used : "(not used)");
+		g_lnames[n] = g_lline[n];
+		g_lmap[n++] = i;
+	}
+	if(g_lsel >= n) {
+		g_lsel = n - 1;
+	}
+	if(g_lsel < 0 && n) {
+		g_lsel = 0;
+	}
+	if(!n) {
+		ui_draw_text(cx + 14, cy + 44, g_nlfold ? "Nothing found in these folders." :
+			"Add the folders that hold your ROMs and disks.", UI_GREY);
+	}
+	{
+		static const int cols[] = { 4, 300, 440, 560 };
+
+		ui_list_columns(cols, 4);
+	}
+	i = ui_list(win, cx, cy, 10, 36, 740, 270, g_lnames, n, &g_lsel, &g_ltop);
+	if(i == 2 && g_lpick && g_lsel >= 0) {
+		SDL_strlcpy(g_lpick, g_library.items[g_lmap[g_lsel]].path, (size_t)g_lpick_cap);
+		g_lpick = NULL;
+		ui_window_close(win);
+		return;
+	}
+	if(g_lsel >= 0 && g_lsel < n) {
+		const LibItem *it = &g_library.items[g_lmap[g_lsel]];
+
+		used_by(it->path, used, sizeof(used));
+		snprintf(line, sizeof(line), "%s", it->path);
+		const char *t = line;
+		while(*t && ui_text_width(t) > 730) {
+			t++;
+		}
+		ui_draw_text(cx + 12, cy + 314, t, UI_BLACK);
+		snprintf(line, sizeof(line), "%s, %ld KB%s%s%s", it->label, it->size / 1024,
+			it->volume[0] ? ", volume " : "", it->volume,
+			it->writable ? "" : ", write-protected");
+		ui_draw_text(cx + 12, cy + 332, line, UI_GREY);
+		snprintf(line, sizeof(line), "Used by: %s", used[0] ? used : "no profile");
+		ui_draw_text(cx + 12, cy + 350, line, used[0] ? UI_BLACK : UI_WARN);
+	}
+	ui_hline(cx + 10, cy + 374, 740, UI_LGREY);
+	ui_draw_text(cx + 12, cy + 382, "Library folders", UI_GREY);
+	{
+		static const char *fn[16];
+
+		for(i = 0; i < g_nlfold; i++) {
+			fn[i] = g_lfold[i];
+		}
+		ui_list(win, cx, cy, 10, 400, 560, 76, fn, g_nlfold, &g_lfsel, &g_lftop);
+	}
+	if(ui_button(win, cx, cy, 580, 400, 170, 22, "Add Folder...", g_nlfold < 16)) {
+		SDL_ShowOpenFolderDialog(add_cb, NULL, g_win, NULL, false);
+	}
+	if(ui_button(win, cx, cy, 580, 427, 170, 22, "Remove Folder", g_lfsel >= 0 && g_lfsel < g_nlfold)) {
+		for(i = g_lfsel; i + 1 < g_nlfold; i++) {
+			memcpy(g_lfold[i], g_lfold[i + 1], sizeof(g_lfold[0]));
+		}
+		g_nlfold--;
+		g_lfsel = -1;
+		lfold_save();
+		lib_rescan();
+	}
+	if(ui_button(win, cx, cy, 580, 454, 170, 22, "Rescan", 1)) {
+		lib_rescan();
+	}
+	if(g_lpick) {
+		if(ui_button(win, cx, cy, 580, 490, 80, 24, "Cancel", 1)) {
+			g_lpick = NULL;
+			ui_window_close(win);
+		}
+		if(ui_button(win, cx, cy, 670, 490, 80, 24, "Use", g_lsel >= 0 && g_lsel < n)) {
+			SDL_strlcpy(g_lpick, g_library.items[g_lmap[g_lsel]].path, (size_t)g_lpick_cap);
+			g_lpick = NULL;
+			ui_window_close(win);
+		}
+	} else if(ui_button(win, cx, cy, 670, 490, 80, 24, "Close", 1)) {
+		ui_window_close(win);
+	}
+}
+
+static void
+lib_open(int kind, char *target, int cap)
+{
+	g_lpick = target;
+	g_lpick_cap = cap;
+	if(target) {
+		g_ltab = kind;
+		g_lsel = 0;
+		g_ltop = 0;
+	}
+	snprintf(g_libwin.title, sizeof(g_libwin.title), "Library");
+	g_libwin.w = 760;
+	g_libwin.h = 536;
+	g_libwin.modal = target != NULL;
+	g_libwin.closable = 1;
+	g_libwin.draw = libwin_draw;
+	g_libwin.on_close = NULL;
+	if(!g_libwin.open) {
+		ui_window_center(&g_libwin);
+		g_libwin.y = 26;
+	}
+	ui_window_open(&g_libwin);
+}
+
 /* ---- menus ---- */
 
-enum { C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT };
+enum { C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -758,12 +997,14 @@ static const UiMenuItem m_file[] = {
 static const UiMenuItem m_prof[] = {
 	{ "Play", C_PLAY, "Return", 0 },
 	{ "Edit...", C_EDIT, "Cmd-E", 0 },
+	{ NULL, 0, NULL, UI_MI_SEP },
+	{ "Library...", C_LIB, "Cmd-L", 0 },
 };
 static const UiMenuItem m_help[] = {
 	{ "About EmuBuddy Launcher", C_ABOUT, NULL, 0 },
 };
 static const UiMenu g_menus[] = {
-	{ "File", m_file, 7 }, { "Profile", m_prof, 2 }, { "Help", m_help, 1 },
+	{ "File", m_file, 7 }, { "Profile", m_prof, 4 }, { "Help", m_help, 1 },
 };
 
 static void
@@ -777,6 +1018,7 @@ app_command(int id)
 	case C_QUIT: g_running = 0; break;
 	case C_PLAY: lib_play(); break;
 	case C_EDIT: if(g_nprof) { edit_open(&g_prof[g_sel], 0); } break;
+	case C_LIB: lib_open(LIB_DISK, NULL, 0); break;
 	case C_ABOUT:
 		ui_message("EmuBuddy Launcher %s - 2026, Walter Tengler", LAUNCHER_VERSION_STR);
 		break;
@@ -801,6 +1043,14 @@ app_status(char *l, char *c, char *r, int n)
 static void
 app_tick(void)
 {
+	if(SDL_GetAtomicInt(&g_add_ready)) {
+		SDL_SetAtomicInt(&g_add_ready, 0);
+		if(g_nlfold < 16) {
+			snprintf(g_lfold[g_nlfold++], sizeof(g_lfold[0]), "%s", g_addpath);
+			lfold_save();
+			lib_rescan();
+		}
+	}
 	if(SDL_GetAtomicInt(&g_pick_ready)) {
 		SDL_SetAtomicInt(&g_pick_ready, 0);
 		if(g_pick_target) {
@@ -825,6 +1075,7 @@ window(void)
 		return;
 	}
 	SDL_SetRenderLogicalPresentation(g_ren, LW, LH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	lfold_load();
 	ui_init(g_win, g_ren, &g_app);
 	snprintf(g_lib.title, sizeof(g_lib.title), "Profiles");
 	g_lib.x = 10;
@@ -915,6 +1166,10 @@ window(void)
 				snprintf(g_pf[1].buf, sizeof(g_pf[1].buf), "/disks/My Disk.hdv");
 				g_ch[3].sel = 2;
 				edit_save();
+			}
+			if(frame == 6 && getenv("LAUNCHER_LIB")) {
+				lib_open(LIB_DISK, NULL, 0);
+				g_ltab = atoi(getenv("LAUNCHER_LIB")) > 1;
 			}
 			if(frame == 20 && getenv("LAUNCHER_SHOT")) {
 				SDL_Surface *sf = SDL_RenderReadPixels(g_ren, NULL);

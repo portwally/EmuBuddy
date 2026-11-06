@@ -35,6 +35,7 @@ jobs:
           cmake -G Ninja -B build-launcher -S launcher
           cmake --build build-launcher
           ./build-launcher/test_profile
+          ./build-launcher/test_library
       - name: Package (.dmg)
         run: cd build && cpack
       - uses: actions/upload-artifact@v7

@@ -169,4 +169,5 @@ the combined download (one installer or archive per platform with both apps).
   Delete, Edit, Play; the profile editor (name, description, ROM, three hard disks, 3.5" and 5.25" floppy, shared and bridge
   folder, memory, speed, slots 1/2/3/4/7, window size, CRT, full screen, extra options) with file choosers, text fields and
   disk drop. The window uses EmuBuddy's own toolkit (the "Retro" look), compiled from `emubuddy/src/ui*.c`.
-- **Next:** ROM and disk library (section 8), generated covers, the skin engine, the other skins, one download with both apps.
+- **Library (first version):** you name folders; the launcher scans them (4 levels), lists ROMs (ROM 01 or 03 by size) and disks (type, ProDOS volume name, size), and shows which profiles use each file or that none does. The profile editor has a **Library** button next to each ROM and disk field. Folders are kept in `Library.folders` in the profiles folder.
+- **Next:** checks (missing, duplicate, damaged), "Duplicate for this profile", tags and search, generated covers, the skin engine, the other skins, one download with both apps.
