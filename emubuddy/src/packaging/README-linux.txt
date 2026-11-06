@@ -1,7 +1,7 @@
-GSplus on Linux
-===============
+EmuBuddy on Linux
+=================
 
-GSplus needs the SDL3 library installed on your system. If launching
+EmuBuddy needs the SDL3 library installed on your system. If launching
 fails with an error like:
 
     error while loading shared libraries: libSDL3.so.0:

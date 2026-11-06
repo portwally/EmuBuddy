@@ -299,10 +299,10 @@ if(APPLE)
 endif()
 
 if(NOT APPLE)
-    # The binary is just "gsplus" (no -sdl). $ORIGIN lets it find a co-located
+    # The binary is just "EmuBuddy" (no -sdl). $ORIGIN lets it find a co-located
     # SDL3 shared library at runtime (ELF).
     set_target_properties(gsplus-sdl PROPERTIES
-        OUTPUT_NAME "gsplus"
+        OUTPUT_NAME "EmuBuddy"
         INSTALL_RPATH "$ORIGIN")
 endif()
 

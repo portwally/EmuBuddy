@@ -1,208 +1,270 @@
-![GSplus - cross-platform Apple IIgs emulator](emubuddy-social.png)
+<p align="center">
+  <img src="emubuddy/lib/emubuddyicon.png" alt="EmuBuddy icon" width="128">
+</p>
 
-# GSplus
+<h1 align="center">EmuBuddy</h1>
 
-An accessible, cross-platform build of [KEGS](http://kegs.sourceforge.net) - 
-Kent Dickey's Apple IIgs emulator - packaged with
-[SDL3](https://www.libsdl.org/) for macOS, Linux, and Windows.
+<p align="center">
+  <b>An Apple IIgs emulator you run with the mouse.</b><br>
+  Menus, windows, drag and drop, printing, internet and file exchange with your computer, all without typing a command.
+</p>
 
-## What it is
+![EmuBuddy running System 6 on macOS](docs/screenshots/desktop.png)
 
-GSplus wraps the KEGS core in a single SDL3 application that builds and runs the
-same way on macOS, Linux, and Windows. It is **focused on the SDL3 build** - if
-you want the native macOS or Windows versions, use
-[KEGS](http://kegs.sourceforge.net) directly. GSplus tracks the KEGS version it's
-based on (currently 1.38).
+EmuBuddy is built on [KEGS](http://kegs.sourceforge.net), Kent Dickey's Apple IIgs emulator, through the
+[GSplus](https://github.com/digarok/gsplus) SDL3 build. The emulator core is the proven KEGS one. What EmuBuddy adds is
+everything around it: a menu bar and windows drawn in the look of the GS/OS desktop, easy disk handling, a printer,
+network access, and several ways to move files between the IIgs and the computer it runs on.
 
-<table>
-  <tr>
-    <td><a href="screenshots/emubuddy-mac-wolf3d.png"><img src="screenshots/emubuddy-mac-wolf3d.png" alt="Wolfenstein 3D running in GSplus" width="400"></a></td>
-    <td><a href="screenshots/emubuddy-mac-arkanoid2.png"><img src="screenshots/emubuddy-mac-arkanoid2.png" alt="Arkanoid II running in GSplus" width="400"></a></td>
-  </tr>
-  <tr>
-    <td><a href="screenshots/emubuddy-mac-animasia3d.png"><img src="screenshots/emubuddy-mac-animasia3d.png" alt="Animasia 3D running in GSplus" width="400"></a></td>
-    <td><a href="screenshots/emubuddy-mac-3200-image.png"><img src="screenshots/emubuddy-mac-3200-image.png" alt="3200-color image displayed in GSplus" width="400"></a></td>
-  </tr>
-</table>
+It runs on **macOS (Apple Silicon)**, **Windows (x64)** and **Linux (x64 and arm64)**, and looks the same on all of them.
 
-## You'll need a ROM
+## What you get
 
-Like any IIgs emulator, GSplus needs an Apple IIgs ROM file to boot. Without one
-it starts into a configuration screen with nothing to run. The ROM is Apple's
-copyrighted firmware, so GSplus can't ship it — you supply your own.
+- **A real user interface.** Menus along the top, status bar along the bottom, and windows for drives, slots, the
+  printer and more, all drawn by EmuBuddy itself in a white Apple IIgs style, so it looks the same on every system.
+- **Disks on the fly.** Drop a disk image on the window, or pick one in the Drives window, while the IIgs is running.
+  Two 3.5" and two 5.25" drives, plus a SCSI card with seven hard disks. `.po`, `.2mg`, `.hdv`, `.dsk`, `.do`, `.woz`
+  and more.
+- **Shared folders.** A folder on your computer becomes a ProDOS disk that the IIgs can read and write. Files you
+  drop on the emulator appear in it, and files the IIgs saves are ordinary files on your computer.
+- **Internet.** An Uthernet II card with a built-in network, so Marinetti and TCP/IP programs get DHCP, DNS and a
+  connection to the internet without any set-up on your side.
+- **Printing.** Print from GS/OS to a virtual ImageWriter II or a PostScript printer. Pages appear in a preview
+  window and can be saved as PDF or sent to a real printer.
+- **Configurable slots.** Choose what sits in each slot in a window, not in a text file.
+- **Speed.** From the stock 1 and 2.8 MHz up to the full speed of your computer, switchable at any time.
+- **Screenshots and video.** One key saves a screenshot; another records an MP4 with sound.
+- **Your keyboard.** German, French, Spanish and other keyboards type what their keys show.
+- **A command line, too.** Every setting also works from the command line, in the style of MAME's `apple2gs`.
 
-**Which ROM:** the IIgs shipped with two ROM versions. **ROM 03** (256 KB, the
-later model) is the usual choice; **ROM 01** (128 KB) is also fully supported.
-GSplus does **not** support the early ROM 0.
+## Screenshots
 
-**Where to put it:** name the file `ROM`, `ROM.01`, or `ROM.03` and place it in
-your home directory, next to the app, or next to your `config.kegs`. GSplus picks
-it up automatically. You can also select one at runtime: press **F4 → ROM File
-Selection → ROM File** and browse to it. A handful of other common names
-(`APPLE2GS.ROM`, `APPLE2GS.ROM2`, `xgs.rom`, `342-0077-b`, …) are recognized too.
+| | |
+|---|---|
+| ![Drives window](docs/screenshots/drives.png) | ![Slots window](docs/screenshots/slots.png) |
+| **Drives.** Floppies, a SCSI card with seven hard disks, shared folders. Drop disks or folders here. | **Slots.** Pick the card for each slot. The defaults suit internet access and printing. |
+| ![Printer window](docs/screenshots/printer.png) | ![Disk Browser](docs/screenshots/browser.png) |
+| **Printer.** Pages from the IIgs, ready to save as PDF, print or open. | **Disk Browser.** Look inside any ProDOS disk image and take files out. |
+| ![Drop Destination window](docs/screenshots/dropdest.png) | ![Machine menu](docs/screenshots/machine.png) |
+| **Drop Destination.** Files you drop go to the front Finder window, or to a folder you choose. | **Machine menu.** Soft and hard reset, pause, slots, printer. |
 
-**Finding one:** the cleanest option is to dump the ROM from a real Apple IIgs you
-own — KEGS includes a short BASIC program that does it, in
-[`upstream/kegs/doc/README.ROM.files.txt`](upstream/kegs/doc/README.ROM.files.txt).
-Otherwise, the IIgs ROM is long-unsupported software that's widely circulated
-online: a web search for *"Apple IIgs ROM 03"* (or ROM 01) generally turns one
-up, and the Internet Archive hosts MAME sets that contain a usable ROM. That same
-`README.ROM.files.txt` lists the exact filenames KEGS accepts and how to extract
-or convert a MAME-format dump.
+## Getting started
 
-**Did it work?** A valid ROM 01 file is exactly **128 KB** and a ROM 03 is **256
-KB**. If GSplus boots to the "Check startup device" screen, the ROM loaded fine —
-it just needs a disk. Press **F4** to mount a disk image, or drag one onto the
-window.
+### 1. Get EmuBuddy
 
-## Downloads
+Prebuilt apps are built automatically for every change; look under the repository's
+[Actions](../../actions) (for the latest build) and [Releases](../../releases) (for tagged versions). Or build it
+yourself, see [Building from source](#building-from-source).
 
-Prebuilt apps are attached to each [release](../../releases). The builds aren't
-code-signed yet, so your OS may warn that the app is from an unidentified
-developer the first time you run it. This is expected:
+The apps are not code-signed yet, so your system may warn you the first time:
 
-**Windows** - SmartScreen blocks unsigned downloads. Click **More info → Run
-anyway**. If the `.exe` won't start after unzipping, right-click it →
-**Properties** → tick **Unblock** → **OK**. Keep `SDL3.dll` next to the `.exe`.
+- **macOS:** right-click the app, choose **Open**, then confirm. If macOS still refuses, run
+  `xattr -dr com.apple.quarantine /Applications/EmuBuddy.app`.
+- **Windows:** SmartScreen blocks unsigned downloads. Click **More info**, then **Run anyway**. Keep `SDL3.dll` next
+  to the `.exe`.
+- **Linux:** unpack the `.tar.gz` and run `EmuBuddy`. It needs the SDL3 library (`libsdl3` from your package manager); the file `README-linux.txt` in the package tells how.
 
-**macOS** - the app is only ad-hoc signed, so Gatekeeper flags it. Right-click
-the app → **Open**, then confirm **Open**. If macOS still refuses, run
-`xattr -dr com.apple.quarantine /Applications/GSplus.app`.
+### 2. Give it a ROM
 
-**Linux** - the `.tar.gz` relies on a system SDL3 (`libsdl3` from your package
-manager). A self-contained AppImage is planned.
+Like every IIgs emulator, EmuBuddy needs an Apple IIgs ROM file. It is Apple's copyrighted firmware, so it cannot
+be included. Without one, EmuBuddy shows a **ROM Required** window instead of a screen.
 
-## Status
+- **Which ROM:** a **ROM 03** file is 256 KB and is the usual choice. A **ROM 01** file is 128 KB and also works. The
+  very first ROM (ROM 0) is not supported.
+- **How to load it:** drop the file on the window, or choose it with **File > Choose ROM File...**. EmuBuddy
+  remembers it. From the command line you can use `-rom <file>`.
+- **Where to find one:** the cleanest way is to read the ROM out of an Apple IIgs you own. Otherwise it circulates
+  widely as part of MAME's `apple2gs` set. EmuBuddy needs a plain ROM file, not a zip: if you only have the MAME
+  files `341-0737` and `341-0748`, put them together into one file (`cat 341-0737 341-0748 > ROM03`).
+- **Did it work?** If you see "Check startup device!", the ROM loaded fine. It just needs a disk.
 
-This is an early reboot - expect rough edges. SDL3 **video, input, and audio**
-are working on macOS, Linux, and Windows.
+### 3. Start something
 
-### What's been added in GSplus
+Drop a disk image on the window, or open **Disks > Drives Window** (F2) and click a drive. The IIgs boots from the
+first bootable disk, as a real one would. GS/OS system disks, games and hard disk images all work the same way.
 
-Some features that are a part of the SDL3 build:
+## Using EmuBuddy
 
-- **Window & display options** - `-fullscreen`, `-borderless`, `-noaspect`,
-  `-highdpi`, `-novsync`, `-nohwaccel`, plus window position; F11 toggles
-  fullscreen.
-- **Screenshot capture** - F10 writes the framebuffer to disk.
-- **Gamepad support** - cross-platform SDL_Gamepad mapped to the IIgs joystick.
-  A connected gamepad is used automatically (with hotplug); without one, the
-  numeric keypad emulates the joystick. The stick's circular travel is remapped
-  to the square range Apple joysticks have, so games can reach the corners.
-  Override either behavior in the config menu (F4) under Joystick
-  Configuration.
-- **Terminal debugger** - a REPL for the built-in 65816 debugger from the
-  controlling terminal.
-- **Drag-and-drop disk loading** - drop a disk image on the window and GSplus
-  guesses the slot from its size.
-- **Centered 8-bit video modes** - 40/80-column text, GR, HGR and DHGR are
-  560 pixels wide vs. super-hires' 640; GSplus centers them instead of
-  KEGS's left-align. `-centera2 0` (or the Display Effects menu) restores
-  the KEGS behavior.
-- **CRT scanline simulator** - `-scanline <0-100>`, Shift+F11 to toggle.
-- **Curved CRT effect** - `-crt 1` with `-crtcurve` / `-crtmask` / `-crtglow`
-  / `-crtvignette`, Ctrl+F11 to toggle. Screen curvature, RGB phosphor mask,
-  bloom, and vignette; composes with the scanline simulator.
-- **One cross-platform build** - the same SDL3 app and CMake build on macOS,
-  Linux, and Windows, with prebuilt downloads for each.
+### Disks and drives
 
-## Controls
+Open the **Drives** window with **F2**. It lists every drive: 3.5" in slot 5, 5.25" in slot 6 and the seven drives of the
+SCSI card in slot 7. Click a drive to choose an image, drop an image on a row, or drop it anywhere on the emulator and
+EmuBuddy picks the right drive from its size and type. Each row has a **Lock** box (write protect) and **Eject**.
+Ejecting waits if the disk is busy, so you cannot pull a disk out in the middle of a write.
 
-The following hotkeys let you dynamically change many of the emulator settings,
-but you can also edit most settings by hitting `F4` for the configuration menu. 
+Hard disk images may contain several partitions; EmuBuddy asks which one to use. The **Disks** menu also keeps a list
+of recently used disks.
 
-| Key | Action | Source |
-|---|---|---|
-| **F1** | Open-Apple (⌘) modifier, for keyboards without an Apple/Command key | KEGS/GS+ |
-| **F4** | Open the configuration menu (mount disks, pick a ROM, settings) | KEGS/GS+ |
-| **F5** | Toggle the status line | KEGS/GS+ |
-| **F6** | Cycle emulation speed (1 MHz / 2.8 MHz / fast) | KEGS/GS+ |
-| **F7** | Toggle the debugger | KEGS/GS+ |
-| **Shift + F7** | Toggle fast disk emulation | KEGS/GS+ |
-| **F8** | Grab / release the mouse (warp + hide pointer) | KEGS/GS+ |
-| **F9** | Invert paddles | KEGS/GS+ |
-| **Shift + F9** | Swap paddles | KEGS/GS+ |
-| **Ctrl + F9** | Copy screen text to the clipboard | KEGS/GS+ |
-| **F10** | Save a screenshot | GS+ |
-| **F11** | Toggle fullscreen | GS+ |
-| **Shift + F11** | Toggle the CRT scanline effect | GS+ |
-| **Ctrl + F11** | Toggle the CRT curved screen effect | GS+ |
-| **Ctrl + F12** | Reset the IIgs (Ctrl-Reset) | KEGS/GS+ |
+### Files between the IIgs and your computer
 
-You can also **drag & drop** a disk image onto the window to mount it (slot
-guessed from size). 
+There are four ways, from the simplest to the most flexible:
+
+1. **Share a folder.** **Disks > Share a Folder...** (or drop a folder on the window) makes a folder on your computer
+   appear as a ProDOS disk. It is live: what the IIgs saves is a normal file in the folder, and a file you put in the
+   folder shows up in the IIgs. **Disks > Show Shared Folder** opens the folder in your file manager.
+2. **Drop files on the emulator.** Drop any file on the window and it is copied into the shared folder. If the front
+   window of the GS/OS Finder shows the shared disk or one of its folders, the file goes **into exactly that
+   folder**. Otherwise it goes where **Disks > Drop Destination...** says. ShrinkIt archives (`.shk`) are files, so
+   they are copied, not mounted. Disk images are mounted in a drive instead.
+3. **Disk Browser.** **Disks > Disk Browser** opens any ProDOS image (also one that is in a drive) and lists its
+   files and folders with type and size. Choose **Export to Desktop**, or on macOS drag a file out of the window to
+   the Finder.
+4. **The host bridge.** A program inside the IIgs can read and write one folder of your computer directly. See
+   [docs/BRIDGE.md](docs/BRIDGE.md). It is for tools such as file managers and is off until you choose a folder
+   with **Disks > Bridge Folder...**.
+
+**File types.** ProDOS files have a type and an aux type that a normal file system does not. EmuBuddy keeps them in the
+file name: `GAME,t$B3,a$DB03` is a type $B3 file with aux type $DB03, `NOTES.txt` is a text file, and a name
+with neither is a binary file. Files that have a resource fork are saved as AppleSingle (`.applesingle`).
+The same convention is used everywhere, so a file can travel in both directions without losing its type.
+
+### Slots
+
+**Machine > Slots...** (F4) shows the seven slots. Choose a card for each and press **Apply**.
+
+| Slot | Choices |
+|---|---|
+| 1 Printer port | Idle, Modem, ImageWriter (a printer), PostScript (a PostScript printer) |
+| 2 Modem port | Idle, Modem (a virtual modem for telnet and BBS programs) |
+| 3 | Empty, Video Overlay Card, Uthernet II |
+| 4 | Empty, Mockingboard, Uthernet II |
+| 5, 6 | The built-in disk drives (see Drives) |
+| 7 | Empty, SCSI card (seven hard disks) |
+
+The defaults are the Uthernet II in slot 4 and a PostScript printer on port 1, because that is what internet access and
+printing need. As on the real machine, a card also needs "Your Card" selected for its slot in the IIgs Control
+Panel. Changing slot 7 restarts the machine.
+
+### Internet
+
+The **Uthernet II** card gives the IIgs a network. EmuBuddy provides the other end, a built-in virtual network with
+DHCP and DNS, so programs that use the **Marinetti** TCP/IP stack (select the Uthernet II link layer in its Control
+Panel) get an address and can reach the internet, other computers on your network, and servers like web, FTP and SMB.
+Nothing has to be installed or configured on your computer. The status bar shows how many packets went out and came in.
+
+The virtual network is 192.168.64.0/24; the IIgs gets an address from .2 on, and the gateway and DNS server are .1.
+
+### Printing
+
+EmuBuddy has two virtual printers. Pick one for slot 1 in the Slots window. Every page lands in the **Printer** window
+(**Machine > Printer**), where you can flip through the pages, **Save PDF**, **Print** on a real printer, **Open** the
+PDF in your viewer, **Clear** the pages or **Eject** the page that is still being printed.
+
+- **ImageWriter II.** Choose the *ImageWriter* printer driver in GS/OS and the ImageWriter port. This is the dot
+  matrix printer most IIgs software supports; Applesoft `PR#1` prints on it too.
+- **PostScript.** In the GS/OS **DC Printer** control panel, choose the printer port and the printer type
+  **DC.PostScript**. The pages are drawn by [Ghostscript](https://ghostscript.com), which EmuBuddy finds itself
+  (if it is missing, a window explains how to install it, and the print job waits). **Save PDF** then writes a
+  sharp, small vector PDF instead of a picture of the page.
+
+### Speed
+
+The **Speed** menu changes the processor speed at any moment: the stock **1.0 MHz** and **2.8 MHz**, a ZipGS
+accelerator at **8, 16, 32, 64 or 128 MHz**, or **Unlimited**, which runs as fast as your computer allows. The status
+bar shows the real speed.
+
+### Display
+
+**View > Window Size** offers 1x, 2x, 3x and 4x (sizes that do not fit your screen are greyed out), **Full Screen**
+(F11), a curved **CRT Effect** (Ctrl-F11) and **Scanlines** (Shift-F11). The picture is always scaled evenly, so pixels
+stay square.
+
+### Screenshots and video
+
+In the **File** menu:
+
+- **Save Screenshot** (F10) saves the IIgs picture to your Pictures folder.
+- **Save Window Screenshot** (Shift-F10) saves the whole window, with menu bar and windows.
+- **Record Video** (Ctrl-F10) starts and stops an MP4 recording with sound, saved in your Movies folder. The status
+  bar shows REC and the time. Recording needs [FFmpeg](https://ffmpeg.org) (if it is missing, a window shows how to
+  get it). Quitting while recording saves the file.
+
+### Keyboard
+
+EmuBuddy passes the character your keyboard makes to the IIgs, so a German, French or Spanish keyboard types what
+its keys show, whatever layout is set in the IIgs Control Panel. Umlauts and accents work in the desktop (EmuBuddy
+types them the Mac way, with Option dead keys) and on the text screens (as the IIgs national characters). The **Edit**
+menu can **Paste Text** from your clipboard into the IIgs and **Copy Screen Text** from a text screen back out.
+
+| Key | Action |
+|---|---|
+| F1 | Open-Apple, for keyboards without an Apple key (the left Command key works as well) |
+| F2 | Drives window |
+| F3 | Pause |
+| F4 | Slots window |
+| F10, Shift-F10, Ctrl-F10 | Screenshot, window screenshot, start or stop video recording |
+| F11, Shift-F11, Ctrl-F11 | Full screen, scanlines, CRT effect |
+| Ctrl-F12 | Soft reset (like Ctrl-Reset on a real IIgs) |
+
+The **Machine** menu has a **Soft Reset**, which restarts the machine but keeps the memory, like Ctrl-Reset, and a
+**Hard Reset**, which also wipes the memory and reloads the ROM, like switching it off and on.
+
+## Command line
+
+Everything above also works from the command line, in the style of MAME's `apple2gs`. The options last for one
+run, unless you add `-save`.
+
+```sh
+EmuBuddy apple2gs -rom ROM03 -hard1 System6.hdv -sl4 uthernet2 -mhz 16 -scale 2 -share ~/IIgsFiles
+```
+
+On macOS the program is `EmuBuddy.app/Contents/MacOS/EmuBuddy`. `EmuBuddy -help` lists all options, and
+[docs/CLI.md](docs/CLI.md) describes them, with notes on screenshots, recording, keyboard layouts and dropping files.
 
 ## Building from source
 
-GSplus builds with CMake (Ninja generator). SDL3 is used if installed, otherwise
-built from source automatically. From the repository root:
+EmuBuddy builds with CMake. SDL3 is used if it is installed and built from source otherwise. From the repository root:
 
 ```sh
 cmake -G Ninja -B build -S emubuddy/src
 cmake --build build --target gsplus-sdl
 ```
 
-This produces the GSplus app:
+This produces `build/EmuBuddy.app` (macOS), `build/EmuBuddy` (Linux) or `build/EmuBuddy.exe` (Windows, with
+`SDL3.dll` next to it).
 
-- **macOS:** `build/GSplus.app`
-- **Linux:** `build/gsplus`
-- **Windows:** `build/gsplus.exe` (with `SDL3.dll` alongside)
+**macOS** (Homebrew and the Xcode command line tools): `brew install cmake ninja sdl3 libslirp`
 
-### Dependencies
+**Linux** (Debian or Ubuntu): `sudo apt install cmake ninja-build build-essential git libslirp-dev` and the X11,
+Wayland, audio and graphics development packages that SDL3 needs; the list is in
+[.github/workflows/build.yml](.github/workflows/build.yml).
 
-**macOS** (Homebrew, plus the Xcode Command Line Tools):
+**Windows** ([MSYS2](https://www.msys2.org/), MINGW64 shell):
+`pacman -S git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja`
 
-```sh
-brew install cmake ninja sdl3
-```
+`libslirp` is what gives the Uthernet II card its network. Without it EmuBuddy still builds, but the card has no
+connection. Optional helper programs, which EmuBuddy only looks for when you use the feature: **Ghostscript**
+(PostScript printing) and **FFmpeg** (video recording).
 
-**Linux** (Debian/Ubuntu) - the X11/Wayland/audio packages are SDL3's build
-dependencies:
-
-```sh
-sudo apt install cmake ninja-build build-essential git \
-  libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
-  libxfixes-dev libxss-dev libxtst-dev libxinerama-dev \
-  libwayland-dev wayland-protocols libdecor-0-dev libxkbcommon-dev \
-  libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev \
-  libpulse-dev libasound2-dev libpipewire-0.3-dev libsndio-dev \
-  libdbus-1-dev libudev-dev libibus-1.0-dev
-```
-
-**Windows** ([MSYS2](https://www.msys2.org/), in the MINGW64 shell):
+Tests (not built by default):
 
 ```sh
-pacman -S git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+cmake --build build --target test_uthernet2 && build/test_uthernet2   # network card
+cmake --build build --target test_bridge && build/test_bridge          # host bridge
 ```
 
-## About Branches
+## Status and plans
 
-- KEGS latest is tracked in the `./upstream` directory.
-- An `upstream` branch is updated whenever there's a new KEGS version and merged
-  to `main`.
-- This makes it easy to track KEGS changes somewhat independently of the GSplus
-  work.
+EmuBuddy is in active development. The core and the user interface are in daily use on macOS; Windows and Linux are
+built and checked on every change but have had much less hands-on testing. Known gaps and plans, in
+[PLAN.md](PLAN.md):
 
-## A note from Dagen
+- Disk sets (named groups of disks and a speed that open together).
+- Writing files into a disk image from the Disk Browser, and dragging files out on Windows and Linux.
+- The Uthernet II's hardware sockets (today the card works in the raw packet mode that Marinetti uses).
+- Resource forks and more commands in the host bridge, and a matching "Mac folder" pane in GS Commander.
+- Signed and notarized downloads, and an AppImage for Linux.
 
-I've tried to reboot GSplus _many times_ over the past few years and each time 
-I'd sink weeks into building and packaging a new release, and then life would 
-pull me away for months, sometimes years, and momentum would die. I made the 
-decision to use AI to allow me to provide the emulator I wanted to have, which
-is controversial even for me.  But then again, this isn't any different than 
-what I see in every modern development shop.  Things have changed dramatically
-over the past few years.  But I want to be clear about AI usage, and that I
-feel comfortable using it as a tool that needs a lot of oversight. 
+## Credits and license
 
-KEGS is a brilliant piece of pure C, and is proof that you don't need AI to 
-write great software. Kent Dickey did the hard, beautiful work. The AI here 
-is a pragmatic crutch to keep *my* reboot alive between the demands of real 
-life.
+EmuBuddy is free software under the **GNU General Public License, version 3** (see [LICENSE](LICENSE)).
 
-If you want the canonical emulator, go straight to KEGS.  It's great!
+- **KEGS**, the Apple IIgs emulator at the heart of this program, is by Kent Dickey.
+- **GSplus** by Dagen Brock (digarok) brought KEGS to SDL3 and to macOS, Windows and Linux; EmuBuddy starts from it.
+- The **ImageWriter II** emulation comes from the GSport and GSplus line of emulators (originally from DOSBox).
+- The **Shaston** font used for the menus and windows is the IIgs system font.
+- **SDL3** for windows, input and sound, and **libslirp** for the virtual network.
+- **Ghostscript** and **FFmpeg** are separate programs that EmuBuddy calls when you print PostScript or record
+  video; they are not part of EmuBuddy and come under their own licenses.
 
-I'm just over here having fun making the emulator extensions that I find 
-useful or interesting.  I hope it helps some other people connect to the 
-incredible machine that is the Apple IIgs. Peace!
-
-- Dagen
+Apple, Apple IIgs, GS/OS and ImageWriter are trademarks of Apple Inc. EmuBuddy is not affiliated with Apple.
