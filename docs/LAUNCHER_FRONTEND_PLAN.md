@@ -118,6 +118,8 @@ details page, search by typing, keyboard and mouse; picture folders compatible w
 dialogs over the pictures; Classic view as a switch; import from Attract-Mode with the options of the start script;
 Set/Remove Picture.
 
-**Not done yet:** game controller input; sounds; idle slideshow; portrait layout; favourites and sorting; German texts;
+**Controller (done):** D-pad and left stick, A/B/X/Y/Start, shoulder buttons, hold-to-repeat; the Space menu works with Up/Down/Return/Esc (so also from the controller). The editor, library and import windows are still mouse and keyboard only.
+
+**Not done yet:** sounds; idle slideshow; portrait layout; favourites and sorting; German texts;
 the friendly editor with presets (the full editor is used for now); automatic snapshot when EmuBuddy quits;
 JPG pictures (PNG and BMP load now).

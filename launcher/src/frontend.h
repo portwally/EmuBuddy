@@ -32,5 +32,7 @@ void	fe_wheel(float dy);
  * Returns 1 and the path, or 0. */
 int	fe_find_art(const Profile *p, const char *root, int kind, char *out, int outsize);
 int	fe_info_open(void);
+/* 1: show the controller hints (A play, X details, Y menu) instead of the key hints. */
+void	fe_set_pad_hints(int on);
 
 #endif

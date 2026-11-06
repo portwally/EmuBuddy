@@ -216,6 +216,8 @@ Arcadeflow. It shows your games (set-ups) as a row of big covers over a blurred 
 **game** holds the whole machine set-up (ROM, memory, speed, every slot, the disks in the drives, the shared folder,
 the window); **Return** starts EmuBuddy with the matching command line (see [Command line](#command-line)).
 
+- **Game controller:** D-pad or left stick move, A plays, B goes back, X shows the details, Y or Start opens the
+  menu, the shoulder buttons jump five games. The hints at the bottom switch to the controller buttons when you use it.
 - **Keys:** Left/Right move, Return plays, Tab shows the details page, Space opens the menu, type to search, Esc goes
   back. The mouse works too (click, double-click, wheel). A **Classic view** with windows, menus and skins is a switch
   away (Space > Classic View).

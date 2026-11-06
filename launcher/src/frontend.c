@@ -11,7 +11,7 @@ static SDL_Renderer	*g_r;
 static FeData		g_d;
 static UiFont		*g_small, *g_mid, *g_big;
 static float		g_pos;			/* animated position in the row */
-static int		g_info;
+static int		g_info, g_pad_hints;
 static char		g_search[64];
 static Uint64		g_last;
 static float		g_bg_fade = 1;		/* 0..1, 1 = the current background is fully in */
@@ -373,6 +373,12 @@ fe_info_open(void)
 	return g_info;
 }
 
+void
+fe_set_pad_hints(int on)
+{
+	g_pad_hints = on;
+}
+
 /* ---- the view ---- */
 
 static float	g_tx[64], g_ty[64], g_tw[64], g_th[64];	/* tile rectangles of the last frame */
@@ -606,7 +612,8 @@ fe_draw(int W, int H)
 			text(g_small, 30, (int)(24 * u), s, 0xFFD060, 255);
 		}
 		{
-			const char *hint = "Return  play        Tab  details        Space  menu        type to search";
+			const char *hint = g_pad_hints ? "A  play        X  details        Y  menu        B  back        L / R  jump" :
+				"Return  play        Tab  details        Space  menu        type to search";
 
 			text(g_small, W / 2 - text_w(g_small, hint) / 2, (int)(H - 44 * u), hint, 0x9AA0B0, 255);
 		}
@@ -645,7 +652,7 @@ fe_draw(int W, int H)
 			}
 		}
 		text(g_small, (int)(px + 24 * u), (int)(py + ph - 44 * u),
-			"Return  play        E  edit        Esc  back", 0x9AA0B0, 255);
+			g_pad_hints ? "A  play        B  back" : "Return  play        E  edit        Esc  back", 0x9AA0B0, 255);
 	}
 }
 

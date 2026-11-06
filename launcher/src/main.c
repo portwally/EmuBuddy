@@ -2122,15 +2122,65 @@ static const struct { const char *label; int id; } g_ovl_items[] = {
 	{ "Classic View", C_VIEW }, { "Full Screen", C_FULL }, { "About", C_ABOUT }, { "Quit", C_QUIT },
 };
 
+static int	g_ovl_sel;		/* the highlighted item (keys and game controller) */
+
+static int
+ovl_enabled(int i)
+{
+	int id = g_ovl_items[i].id;
+
+	return (id == C_PLAY || id == C_INFO || id == C_EDIT || id == C_DUP || id == C_DEL || id == C_SETPIC ||
+		id == C_RMPIC) ? g_nprof > 0 : 1;
+}
+
+/* Up/Down/Return/Esc in the Space menu; returns 1 if the key was used. */
+static int
+ovl_key(SDL_Keycode k)
+{
+	int	n = (int)(sizeof(g_ovl_items) / sizeof(g_ovl_items[0])), i;
+
+	if(!g_ovl.open) {
+		return 0;
+	}
+	if(k == SDLK_DOWN || k == SDLK_UP) {
+		int step = k == SDLK_DOWN ? 1 : -1;
+
+		for(i = 1; i <= n; i++) {
+			int c = (g_ovl_sel + step * i + n * 2) % n;
+
+			if(ovl_enabled(c)) {
+				g_ovl_sel = c;
+				break;
+			}
+		}
+		return 1;
+	}
+	if(k == SDLK_RETURN && ovl_enabled(g_ovl_sel)) {
+		int id = g_ovl_items[g_ovl_sel].id;
+
+		ui_window_close(&g_ovl);
+		app_command(id);
+		return 1;
+	}
+	if(k == SDLK_ESCAPE || k == SDLK_SPACE) {
+		ui_window_close(&g_ovl);
+		return 1;
+	}
+	return 1;			/* the menu is modal: it eats the other keys */
+}
+
 static void
 ovl_draw(UiWindow *win, int cx, int cy)
 {
 	int	i, y = 8, n = (int)(sizeof(g_ovl_items) / sizeof(g_ovl_items[0]));
 
 	for(i = 0; i < n; i++) {
-		int en = (g_ovl_items[i].id == C_PLAY || g_ovl_items[i].id == C_INFO || g_ovl_items[i].id == C_EDIT ||
-			g_ovl_items[i].id == C_DUP || g_ovl_items[i].id == C_DEL) ? g_nprof > 0 : 1;
+		int en = ovl_enabled(i);
 
+		if(i == g_ovl_sel) {		/* the highlight */
+			ui_frame(cx + 7, cy + y - 3, win->w - 16, 32, UI_BLACK);
+			ui_frame(cx + 8, cy + y - 2, win->w - 18, 30, UI_BLACK);
+		}
 		if(ui_button(win, cx, cy, 10, y, win->w - 22, 26, g_ovl_items[i].label, en)) {
 			int id = g_ovl_items[i].id;
 
@@ -2151,6 +2201,7 @@ ovl_open(void)
 	g_ovl.modal = 1;
 	g_ovl.closable = 1;
 	g_ovl.draw = ovl_draw;
+	g_ovl_sel = 0;
 	ui_window_center(&g_ovl);
 	ui_window_open(&g_ovl);
 }
@@ -2262,10 +2313,131 @@ app_tick(void)
 static UiApp g_app = { g_menus_rw, 6, app_state, app_command, app_status, app_tick,
 	NULL, NULL, NULL };
 
+/* ---- game controller: buttons and the stick become the keys of the Arcade view ----
+ * D-pad or left stick move, A plays, B goes back, X shows the details, Y or Start opens the menu,
+ * the shoulder buttons jump five games. Holding a direction repeats it. */
+
+static SDL_Gamepad	*g_pads[4];
+static int		g_pad_dir;		/* 0 none, else the key being held by D-pad or stick */
+static Uint64		g_pad_next;		/* when a held direction repeats */
+static int		g_stick_x, g_stick_y;	/* -1, 0, 1 from the left stick */
+
+static void
+pad_key(SDL_Keycode k)
+{
+	SDL_Event ke;
+
+	SDL_zero(ke);
+	ke.type = SDL_EVENT_KEY_DOWN;
+	ke.key.windowID = SDL_GetWindowID(g_win);
+	ke.key.key = k;
+	ke.key.down = true;
+	SDL_PushEvent(&ke);
+}
+
+static void
+pad_set_dir(SDL_Keycode k)
+{
+	if(k == g_pad_dir) {
+		return;
+	}
+	g_pad_dir = (int)k;
+	if(k) {
+		pad_key(k);
+		g_pad_next = SDL_GetTicks() + 420;
+	}
+}
+
+/* the direction the D-pad or the stick is holding right now */
+static SDL_Keycode
+pad_dir_now(int dpad_l, int dpad_r, int dpad_u, int dpad_d)
+{
+	if(dpad_l || g_stick_x < 0) {
+		return SDLK_LEFT;
+	} else if(dpad_r || g_stick_x > 0) {
+		return SDLK_RIGHT;
+	} else if(dpad_u || g_stick_y < 0) {
+		return SDLK_UP;
+	} else if(dpad_d || g_stick_y > 0) {
+		return SDLK_DOWN;
+	}
+	return 0;
+}
+
+static int	g_dpad[4];			/* left, right, up, down held */
+
+static void
+pad_event(const SDL_Event *e)
+{
+	if(e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION) {
+		fe_set_pad_hints(1);
+	}
+	switch(e->type) {
+	case SDL_EVENT_GAMEPAD_ADDED:
+		for(int i = 0; i < 4; i++) {
+			if(!g_pads[i]) {
+				g_pads[i] = SDL_OpenGamepad(e->gdevice.which);
+				break;
+			}
+		}
+		break;
+	case SDL_EVENT_GAMEPAD_REMOVED:
+		for(int i = 0; i < 4; i++) {
+			if(g_pads[i] && SDL_GetGamepadID(g_pads[i]) == e->gdevice.which) {
+				SDL_CloseGamepad(g_pads[i]);
+				g_pads[i] = NULL;
+			}
+		}
+		break;
+	case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+		int v = e->gaxis.value, dir = v > 16000 ? 1 : (v < -16000 ? -1 : 0);
+
+		if(e->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX) {
+			g_stick_x = dir;
+		} else if(e->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
+			g_stick_y = dir;
+		} else {
+			break;
+		}
+		pad_set_dir(pad_dir_now(g_dpad[0], g_dpad[1], g_dpad[2], g_dpad[3]));
+		break; }
+	case SDL_EVENT_GAMEPAD_BUTTON_UP:
+	case SDL_EVENT_GAMEPAD_BUTTON_DOWN: {
+		int down = e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+
+		switch(e->gbutton.button) {
+		case SDL_GAMEPAD_BUTTON_DPAD_LEFT: g_dpad[0] = down; break;
+		case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: g_dpad[1] = down; break;
+		case SDL_GAMEPAD_BUTTON_DPAD_UP: g_dpad[2] = down; break;
+		case SDL_GAMEPAD_BUTTON_DPAD_DOWN: g_dpad[3] = down; break;
+		case SDL_GAMEPAD_BUTTON_SOUTH: if(down) pad_key(SDLK_RETURN); break;
+		case SDL_GAMEPAD_BUTTON_EAST: if(down) pad_key(SDLK_ESCAPE); break;
+		case SDL_GAMEPAD_BUTTON_WEST: if(down) pad_key(SDLK_TAB); break;
+		case SDL_GAMEPAD_BUTTON_NORTH:
+		case SDL_GAMEPAD_BUTTON_START: if(down) pad_key(SDLK_SPACE); break;
+		case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: if(down) pad_key(SDLK_UP); break;
+		case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: if(down) pad_key(SDLK_DOWN); break;
+		default: return;
+		}
+		pad_set_dir(pad_dir_now(g_dpad[0], g_dpad[1], g_dpad[2], g_dpad[3]));
+		break; }
+	}
+}
+
+/* called once per frame: repeat a held direction */
+static void
+pad_tick(void)
+{
+	if(g_pad_dir && SDL_GetTicks() >= g_pad_next) {
+		pad_key((SDL_Keycode)g_pad_dir);
+		g_pad_next = SDL_GetTicks() + 110;
+	}
+}
+
 static void
 window(void)
 {
-	if(!SDL_Init(SDL_INIT_VIDEO)) {
+	if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
 		fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
 		return;
 	}
@@ -2319,12 +2491,23 @@ window(void)
 	while(g_running) {
 		SDL_Event e;
 
+		pad_tick();
 		while(SDL_PollEvent(&e)) {
 			if(e.type == SDL_EVENT_QUIT) {
 				g_running = 0;
 				continue;
 			}
-			/* SDL converts mouse events for the logical size by itself */
+			if((e.type == SDL_EVENT_KEY_DOWN && e.key.key != SDLK_UNKNOWN && e.key.scancode != SDL_SCANCODE_UNKNOWN) ||
+					e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+				fe_set_pad_hints(0);	/* the keyboard or the mouse was used last */
+			}
+			if(e.type >= SDL_EVENT_GAMEPAD_AXIS_MOTION && e.type <= SDL_EVENT_GAMEPAD_REMOVED) {
+				pad_event(&e);
+				continue;
+			}
+			if(g_ovl.open && e.type == SDL_EVENT_KEY_DOWN && !g_focus && ovl_key(e.key.key)) {
+				continue;
+			}
 			if(g_focus && e.type == SDL_EVENT_TEXT_INPUT) {
 				focus_insert(e.text.text);
 				continue;
@@ -2592,6 +2775,34 @@ window(void)
 					ce.type = SDL_EVENT_TEXT_INPUT;
 					ce.text.text = "X";
 					SDL_PushEvent(&ce);
+				}
+			}
+			if(getenv("LAUNCHER_PADSEQ") && frame >= 10 && frame < 10 + 4 * 24 && (frame - 10) % 4 == 0) {
+				/* test aid: letters L R U D A B X Y S, one every 4 frames, as controller buttons */
+				const char *q = getenv("LAUNCHER_PADSEQ");
+				size_t idx = (size_t)((frame - 10) / 4);
+
+				if(idx < strlen(q)) {
+					static const struct { char c; int b; } map[] = { { 'L', SDL_GAMEPAD_BUTTON_DPAD_LEFT },
+						{ 'R', SDL_GAMEPAD_BUTTON_DPAD_RIGHT }, { 'U', SDL_GAMEPAD_BUTTON_DPAD_UP },
+						{ 'D', SDL_GAMEPAD_BUTTON_DPAD_DOWN }, { 'A', SDL_GAMEPAD_BUTTON_SOUTH },
+						{ 'B', SDL_GAMEPAD_BUTTON_EAST }, { 'X', SDL_GAMEPAD_BUTTON_WEST },
+						{ 'Y', SDL_GAMEPAD_BUTTON_NORTH }, { 'S', SDL_GAMEPAD_BUTTON_START } };
+
+					for(size_t m = 0; m < sizeof(map) / sizeof(map[0]); m++) {
+						if(map[m].c == q[idx]) {
+							SDL_Event pe;
+
+							SDL_zero(pe);
+							pe.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+							pe.gbutton.button = (Uint8)map[m].b;
+							pe.gbutton.down = true;
+							SDL_PushEvent(&pe);
+							pe.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+							pe.gbutton.down = false;
+							SDL_PushEvent(&pe);
+						}
+					}
 				}
 			}
 			if(frame == 3 && getenv("LAUNCHER_SEL") && g_nprof > 0) {		/* test aid: select a game */
