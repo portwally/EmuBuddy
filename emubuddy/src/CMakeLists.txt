@@ -372,6 +372,13 @@ else()
     set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 endif()
 
+# The Launcher (profiles and skins) ships in the same download. Switch it off
+# with -DEMUBUDDY_WITH_LAUNCHER=OFF.
+option(EMUBUDDY_WITH_LAUNCHER "Build and package EmuBuddy Launcher too" ON)
+if(EMUBUDDY_WITH_LAUNCHER AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../launcher/CMakeLists.txt")
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../launcher" launcher)
+endif()
+
 # Every artifact ships the project README and the GPL license text (the GPL
 # requires the license to accompany distributed binaries). These paths are
 # relative to emubuddy/src, so ../.. is the repository root.

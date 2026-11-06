@@ -29,13 +29,12 @@ jobs:
           esac
           cmake -G Ninja -B build -S emubuddy/src $ARGS
       - name: Build
-        run: cmake --build build --target gsplus-sdl
-      - name: Build and test the Launcher
+        run: cmake --build build --target gsplus-sdl emubuddy-launcher
+      - name: Test the Launcher
         run: |
-          cmake -G Ninja -B build-launcher -S launcher
-          cmake --build build-launcher
-          ./build-launcher/test_profile
-          ./build-launcher/test_library
+          cmake --build build --target test_profile test_library
+          ./build/launcher/test_profile
+          ./build/launcher/test_library
       - name: Package (.dmg)
         run: cd build && cpack
       - uses: actions/upload-artifact@v7
@@ -78,7 +77,7 @@ jobs:
           esac
           cmake -G Ninja -B build -S emubuddy/src $ARGS
       - name: Build
-        run: cmake --build build --target gsplus-sdl
+        run: cmake --build build --target gsplus-sdl emubuddy-launcher
       - name: Package (.tar.gz)
         run: cd build && cpack
       - uses: actions/upload-artifact@v7
@@ -113,7 +112,7 @@ jobs:
           esac
           cmake -G Ninja -B build -S emubuddy/src $ARGS
       - name: Build
-        run: cmake --build build --target gsplus-sdl
+        run: cmake --build build --target gsplus-sdl emubuddy-launcher
       - name: Package (.zip)
         run: cd build && cpack
       - uses: actions/upload-artifact@v7

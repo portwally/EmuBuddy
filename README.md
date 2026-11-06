@@ -213,6 +213,21 @@ menu can **Paste Text** from your clipboard into the IIgs and **Copy Screen Text
 The **Machine** menu has a **Soft Reset**, which restarts the machine but keeps the memory, like Ctrl-Reset, and a
 **Hard Reset**, which also wipes the memory and reloads the ROM, like switching it off and on.
 
+## EmuBuddy Launcher
+
+The download holds a second program, **EmuBuddy Launcher**. It keeps several **profiles**, for example one for web
+apps, one for your own projects and one for games. A profile holds the whole set-up: ROM, memory, speed, every slot,
+the disks in the drives, the shared folder and the window. **Play** starts EmuBuddy with the matching command line
+(see [Command line](#command-line)); the launcher shows that line, so you can use it in your own scripts.
+
+- A **library** of your ROMs and disk images: you name the folders, the launcher lists what it finds with disk type
+  and ProDOS volume name, shows which profile uses each file, and can check for copies and damaged images. A profile
+  can use a **private copy** of a disk so the original stays as it is.
+- **Skins:** Retro, Modern, Magazine, MacOS 1, MacOS 7, Terminal Amber, Apple II, NeXT, BeOS, Retro Neon, Shelf and
+  Cover Flow. Every profile has a cover, your own picture or a generated one.
+
+The plan and details are in [docs/LAUNCHER_PLAN.md](docs/LAUNCHER_PLAN.md).
+
 ## Command line
 
 Everything above also works from the command line, in the style of MAME's `apple2gs`. The options last for one

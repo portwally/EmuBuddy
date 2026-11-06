@@ -113,30 +113,37 @@ root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 lib = os.path.join(root, "emubuddy", "lib")
 src = os.path.join(root, "emubuddy", "src")
 
-open(os.path.join(lib, "emubuddyicon.png"), "wb").write(png(1024))
 
-# Windows .ico with PNG entries
-sizes = [16, 32, 64, 128, 256]
-data = [png(s) for s in sizes]
-ico = struct.pack("<HHH", 0, 1, len(sizes))
-off = 6 + 16 * len(sizes)
-for s, d in zip(sizes, data):
-    ico += struct.pack("<BBBBHHII", s % 256, s % 256, 0, 0, 1, 32, len(d), off)
-    off += len(d)
-open(os.path.join(lib, "emubuddyicon.ico"), "wb").write(ico + b"".join(data))
+def write_all(name):
 
-# macOS .icns through iconutil
-if sys.platform == "darwin":
-    with tempfile.TemporaryDirectory() as t:
-        iset = os.path.join(t, "emubuddy.iconset")
-        os.mkdir(iset)
-        for base in (16, 32, 128, 256, 512):
-            open(os.path.join(iset, "icon_%dx%d.png" % (base, base)), "wb").write(png(base))
-            open(os.path.join(iset, "icon_%dx%d@2x.png" % (base, base)), "wb").write(png(base * 2))
-        subprocess.check_call(["iconutil", "-c", "icns", iset, "-o",
-                               os.path.join(lib, "emubuddyicon.icns")])
-else:
-    print("not on macOS: emubuddyicon.icns not regenerated")
+    open(os.path.join(lib, name + ".png"), "wb").write(png(1024))
+
+    # Windows .ico with PNG entries
+    sizes = [16, 32, 64, 128, 256]
+    data = [png(s) for s in sizes]
+    ico = struct.pack("<HHH", 0, 1, len(sizes))
+    off = 6 + 16 * len(sizes)
+    for s, d in zip(sizes, data):
+        ico += struct.pack("<BBBBHHII", s % 256, s % 256, 0, 0, 1, 32, len(d), off)
+        off += len(d)
+    open(os.path.join(lib, name + ".ico"), "wb").write(ico + b"".join(data))
+
+    # macOS .icns through iconutil
+    if sys.platform == "darwin":
+        with tempfile.TemporaryDirectory() as t:
+            iset = os.path.join(t, "emubuddy.iconset")
+            os.mkdir(iset)
+            for base in (16, 32, 128, 256, 512):
+                open(os.path.join(iset, "icon_%dx%d.png" % (base, base)), "wb").write(png(base))
+                open(os.path.join(iset, "icon_%dx%d@2x.png" % (base, base)), "wb").write(png(base * 2))
+            subprocess.check_call(["iconutil", "-c", "icns", iset, "-o",
+                                   os.path.join(lib, name + ".icns")])
+    else:
+        print("not on macOS: emubuddyicon.icns not regenerated")
+
+
+
+write_all("emubuddyicon")
 
 # 128x128 RGBA header for the window icon
 rows = scaled(128)
@@ -151,4 +158,25 @@ with open(os.path.join(src, "emubuddy_icon.h"), "w") as f:
     for i in range(0, len(flat), 16):
         f.write("  " + ",".join(str(v) for v in flat[i:i + 16]) + ",\n")
     f.write("};\n\n#endif\n")
+
+
+
+# ---- the Launcher icon: the same blue square with four profile "covers" ----
+px = [[T] * N for _ in range(N)]
+for y in range(2, 30):
+    for x in range(2, 30):
+        dx = max(2 + 5 - x, x - (29 - 5), 0)
+        dy = max(2 + 5 - y, y - (29 - 5), 0)
+        if dx * dx + dy * dy <= 25:
+            put(x, y, BLUE)
+rect(7, 2, 24, 2, BLUE_L)
+rect(7, 29, 24, 29, BLUE_D)
+for tx, ty, band in ((6, 6, (230, 70, 70, 255)), (17, 6, (70, 200, 110, 255)),
+                     (6, 17, (250, 200, 50, 255)), (17, 17, (60, 200, 230, 255))):
+    rect(tx, ty, tx + 8, ty + 8, DARK)
+    rect(tx + 1, ty + 1, tx + 7, ty + 7, CREAM)
+    rect(tx + 1, ty + 1, tx + 7, ty + 3, band)
+    rect(tx + 2, ty + 5, tx + 6, ty + 5, SHADE)
+rect(15, 15, 16, 16, CREAM)
+write_all("launchericon")
 print("icons written")

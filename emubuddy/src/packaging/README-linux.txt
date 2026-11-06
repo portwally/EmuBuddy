@@ -1,6 +1,9 @@
 EmuBuddy on Linux
 =================
 
+This download holds two programs: EmuBuddy (the emulator) and EmuBuddy-Launcher
+(profiles for different set-ups, with skins). Both need the SDL3 library.
+
 EmuBuddy needs the SDL3 library installed on your system. If launching
 fails with an error like:
 

@@ -723,12 +723,12 @@ cover_icon(const Profile *p, int ox, int oy)
 
 	if(!kind[0]) {
 		snprintf(hay, sizeof(hay), "%s %s", profile_name(p), profile_get(p, "description"));
-		if(strcasestr(hay, "web") || strcasestr(hay, "internet") || strcasestr(hay, "net")) {
+		if(eb_strcasestr(hay, "web") || eb_strcasestr(hay, "internet") || eb_strcasestr(hay, "net")) {
 			kind = "globe";
-		} else if(strcasestr(hay, "proj") || strcasestr(hay, "dev") || strcasestr(hay, "code") ||
-				strcasestr(hay, "program")) {
+		} else if(eb_strcasestr(hay, "proj") || eb_strcasestr(hay, "dev") || eb_strcasestr(hay, "code") ||
+				eb_strcasestr(hay, "program")) {
 			kind = "gear";
-		} else if(strcasestr(hay, "game") || strcasestr(hay, "play")) {
+		} else if(eb_strcasestr(hay, "game") || eb_strcasestr(hay, "play")) {
 			kind = "joystick";
 		} else {
 			kind = "disk";

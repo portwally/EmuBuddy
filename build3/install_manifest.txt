@@ -1,0 +1,10 @@
+/tmp/ebinst/EmuBuddy.app/Contents/_CodeSignature/CodeResources
+/tmp/ebinst/EmuBuddy.app/Contents/MacOS/EmuBuddy
+/tmp/ebinst/EmuBuddy.app/Contents/Resources/emubuddyicon.icns
+/tmp/ebinst/EmuBuddy.app/Contents/Info.plist
+/tmp/ebinst/EmuBuddy Launcher.app/Contents/_CodeSignature/CodeResources
+/tmp/ebinst/EmuBuddy Launcher.app/Contents/MacOS/EmuBuddy Launcher
+/tmp/ebinst/EmuBuddy Launcher.app/Contents/Resources/launchericon.icns
+/tmp/ebinst/EmuBuddy Launcher.app/Contents/Info.plist
+/tmp/ebinst/README.md
+/tmp/ebinst/LICENSE

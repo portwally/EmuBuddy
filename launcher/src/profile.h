@@ -41,4 +41,7 @@ void	profile_cmdline(char **argv, int argc, char *out, int outsize);
 /* ~ at the start of a path becomes the home folder. */
 void	profile_expand_path(const char *in, char *out, int outsize);
 
+/* strcasestr is not everywhere (Windows); this one is. */
+const char *eb_strcasestr(const char *hay, const char *needle);
+
 #endif

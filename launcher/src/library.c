@@ -1,5 +1,6 @@
 #include "library.h"
 #include "prodos_img.h"
+#include "profile.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,7 +63,7 @@ lib_classify(const char *path, long size, char *label, int labelsize)
 	}
 	/* A ROM: 128 KB (ROM 01) or 256 KB (ROM 03) with a name that says so */
 	if((size == 131072 || size == 262144) &&
-			(strcasestr(name, "rom") || has_ext(name, ".bin") ||
+			(eb_strcasestr(name, "rom") || has_ext(name, ".bin") ||
 			 !strchr(name, '.'))) {
 		snprintf(label, (size_t)labelsize, "ROM %s (%ld KB)",
 					size == 131072 ? "01" : "03", size / 1024);
@@ -166,11 +167,11 @@ lib_scan(Library *l, char folders[][1100], int nfolders)
 
 /* ---- checks ---- */
 
-static unsigned long
+static unsigned long long
 file_hash(const char *path, long size)
 {
 	FILE		*f = fopen(path, "rb");
-	unsigned long	h = 1469598103934665603UL ^ (unsigned long)size;
+	unsigned long long h = 1469598103934665603ULL ^ (unsigned long long)size;
 	unsigned char	buf[65536];
 	size_t		n, i;
 
@@ -179,12 +180,12 @@ file_hash(const char *path, long size)
 	}
 	n = fread(buf, 1, sizeof(buf), f);
 	for(i = 0; i < n; i++) {
-		h = (h ^ buf[i]) * 1099511628211UL;
+		h = (h ^ buf[i]) * 1099511628211ULL;
 	}
 	if(size > (long)sizeof(buf) * 2 && fseek(f, size - (long)sizeof(buf), SEEK_SET) == 0) {
 		n = fread(buf, 1, sizeof(buf), f);
 		for(i = 0; i < n; i++) {
-			h = (h ^ buf[i]) * 1099511628211UL;
+			h = (h ^ buf[i]) * 1099511628211ULL;
 		}
 	}
 	fclose(f);
@@ -194,7 +195,7 @@ file_hash(const char *path, long size)
 void
 lib_check(Library *l)
 {
-	unsigned long	*h = calloc((size_t)(l->n + 1), sizeof(unsigned long));
+	unsigned long long *h = calloc((size_t)(l->n + 1), sizeof(unsigned long long));
 	int		i, j;
 
 	if(!h) {
@@ -330,7 +331,7 @@ lib_matches(const LibItem *it, const char *search)
 	snprintf(hay, sizeof(hay), "%s %s %s %s", it->name, it->label, it->volume, it->tags);
 	snprintf(words, sizeof(words), "%s", search);
 	for(w = strtok_r(words, " ", &save); w; w = strtok_r(NULL, " ", &save)) {
-		if(!strcasestr(hay, w)) {
+		if(!eb_strcasestr(hay, w)) {
 			return 0;
 		}
 	}

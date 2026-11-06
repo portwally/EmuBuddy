@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/wally/Documents/EmuBuddy/build3/cmake_install.cmake",
+		"/Users/wally/Documents/EmuBuddy/build3/launcher/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

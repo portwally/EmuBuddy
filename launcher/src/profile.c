@@ -333,3 +333,19 @@ profile_cmdline(char **argv, int argc, char *out, int outsize)
 					quote ? "\"" : "", argv[i], quote ? "\"" : "");
 	}
 }
+
+const char *
+eb_strcasestr(const char *hay, const char *needle)
+{
+	size_t	n = strlen(needle);
+
+	if(!n) {
+		return hay;
+	}
+	for(; *hay; hay++) {
+		if(!strncasecmp(hay, needle, n)) {
+			return hay;
+		}
+	}
+	return NULL;
+}
