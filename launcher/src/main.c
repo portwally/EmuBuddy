@@ -146,7 +146,9 @@ find_emubuddy(char *out, size_t n)
 			"EmuBuddy.app/Contents/MacOS/EmuBuddy",
 			"../EmuBuddy.app/Contents/MacOS/EmuBuddy",
 			"../../../EmuBuddy.app/Contents/MacOS/EmuBuddy",
-			"../MacOS/EmuBuddy", NULL };
+			"../MacOS/EmuBuddy",
+			/* run from the build folder: build/launcher/EmuBuddy Launcher.app next to build/EmuBuddy.app */
+			"../../../../EmuBuddy.app/Contents/MacOS/EmuBuddy", "../EmuBuddy", "../EmuBuddy.exe", NULL };
 
 		for(int i = 0; rel[i]; i++) {
 			snprintf(out, n, "%s%s", base, rel[i]);
