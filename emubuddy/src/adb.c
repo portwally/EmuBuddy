@@ -668,9 +668,13 @@ adb_set_config(word32 val0, word32 val1, word32 val2)
 		g_kbd_ctl_addr = new_kbd;
 	}
 
-	if(val1) {
-		// Do nothing
+	/* val1: bits 7-4 = character set, bits 3-0 = keyboard layout. */
+	if(((val1 >> 4) != g_adb_char_set) || ((val1 & 0xf) != g_adb_layout_lang)) {
+		printf("ADB config: keyboard layout %d, character set %d\n",
+				val1 & 0xf, val1 >> 4);
 	}
+	g_adb_char_set = (val1 >> 4) & 0xf;
+	g_adb_layout_lang = val1 & 0xf;
 
 	tmp1 = val2 >> 4;
 	if(tmp1 == 4) {
@@ -1721,6 +1725,10 @@ adb_key_event(int a2code, int is_up)
 		}
 	}
 	key = (ascii & 0x7f) + 0x80;
+	if(getenv("EMUBUDDY_KEYDEBUG") && !is_up) {
+		printf("ADB key: a2code %02x -> char %02x (%c)\n", a2code, ascii & 0xff,
+			(ascii >= 0x20 && ascii < 0x7f) ? ascii : '.');
+	}
 
 	special = (ascii >> 8) & 0xff;
 	if(ascii < 0) {

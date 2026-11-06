@@ -51,6 +51,10 @@ void
 sdl_mac_fix_menu(void)
 {
 	@autoreleasepool {
+		/* Holding a letter must repeat (the IIgs does its own repeat), not
+		 * bring up macOS's accent picker. */
+		[[NSUserDefaults standardUserDefaults] setBool:NO
+						forKey:@"ApplePressAndHoldEnabled"];
 		NSMenu *menu = [NSApp mainMenu];
 		if (menu) {
 			gsplus_strip_key_equivalents(menu);

@@ -98,3 +98,7 @@ File menu: **Save Screenshot** (F10, the IIgs picture only, to your Pictures fol
 (Shift-F10, with menu bar and windows) and **Record Video** (Ctrl-F10, MP4 with sound, to your Movies folder;
 the status bar shows REC and the time). Recording needs FFmpeg (`brew install ffmpeg`, `winget install ffmpeg`
 or `sudo apt install ffmpeg`); if it is missing, a window explains it. Quitting while recording saves the file.
+
+## Keyboard layouts
+
+EmuBuddy passes the character your keyboard makes to the IIgs, so a German (or any other) host keyboard types what its keys show, whatever layout is set in the IIgs Control Panel. Characters outside ASCII use the IIgs national codes (German ä ö ü Ä Ö Ü ß arrive as `{ | } [ \ ] ~`, shown as umlauts with the German character set). Control and Open-Apple key combinations are unchanged.

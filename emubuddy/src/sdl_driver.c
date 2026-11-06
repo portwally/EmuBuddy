@@ -559,6 +559,7 @@ sdl_video_init(void)
 		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
 		exit(1);
 	}
+	SDL_StartTextInput(g_mainwin_info.window);	/* host layout characters */
 	if(!g_fullscreen) {
 		SDL_SetWindowPosition(g_mainwin_info.window,
 					g_mainwin_xpos, g_mainwin_ypos);
@@ -741,9 +742,10 @@ sdl_update_modifiers(Window_info *win)
 }
 
 static void
-sdl_handle_key(Window_info *win, SDL_Scancode sc, int is_up, int repeat)
+sdl_handle_key(Window_info *win, SDL_Scancode sc, int is_up, int repeat,
+							unsigned unicode)
 {
-	int	a2code;
+	int	a2code, drop_option;
 
 	if(repeat) {
 		return;		/* the IIgs ADB does its own key repeat */
@@ -752,7 +754,41 @@ sdl_handle_key(Window_info *win, SDL_Scancode sc, int is_up, int repeat)
 
 	a2code = sdl_scancode_to_a2code(sc);
 	if(a2code >= 0) {
-		adb_physical_key_update(win->kimage_ptr, a2code, 0, is_up);
+		/* A plain character made with Option on the host keyboard (for
+		 * example @ or [ on a German keyboard) must not also reach the IIgs
+		 * as an Option key: let go of Option while the key is typed. */
+		drop_option = unicode >= 0x20 && unicode < 0x7f && !is_up &&
+					(SDL_GetModState() & SDL_KMOD_ALT);
+		if(drop_option) {
+			adb_physical_key_update(win->kimage_ptr, 0x3a, 0, 1);
+		}
+		adb_physical_key_update(win->kimage_ptr, a2code, unicode, is_up);
+		if(drop_option) {
+			adb_physical_key_update(win->kimage_ptr, 0x3a, 0, 0);
+		}
+	}
+}
+
+/* Keys that type a character. Their IIgs key press waits for the host's text
+ * input event, so the character the host keyboard (for example German) made
+ * is what the IIgs gets: the core finds the US key that produces it. */
+static int	g_pending_sc = -1;	/* key down, text not seen yet */
+static int	g_skip_text = 0;	/* text of an auto-repeat: ignore */
+
+static int
+sdl_is_char_key(SDL_Scancode sc)
+{
+	return (sc >= SDL_SCANCODE_A && sc <= SDL_SCANCODE_0) ||
+		(sc >= SDL_SCANCODE_MINUS && sc <= SDL_SCANCODE_SLASH) ||
+		sc == SDL_SCANCODE_NONUSBACKSLASH;
+}
+
+static void
+sdl_flush_pending_key(Window_info *win)
+{
+	if(g_pending_sc >= 0) {
+		sdl_handle_key(win, (SDL_Scancode)g_pending_sc, 0, 0, 0);
+		g_pending_sc = -1;
 	}
 }
 
@@ -998,7 +1034,38 @@ sdl_poll_events(void)
 				}
 				break;
 			}
-			sdl_handle_key(win, ev.key.scancode, 0, ev.key.repeat);
+			if(sdl_is_char_key(ev.key.scancode) &&
+					!(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) {
+				if(ev.key.repeat) {
+					g_skip_text = 1;	/* its text repeats too */
+				} else {
+					sdl_flush_pending_key(win);
+					g_pending_sc = (int)ev.key.scancode;
+				}
+				break;
+			}
+			sdl_flush_pending_key(win);
+			sdl_handle_key(win, ev.key.scancode, 0, ev.key.repeat, 0);
+			break;
+		case SDL_EVENT_TEXT_INPUT:
+			if(g_skip_text) {
+				g_skip_text = 0;
+			} else {
+				const char *tp = ev.text.text;
+				size_t	tl = strlen(tp);
+				Uint32	uc = tl ? SDL_StepUTF8(&tp, &tl) : 0;
+
+				if(g_pending_sc >= 0) {
+					int sc = g_pending_sc;
+
+					g_pending_sc = -1;
+					sdl_handle_key(win, (SDL_Scancode)sc, 0, 0, uc);
+				} else if(uc > 0 && uc < 0x7f) {
+					/* composed text (accent keys): type it */
+					adb_physical_key_update(win->kimage_ptr, 0, uc, 0);
+					adb_physical_key_update(win->kimage_ptr, 0, 0, 1);
+				}
+			}
 			break;
 		case SDL_EVENT_KEY_UP:
 			if(ev.key.scancode == SDL_SCANCODE_F11) {
@@ -1009,7 +1076,8 @@ sdl_poll_events(void)
 			if(ev.key.scancode == SDL_SCANCODE_F10) {
 				break;
 			}
-			sdl_handle_key(win, ev.key.scancode, 1, 0);
+			sdl_flush_pending_key(win);
+			sdl_handle_key(win, ev.key.scancode, 1, 0, 0);
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
 			/* Map window coords through the renderer's logical
@@ -1057,6 +1125,7 @@ sdl_poll_events(void)
 			break;
 		}
 	}
+	sdl_flush_pending_key(win);	/* key without text (arrows are not here) */
 }
 
 /* Build "[<ssdir>/]gsplus_screenshot_YYYYMMDD_HHMMSS.png" into buf. With no
@@ -1243,11 +1312,11 @@ sdl_dev_keys(Window_info *win, int frames)
 				key = SDL_GetScancodeFromName(combo);
 			}
 			if(down) {
-				if(mod) sdl_handle_key(win, mod, 0, 0);
-				sdl_handle_key(win, key, 0, 0);
+				if(mod) sdl_handle_key(win, mod, 0, 0, 0);
+				sdl_handle_key(win, key, 0, 0, 0);
 			} else {
-				sdl_handle_key(win, key, 1, 0);
-				if(mod) sdl_handle_key(win, mod, 1, 0);
+				sdl_handle_key(win, key, 1, 0, 0);
+				if(mod) sdl_handle_key(win, mod, 1, 0, 0);
 			}
 		}
 		p += n;
@@ -1321,6 +1390,32 @@ sdl_dev_snapshot(Window_info *win)
 		}
 	}
 	sdl_dev_mouse(win, frames);
+	{	/* EMUBUDDY_CHARS="frame:Scancode:text;..." key down + the text the host
+		 * keyboard made for it (to test other keyboard layouts), then key up */
+		const char *p = getenv("EMUBUDDY_CHARS");
+		int	f, n;
+		char	name[32], text[16];
+
+		while(p && sscanf(p, "%d:%31[^:]:%15[^;]%n", &f, name, text, &n) == 3) {
+			if(f == frames || f + 2 == frames) {
+				SDL_Event e;
+
+				SDL_zero(e);
+				e.type = f == frames ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+				e.key.scancode = SDL_GetScancodeFromName(name);
+				e.key.down = (f == frames);
+				SDL_PushEvent(&e);
+				if(f == frames) {
+					SDL_zero(e);
+					e.type = SDL_EVENT_TEXT_INPUT;
+					e.text.text = SDL_strdup(text);
+					SDL_PushEvent(&e);
+				}
+			}
+			p += n;
+			if(*p == ';') p++;
+		}
+	}
 	sdl_dev_keys(win, frames);
 	if(sdl_dev_multisnap(win, frames)) {
 		g_quit_requested = 1;
