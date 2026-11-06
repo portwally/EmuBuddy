@@ -281,15 +281,47 @@ ui_pointer_over_ui(void)
 /* ------------------------------------------------------------------ */
 /* menu layout (shared by drawing and hit testing) */
 
-#define MENU_X0		30
 #define MENU_PAD	8
+
+/* Colours of the menu bar, drop-down menus and status bar. The Launcher's
+ * skins theme them like everything else; in EmuBuddy they are a neutral dark
+ * strip that can't be mistaken for the GS/OS menu bar inside the emulator. */
+#ifdef UI_THEMABLE
+#define CH_BG		UI_WHITE
+#define CH_FG		UI_BLACK
+#define CH_DIM		UI_GREY
+#define CH_SEL_BG	UI_BLACK
+#define CH_SEL_FG	UI_WHITE
+#define CH_LINE		UI_BLACK
+#define CH_SHADOW	UI_BLACK
+#define CH_BRAND	UI_BLACK
+#else
+#define CH_BG		0x2A2D34
+#define CH_FG		0xE8EAF0
+#define CH_DIM		0x8D93A3
+#define CH_SEL_BG	0x3D6AE0
+#define CH_SEL_FG	0xFFFFFF
+#define CH_LINE		0x555B6B
+#define CH_SHADOW	0x0C0D10
+#define CH_BRAND	0x7FA6FF
+#endif
 #define MENU_ITEM_H	18
 #define MENU_SEP_H	8
 
 static int
+menu_x0(void)
+{
+#ifdef UI_THEMABLE
+	return 30;
+#else
+	return ui_text_width("EmuBuddy") + 28;
+#endif
+}
+
+static int
 menu_title_x(int i)
 {
-	int	x = MENU_X0, k;
+	int	x = menu_x0(), k;
 
 	for(k = 0; k < i; k++) {
 		x += ui_text_width(g_app->menus[k].title) + 2 * MENU_PAD;
@@ -1114,19 +1146,22 @@ draw_menu_bar(void)
 	if(UI_TOP_H == 0) {
 		return;			/* the system's menu bar is used */
 	}
-	ui_fill(0, 0, g_lw, UI_BAR_H, UI_WHITE);
-	ui_hline(0, UI_BAR_H - 1, g_lw, UI_BLACK);
+	ui_fill(0, 0, g_lw, UI_BAR_H, CH_BG);
+	ui_hline(0, UI_BAR_H - 1, g_lw, CH_LINE);
+#ifdef UI_THEMABLE
 	draw_logo(10, 4);
+#else
+	ui_draw_text(10, 1, "EmuBuddy", CH_BRAND);		/* bold, so it reads as the app's own bar */
+	ui_draw_text(11, 1, "EmuBuddy", CH_BRAND);
+#endif
 	for(i = 0; i < g_app->n_menus; i++) {
 		x = menu_title_x(i);
 		tw = menu_title_w(i);
 		if(i == g_menu_open) {
-			ui_fill(x, 0, tw, UI_BAR_H - 1, UI_BLACK);
-			ui_draw_text(x + MENU_PAD, 1, g_app->menus[i].title,
-								UI_WHITE);
+			ui_fill(x, 0, tw, UI_BAR_H - 1, CH_SEL_BG);
+			ui_draw_text(x + MENU_PAD, 1, g_app->menus[i].title, CH_SEL_FG);
 		} else {
-			ui_draw_text(x + MENU_PAD, 1, g_app->menus[i].title,
-								UI_BLACK);
+			ui_draw_text(x + MENU_PAD, 1, g_app->menus[i].title, CH_FG);
 		}
 	}
 }
@@ -1146,9 +1181,9 @@ draw_dropdown(void)
 	bw = menu_box_w(m);
 	bh = menu_box_h(m);
 	hover = menu_item_at(g_mx, g_my);
-	ui_fill(bx + 2, by + 2, bw, bh, UI_BLACK);		/* shadow */
-	ui_fill(bx, by, bw, bh, UI_WHITE);
-	ui_frame(bx, by, bw, bh, UI_BLACK);
+	ui_fill(bx + 2, by + 2, bw, bh, CH_SHADOW);		/* shadow */
+	ui_fill(bx, by, bw, bh, CH_BG);
+	ui_frame(bx, by, bw, bh, CH_LINE);
 	y = by + 1;
 	for(i = 0; i < m->n_items; i++) {
 		const UiMenuItem *it = &m->items[i];
@@ -1157,7 +1192,7 @@ draw_dropdown(void)
 		Uint32 fg;
 
 		if(it->flags & UI_MI_SEP) {
-			ui_hline(bx + 4, y + h / 2, bw - 8, UI_GREY);
+			ui_hline(bx + 4, y + h / 2, bw - 8, CH_LINE);
 			y += h;
 			continue;
 		}
@@ -1165,10 +1200,10 @@ draw_dropdown(void)
 		dis = (it->flags | st) & UI_MI_DISABLED;
 		chk = (it->flags | st) & UI_MI_CHECKED;
 		if(i == hover && !dis) {
-			ui_fill(bx + 1, y, bw - 2, h, UI_BLACK);
-			fg = UI_WHITE;
+			ui_fill(bx + 1, y, bw - 2, h, CH_SEL_BG);
+			fg = CH_SEL_FG;
 		} else {
-			fg = dis ? UI_GREY : UI_BLACK;
+			fg = dis ? CH_DIM : CH_FG;
 		}
 		if(chk) {
 			SDL_FPoint p[3];
@@ -1195,17 +1230,17 @@ draw_status_bar(void)
 	char	l[96] = "", c[96] = "", r[96] = "";
 	int	y = g_lh - UI_BAR_H;
 
-	ui_fill(0, y, g_lw, UI_BAR_H, UI_WHITE);
-	ui_hline(0, y, g_lw, UI_BLACK);
+	ui_fill(0, y, g_lw, UI_BAR_H, CH_BG);
+	ui_hline(0, y, g_lw, CH_LINE);
 	if(g_app->status) {
 		g_app->status(l, c, r, 96);
 	}
 	if(SDL_GetTicks() < g_msg_until) {
 		snprintf(c, sizeof(c), "%s", g_msg);
 	}
-	ui_draw_text(8, y + 3, l, UI_BLACK);
-	ui_draw_text((g_lw - ui_text_width(c)) / 2, y + 3, c, UI_BLACK);
-	ui_draw_text(g_lw - 8 - ui_text_width(r), y + 3, r, UI_BLACK);
+	ui_draw_text(8, y + 3, l, CH_FG);
+	ui_draw_text((g_lw - ui_text_width(c)) / 2, y + 3, c, CH_FG);
+	ui_draw_text(g_lw - 8 - ui_text_width(r), y + 3, r, CH_FG);
 	if(g_app->status_draw) {
 		g_app->status_draw(0, y, g_lw - 16 - ui_text_width(r), UI_BAR_H);
 	}

@@ -562,7 +562,12 @@ sdl_video_init(void)
 	if(g_fullscreen) { flags |= SDL_WINDOW_FULLSCREEN; g_is_fullscreen = 1; }
 
 #ifdef __APPLE__
-	g_ui_top_h = (g_skin == 1) ? 0 : UI_BAR_H;	/* System skin: the macOS menu bar */
+	g_skin = 1;				/* always the macOS menu bar, never a drawn one */
+	g_ui_top_h = 0;
+	if(getenv("EMUBUDDY_DRAWNBAR")) {	/* developer aid: see the Windows/Linux look */
+		g_skin = 0;
+		g_ui_top_h = UI_BAR_H;
+	}
 #else
 	g_skin = 0;
 #endif

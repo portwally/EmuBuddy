@@ -86,7 +86,7 @@ usage(void)
 "  -bridge <folder>               folder IIgs programs may read/write (host bridge)\n"
 "  -title <text>                  window title\n"
 "  -profile <name>                 name of the Launcher profile (shown in the window title)\n"
-"  -skin iigs | system            look: IIgs style, or the macOS menu bar (macOS only)\n"
+"  -skin iigs | system            (accepted, no effect: macOS always uses its menu bar)\n"
 "  <img or folder>                put in the first free fitting drive\n"
 "\n"
 "Slots (-slN <card>):\n"

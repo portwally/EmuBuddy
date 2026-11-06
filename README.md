@@ -13,17 +13,17 @@
 
 EmuBuddy is built on [KEGS](http://kegs.sourceforge.net), Kent Dickey's Apple IIgs emulator, through the
 [GSplus](https://github.com/digarok/gsplus) SDL3 build. The emulator core is the proven KEGS one. What EmuBuddy adds is
-everything around it: a menu bar and windows drawn in the look of the GS/OS desktop, easy disk handling, a printer,
+everything around it: a menu bar, status bar and tool windows, easy disk handling, a printer,
 network access, and several ways to move files between the IIgs and the computer it runs on.
 
 It runs on **macOS (Apple Silicon)**, **Windows (x64)** and **Linux (x64 and arm64)**, and looks the same on all of them.
 
 ## What you get
 
-- **A real user interface.** Menus along the top, status bar along the bottom, and windows for drives, slots, the
-  printer and more, all drawn by EmuBuddy itself in a white Apple IIgs style, so it looks the same on every system.
-  On macOS you can switch to the **System** skin: the menus move to the normal macOS menu bar at the top of the
-  screen and file choosers are the system's own (View > Skin).
+- **A real user interface.** Menus, a status bar along the bottom, and windows for drives, slots, the printer and
+  more. On macOS the menus are the normal macOS menu bar at the top of the screen and the file choosers are the
+  system's own. On Windows and Linux EmuBuddy draws a dark menu bar and status bar above and below the emulator
+  picture, deliberately unlike the white GS/OS menu bar inside the emulator so the two cannot be mixed up.
 - **Disks on the fly.** Drop a disk image on the window, or pick one in the Drives window, while the IIgs is running.
   Two 3.5" and two 5.25" drives, plus a SCSI card with seven hard disks. `.po`, `.2mg`, `.hdv`, `.dsk`, `.do`, `.woz`
   and more.
@@ -174,10 +174,6 @@ accelerator at **8, 16, 32, 64 or 128 MHz**, or **Unlimited**, which runs as fas
 bar shows the real speed.
 
 ### Display
-
-**View > Skin** (macOS) chooses the look: *IIgs Style* draws the menu bar inside the window; *System* uses the real
-macOS menu bar and the system's file and folder choosers, and the window gets 20 points shorter. The tool windows
-(Drives, Slots, Printer and so on) are drawn in the IIgs style in both skins.
 
 **View > Window Size** offers 1x, 2x, 3x and 4x (sizes that do not fit your screen are greyed out), **Full Screen**
 (F11), a curved **CRT Effect** (Ctrl-F11) and **Scanlines** (Shift-F11). The picture is always scaled evenly, so pixels

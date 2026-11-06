@@ -119,11 +119,6 @@ static const UiMenuItem view_items[] = {
 	{ "Scanlines", CMD_SCANLINES, "Shift-F11", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Core Debug Lines", CMD_CORE_STATUS, NULL, 0 },
-#ifdef __APPLE__
-	{ "", 0, NULL, UI_MI_SEP },
-	{ "Skin: IIgs Style", CMD_SKIN_IIGS, NULL, 0 },
-	{ "Skin: System (macOS menus)", CMD_SKIN_SYS, NULL, 0 },
-#endif
 };
 static const UiMenuItem edit_items[] = {
 	{ "Paste Text", CMD_PASTE, NULL, 0 },
@@ -673,8 +668,6 @@ app_command(int id)
 	case CMD_AUTOSHARE: g_auto_share = !g_auto_share; break;
 	case CMD_BRIDGE: ui_bridge_choose(); break;
 	case CMD_INSTALL_RECEIVE: ui_install_receive(); break;
-	case CMD_SKIN_IIGS: sdl_set_skin(0); break;
-	case CMD_SKIN_SYS: sdl_set_skin(1); break;
 	case CMD_BRIDGE_OFF: ui_bridge_off(); break;
 	case CMD_CORE_STATUS: g_status_enable = !g_status_enable; break;
 	case CMD_ABOUT: about_open(); break;
@@ -715,8 +708,6 @@ app_item_state(int id)
 		return (g_window_scale == n && !g_fullscreen ? UI_MI_CHECKED : 0) |
 			(sdl_scale_fits(n) ? 0 : UI_MI_DISABLED);
 	}
-	case CMD_SKIN_IIGS: return g_skin == 0 ? UI_MI_CHECKED : 0;
-	case CMD_SKIN_SYS: return g_skin == 1 ? UI_MI_CHECKED : 0;
 	case CMD_AUTOSHARE: return g_auto_share ? UI_MI_CHECKED : 0;
 	case CMD_BRIDGE: return ui_bridge_is_on() ? UI_MI_CHECKED : 0;
 	case CMD_BRIDGE_OFF: return ui_bridge_is_on() ? 0 : UI_MI_DISABLED;
@@ -863,9 +854,9 @@ app_status_draw(int x, int y, int w, int h)
 				active = 1;
 			}
 		}
-		ui_fill(lx, y + 6, 9, 9, active ? UI_GOOD : UI_WHITE);
-		ui_frame(lx, y + 6, 9, 9, UI_BLACK);
-		ui_draw_text(lx + 13, y + 3, names[k], UI_BLACK);
+		ui_fill(lx, y + 6, 9, 9, active ? 0x44DD77 : 0x3A3E48);
+		ui_frame(lx, y + 6, 9, 9, 0x8D93A3);
+		ui_draw_text(lx + 13, y + 3, names[k], 0xE8EAF0);
 		lx += 52;
 	}
 	(void)h;

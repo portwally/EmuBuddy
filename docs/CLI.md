@@ -65,7 +65,7 @@ used when its slot is set to "Your Card" in the IIgs Control Panel.
 | `-validate` | check that the ROM, disks and folders named here exist, print the result and exit (0 = fine, 1 = something is missing) |
 | `-showconfig` | print the settings this command line stands for and exit |
 | `-bridge <folder>` | folder IIgs programs may read and write (host bridge) |
-| `-skin iigs\|system` | look: IIgs style, or the macOS menu bar (macOS only) |
+| `-skin iigs\|system` | accepted, no effect (macOS always uses its menu bar, other systems the drawn one) |
 | `-save` | also save these settings to the config file |
 | `-cfg <file>` | use another config file |
 | `-h`, `-help` | list the options |
@@ -115,9 +115,8 @@ EmuBuddy passes the character your keyboard makes to the IIgs, so a German (or a
 
 Drop a file from the Finder / Explorer on the window and it is copied into the shared folder; the IIgs sees it after a moment. If the front GS/OS Finder window shows the shared volume or one of its folders, the file goes into exactly that folder (EmuBuddy reads the window's path from the emulated RAM; tested with System 6.0.4). Otherwise it goes to the folder chosen in Disks > Drop Destination..., where "Drop into the front Finder window" can be switched off. ShrinkIt archives (.shk) are files, not disks. Disk images (.po .hdv .2mg .dsk .woz ...) are mounted in a drive instead.
 
-## Skin (macOS)
+## Menus
 
-`-skin system` starts with the macOS menu bar and the system's file and folder choosers; `-skin iigs` (the default)
-draws the menus inside the window. View > Skin switches while the emulator runs, and the choice is saved. On other
-systems only the IIgs style exists. The tool windows (Drives, Slots, Printer, Disk Browser, Drop Destination) are
-drawn by EmuBuddy in both skins.
+On macOS the menus are the macOS menu bar and the file and folder choosers are the system's own. On Windows and Linux
+EmuBuddy draws its own dark menu bar and status bar, deliberately different from the white GS/OS menu bar inside the
+emulator. The tool windows (Drives, Slots, Printer, Disk Browser, Drop Destination) are drawn by EmuBuddy everywhere.
