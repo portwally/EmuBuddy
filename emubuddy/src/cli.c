@@ -68,6 +68,7 @@ usage(void)
 "  -flop3 <img>   -flop4 <img>    3.5\" drives (slot 5, drive 1/2)\n"
 "  -hard1 <img> ... -hard7 <img>  SCSI hard disks (slot 7, drive 1-7)\n"
 "  -share <folder>                Mac/PC folder as a ProDOS volume\n"
+"  -bridge <folder>               folder IIgs programs may read/write (host bridge)\n"
 "  <img or folder>                put in the first free fitting drive\n"
 "\n"
 "Slots (-slN <card>):\n"
@@ -271,7 +272,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 		/* options with a value from here on */
 		if(!v && (is(o, "-flop1") || is(o, "-flop2") || is(o, "-flop3") ||
 				is(o, "-flop4") || !strncasecmp(o, "-hard", 5) ||
-				!strncasecmp(o, "-sl", 3) || is(o, "-share") ||
+				!strncasecmp(o, "-sl", 3) || is(o, "-share") || is(o, "-bridge") ||
 				is(o, "-mhz") || is(o, "-ramsize") ||
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines"))) {
@@ -297,6 +298,8 @@ emubuddy_cli(int *pargc, char ***pargv)
 			}
 		} else if(is(o, "-share")) {
 			later(v);
+		} else if(is(o, "-bridge")) {
+			emit2("-g_bridge_root", v);
 		} else if(is(o, "-mhz")) {
 			if(mhz_option(v) != 0) {
 				return -1;

@@ -857,6 +857,122 @@ finder_path_to_host(const char *root, const char *gsos, char *out, size_t n)
 	return 1;
 }
 
+/* ---- Host bridge folder (bridge.c): Disks > Bridge Folder ---- */
+
+#include "bridge.h"
+#ifndef _WIN32
+# include <limits.h>
+# include <stdlib.h>
+#endif
+
+static void
+real_or_same(const char *p, char *out, size_t n)
+{
+#ifndef _WIN32
+	char	tmp[PATH_MAX];
+
+	if(realpath(p, tmp)) {
+		snprintf(out, n, "%s", tmp);
+		return;
+	}
+#endif
+	snprintf(out, n, "%s", p);
+}
+
+static int
+paths_overlap(const char *a, const char *b)
+{
+	size_t	la = strlen(a), lb = strlen(b), m = la < lb ? la : lb;
+
+	if(strncmp(a, b, m) != 0) {
+		return 0;
+	}
+	return (la == lb) || (la < lb ? b[m] == '/' : a[m] == '/');
+}
+
+/* 1 if the folder (or a folder inside / above it) is mounted as a disk. */
+static int
+bridge_overlaps_share(const char *folder)
+{
+	int	slot, d, nd;
+	Disk	*dsk;
+	char	f[1500], s[1500];
+
+	real_or_same(folder, f, sizeof(f));
+	for(slot = 7; slot >= 5; slot--) {
+		nd = (slot == 7) ? MAX_C7_DISKS : 2;
+		for(d = 0; d < nd; d++) {
+			dsk = iwm_get_dsk_from_slot_drive(slot, d);
+			if(dsk->fd >= 0 && dsk->dynapro_info_ptr && dsk->name_ptr) {
+				real_or_same(dsk->name_ptr, s, sizeof(s));
+				if(paths_overlap(f, s)) {
+					return 1;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
+static void
+bridge_folder_picked(const char *path)
+{
+	if(bridge_overlaps_share(path)) {
+		ui_message("That folder is shared as a disk - choose another one");
+		return;
+	}
+	cfg_file_update_ptr(&g_bridge_root, (char *)path, 1);
+	ui_message("Bridge folder: %s", base_name(path));
+}
+
+void
+ui_bridge_choose(void)
+{
+	ui_folder_browser_open("Choose the Bridge Folder", bridge_folder_picked);
+}
+
+void
+ui_bridge_off(void)
+{
+	cfg_file_update_ptr(&g_bridge_root, "", 1);
+	ui_message("Bridge off");
+}
+
+int
+ui_bridge_is_on(void)
+{
+	return g_bridge_root && g_bridge_root[0];
+}
+
+/* Disks > Show Shared Folder: open the shared folder in the computer's own
+ * file manager (Finder / Explorer). */
+void
+ui_show_shared_folder(void)
+{
+	const char	*root = shared_root();
+	char		url[3000];
+	size_t		k = 0;
+
+	if(!root) {
+		ui_message("No shared folder yet - use Disks > Share a Folder");
+		return;
+	}
+	k += (size_t)snprintf(url, sizeof(url), "file://");
+	for(; *root && k + 4 < sizeof(url); root++) {
+		unsigned char c = (unsigned char)*root;
+
+		if(SDL_isalnum(c) || strchr("/-_.~", c)) {
+			url[k++] = (char)c;
+		} else {
+			k += (size_t)snprintf(url + k, sizeof(url) - k, "%%%02X", c);
+		}
+	}
+	url[k] = 0;
+	if(!SDL_OpenURL(url)) {
+		ui_message("Could not open the folder");
+	}
+}
+
 /* The folder for dropped files: the front Finder window if it shows the
  * shared volume, else the chosen subfolder if it still exists. */
 static void
@@ -993,5 +1109,6 @@ ui_drives_toggle(void)
 void
 ui_drives_init(void)
 {
+	bridge_overlap_check = bridge_overlaps_share;
 	recent_load();
 }

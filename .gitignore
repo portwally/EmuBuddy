@@ -14,3 +14,5 @@ skills-lock.json
 .DS_Store
 build/
 .DS_Store
+tools/bridgetest/build/
+build2/

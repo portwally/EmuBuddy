@@ -201,6 +201,11 @@ if(SLIRP_FOUND)
     target_link_libraries(test_uthernet2 PRIVATE PkgConfig::SLIRP)
 endif()
 
+# Host test for the bridge (bridge.c), not built by default:
+#   cmake --build build --target test_bridge && build/test_bridge
+add_executable(test_bridge EXCLUDE_FROM_ALL tests/test_bridge.c bridge.c)
+target_link_libraries(test_bridge PRIVATE SDL3::SDL3)
+
 # Virtual ImageWriter II (C++, ported from GSport/GSplus legacy, GPL v2+)
 enable_language(CXX)
 set(EMUBUDDY_PRINTER_SOURCES imagewriter.cpp iw_font.c printer_scc.c printer_ps.c tool_find.c video_rec.c finder_probe.c ui_printer.c)
@@ -219,6 +224,7 @@ add_executable(gsplus-sdl
     ui_browser.c
     cli.c
     prodos_img.c
+    bridge.c
     ${EMUBUDDY_NET_SOURCES}
     ${EMUBUDDY_PRINTER_SOURCES}
 )

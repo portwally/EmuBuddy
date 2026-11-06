@@ -12,6 +12,7 @@
 
 #define INCLUDE_RCSID_C
 #include "defc.h"
+#include "bridge.h"
 #undef INCLUDE_RCSID_C
 
 /* GSplus version for the status line, set by the build from the git tag (see
@@ -388,6 +389,7 @@ my_exit(int ret)
 void
 do_reset()
 {
+	bridge_close_all();
 	g_c035_shadow_reg = 0;
 
 	g_c068_statereg = 0x200 | 0x08 | 0x04;	// Set wrdefram, rdrom, lcbank2
@@ -1929,9 +1931,28 @@ do_cop(word32 ret)
 	fflush(stdout);
 }
 
+/* EmuBuddy host bridge (bridge.c): WDM $EB,$00 with DB:A = parameter block */
+static unsigned
+bridge_mem_rd(unsigned long addr)
+{
+	return get_memory_c((word32)addr) & 0xff;
+}
+
+static void
+bridge_mem_wr(unsigned long addr, unsigned val)
+{
+	set_memory_c((word32)addr, val & 0xff, 0);
+}
+
 void
 do_wdm(word32 arg)
 {
+	if(arg == 0x00eb) {
+		bridge_set_memory(bridge_mem_rd, bridge_mem_wr);
+		bridge_command(((unsigned long)engine.dbank << 16) |
+							(engine.acc & 0xffff));
+		return;
+	}
 	if(arg == 0x00c7) {
 		// WDM, 0xc7, 0x00: WDM in Slot 7
 		if(engine.psr & 0x40) {

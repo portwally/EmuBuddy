@@ -16,6 +16,10 @@ extern int	g_fullscreen;
 extern int	g_window_scale;
 int		rec_active(void);
 void		ui_drop_dest_toggle(void);
+void		ui_show_shared_folder(void);
+void		ui_bridge_choose(void);
+void		ui_bridge_off(void);
+int		ui_bridge_is_on(void);
 double		rec_seconds(void);
 void		sdl_request_window_screenshot(void);
 void		sdl_request_record_toggle(void);
@@ -54,18 +58,21 @@ enum {
 	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT, CMD_CORE_STATUS,
 	CMD_PASTE = 45, CMD_COPY_SCREEN,
 	CMD_SIZE_1 = 50, CMD_SIZE_2, CMD_SIZE_3, CMD_SIZE_4,
-	CMD_SHOT_WIN = 55, CMD_RECORD, CMD_DROPDEST,
+	CMD_SHOT_WIN = 55, CMD_RECORD, CMD_DROPDEST, CMD_SHOWSHARE, CMD_BRIDGE, CMD_BRIDGE_OFF,
 	CMD_ABOUT = 40,
 	CMD_RECENT0 = 60,		/* 60..69 */
 };
 #define N_RECENT 10
 
-#define DISKS_FIXED	6
+#define DISKS_FIXED	9
 static UiMenuItem disks_items[DISKS_FIXED + 2 + N_RECENT] = {
 	{ "Drives Window", CMD_DRIVES, "F2", 0 },
 	{ "Open Disk Image...", CMD_OPEN_DISK, NULL, 0 },
 	{ "Share a Folder...", CMD_SHARE, NULL, 0 },
 	{ "Drop Destination...", CMD_DROPDEST, NULL, 0 },
+	{ "Show Shared Folder", CMD_SHOWSHARE, NULL, 0 },
+	{ "Bridge Folder...", CMD_BRIDGE, NULL, 0 },
+	{ "Turn Bridge Off", CMD_BRIDGE_OFF, NULL, 0 },
 	{ "Disk Browser", CMD_BROWSER, NULL, 0 },
 	{ "Eject All", CMD_EJECT_ALL, NULL, 0 },
 };
@@ -578,6 +585,9 @@ app_command(int id)
 	case CMD_SHOT_WIN: sdl_request_window_screenshot(); break;
 	case CMD_RECORD: sdl_request_record_toggle(); break;
 	case CMD_DROPDEST: ui_drop_dest_toggle(); break;
+	case CMD_SHOWSHARE: ui_show_shared_folder(); break;
+	case CMD_BRIDGE: ui_bridge_choose(); break;
+	case CMD_BRIDGE_OFF: ui_bridge_off(); break;
 	case CMD_CORE_STATUS: g_status_enable = !g_status_enable; break;
 	case CMD_ABOUT: about_open(); break;
 	case CMD_PASTE: paste_text(); break;
@@ -617,6 +627,8 @@ app_item_state(int id)
 		return (g_window_scale == n && !g_fullscreen ? UI_MI_CHECKED : 0) |
 			(sdl_scale_fits(n) ? 0 : UI_MI_DISABLED);
 	}
+	case CMD_BRIDGE: return ui_bridge_is_on() ? UI_MI_CHECKED : 0;
+	case CMD_BRIDGE_OFF: return ui_bridge_is_on() ? 0 : UI_MI_DISABLED;
 	case CMD_RECORD: return rec_active() ? UI_MI_CHECKED : 0;
 	case CMD_FULLSCREEN: return g_fullscreen ? UI_MI_CHECKED : 0;
 	case CMD_CRT: return g_crt ? UI_MI_CHECKED : 0;
