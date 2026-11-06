@@ -258,7 +258,8 @@ cli(int argc, char **argv)
 #define LH	640
 
 static void lib_open(int kind, char *target, int cap);
-static int		g_skin, g_wscale = 1, g_full;
+static int		g_skin, g_wscale = 100, g_full;	/* window size in percent of 800x640 */
+static const int	g_steps[6] = { 80, 100, 125, 150, 200, 300 };
 static SDL_Window	*g_win;
 static SDL_Renderer	*g_ren;
 static int		g_sel, g_top, g_running = 1;
@@ -881,13 +882,13 @@ size_fits(int n)
 {
 	SDL_Rect	r;
 
-	if(n <= 1) {
+	if(n <= 100) {
 		return 1;
 	}
 	if(!SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(g_win), &r)) {
 		return 1;
 	}
-	return LW * n <= r.w && LH * n + 30 <= r.h;
+	return LW * n / 100 <= r.w && LH * n / 100 + 30 <= r.h;
 }
 
 static void
@@ -900,7 +901,7 @@ apply_window_mode(void)
 		SDL_SetWindowFullscreen(g_win, true);
 	} else {
 		SDL_SetWindowFullscreen(g_win, false);
-		SDL_SetWindowSize(g_win, LW * g_wscale, LH * g_wscale);
+		SDL_SetWindowSize(g_win, LW * g_wscale / 100, LH * g_wscale / 100);
 		SDL_SetWindowPosition(g_win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 	}
 }
@@ -909,7 +910,7 @@ static void
 set_window_size(int n)
 {
 	if(!size_fits(n)) {
-		ui_message("%dx does not fit this screen", n);
+		ui_message("That size does not fit this screen");
 		return;
 	}
 	g_wscale = n;
@@ -939,7 +940,10 @@ settings_load(void)
 		if(!strncmp(line, "skin = ", 7) && skin_find(line + 7) >= 0) {
 			g_skin = skin_find(line + 7);
 		} else if(!strncmp(line, "size = ", 7)) {
-			g_wscale = atoi(line + 7) >= 1 && atoi(line + 7) <= 3 ? atoi(line + 7) : 1;
+			g_wscale = atoi(line + 7);
+			if(g_wscale < 50 || g_wscale > 400) {
+				g_wscale = 100;
+			}
 		} else if(!strncmp(line, "fullscreen = ", 13)) {
 			g_full = atoi(line + 13) != 0;
 		}
@@ -1791,7 +1795,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_SIZE1 = 80, C_SIZE2, C_SIZE3, C_FULL, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -1809,9 +1813,12 @@ static const UiMenuItem m_edit[] = {
 	{ "Select All", C_SELALL, "Cmd-A", 0 },
 };
 static const UiMenuItem m_view[] = {
-	{ "Window Size 1x", C_SIZE1, "Cmd-1", 0 },
-	{ "Window Size 2x", C_SIZE2, "Cmd-2", 0 },
-	{ "Window Size 3x", C_SIZE3, "Cmd-3", 0 },
+	{ "Window Size 0.8x", C_SIZE1, "Cmd-1", 0 },
+	{ "Window Size 1x", C_SIZE2, "Cmd-2", 0 },
+	{ "Window Size 1.25x", C_SIZE3, "Cmd-3", 0 },
+	{ "Window Size 1.5x", C_SIZE4, "Cmd-4", 0 },
+	{ "Window Size 2x", C_SIZE5, "Cmd-5", 0 },
+	{ "Window Size 3x", C_SIZE6, "Cmd-6", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Full Screen", C_FULL, "F11", 0 },
 };
@@ -1826,7 +1833,7 @@ static const UiMenuItem m_help[] = {
 };
 static UiMenuItem m_skin[16];
 static const UiMenu g_menus[] = {
-	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "View", m_view, 5 },
+	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "View", m_view, 8 },
 	{ "Skin", m_skin, 0 }, { "Help", m_help, 1 },
 };
 static UiMenu g_menus_rw[6];
@@ -1841,7 +1848,9 @@ app_command(int id)
 		return;
 	}
 	switch(id) {
-	case C_SIZE1: case C_SIZE2: case C_SIZE3: set_window_size(id - C_SIZE1 + 1); break;
+	case C_SIZE1: case C_SIZE2: case C_SIZE3: case C_SIZE4: case C_SIZE5: case C_SIZE6:
+		set_window_size(g_steps[id - C_SIZE1]);
+		break;
 	case C_FULL: toggle_fullscreen(); break;
 	case C_CUT: clip_copy(1); break;
 	case C_COPY: clip_copy(0); break;
@@ -1865,8 +1874,8 @@ app_command(int id)
 static int
 app_state(int id)
 {
-	if(id >= C_SIZE1 && id <= C_SIZE3) {
-		int n = id - C_SIZE1 + 1;
+	if(id >= C_SIZE1 && id <= C_SIZE6) {
+		int n = g_steps[id - C_SIZE1];
 
 		return (g_wscale == n && !g_full ? UI_MI_CHECKED : 0) | (size_fits(n) ? 0 : UI_MI_DISABLED);
 	}
@@ -1938,9 +1947,9 @@ window(void)
 	}
 	ui_init(g_win, g_ren, &g_app);
 	skin_switch(g_skin);
-	if(g_full || g_wscale > 1) {
+	if(g_full || g_wscale != 100) {
 		if(!g_full && !size_fits(g_wscale)) {
-			g_wscale = 1;
+			g_wscale = 100;
 		}
 		apply_window_mode();
 	}
@@ -2012,7 +2021,7 @@ window(void)
 					(e.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL))) {
 				SDL_Keycode k = e.key.key;
 
-				if(k == SDLK_1 || k == SDLK_2 || k == SDLK_3) {
+				if(k >= SDLK_1 && k <= SDLK_6) {
 					app_command(C_SIZE1 + (int)(k - SDLK_1));
 					continue;
 				} else if(k == SDLK_N) {
