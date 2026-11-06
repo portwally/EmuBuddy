@@ -101,4 +101,4 @@ or `sudo apt install ffmpeg`); if it is missing, a window explains it. Quitting 
 
 ## Keyboard layouts
 
-EmuBuddy passes the character your keyboard makes to the IIgs, so a German (or any other) host keyboard types what its keys show, whatever layout is set in the IIgs Control Panel. Characters outside ASCII use the IIgs national codes (German ä ö ü Ä Ö Ü ß arrive as `{ | } [ \ ] ~`, shown as umlauts with the German character set). Control and Open-Apple key combinations are unchanged.
+EmuBuddy passes the character your keyboard makes to the IIgs, so a German (or any other) host keyboard types what its keys show, whatever layout is set in the IIgs Control Panel. Umlauts, accents, ss, a-ring, c-cedilla, o-slash and a few symbols are typed the Mac way (Option dead keys, for example ae = Option-u then a), which the IIgs ROM turns into the real Mac Roman character; programs with desktop text fields show them, the 80-column text screen does not. Control and Open-Apple key combinations are unchanged.

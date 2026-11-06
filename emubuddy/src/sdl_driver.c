@@ -769,6 +769,123 @@ sdl_handle_key(Window_info *win, SDL_Scancode sc, int is_up, int repeat,
 	}
 }
 
+
+/* ---- Characters outside ASCII (German umlauts, accents, ...) ----
+ * The IIgs makes them the Mac way: Option plus a key is an accent (dead key)
+ * that the next letter completes, or a character of its own. The ROM has these
+ * tables, so we only type the same keys, spread over several frames. */
+typedef struct {
+	unsigned short	uc;		/* Unicode character */
+	unsigned char	dead;		/* a2code of the accent key (0 = none) */
+	unsigned char	key;		/* a2code of the letter / key */
+	unsigned char	shift;		/* the letter is typed with Shift */
+} IntlKey;
+
+#define K_OPT	0x3a
+#define K_SHIFT	0x38
+#define D_UML	0x20			/* Option-u */
+#define D_ACU	0x0e			/* Option-e */
+#define D_GRV	0x32			/* Option-` */
+#define D_CIR	0x22			/* Option-i */
+#define D_TIL	0x2d			/* Option-n */
+
+static const IntlKey g_intl_keys[] = {
+	{ 0xe4, D_UML, 0x00, 0 }, { 0xeb, D_UML, 0x0e, 0 }, { 0xef, D_UML, 0x22, 0 },
+	{ 0xf6, D_UML, 0x1f, 0 }, { 0xfc, D_UML, 0x20, 0 }, { 0xff, D_UML, 0x10, 0 },
+	{ 0xc4, D_UML, 0x00, 1 }, { 0xcb, D_UML, 0x0e, 1 }, { 0xcf, D_UML, 0x22, 1 },
+	{ 0xd6, D_UML, 0x1f, 1 }, { 0xdc, D_UML, 0x20, 1 },
+	{ 0xe1, D_ACU, 0x00, 0 }, { 0xe9, D_ACU, 0x0e, 0 }, { 0xed, D_ACU, 0x22, 0 },
+	{ 0xf3, D_ACU, 0x1f, 0 }, { 0xfa, D_ACU, 0x20, 0 },
+	{ 0xc1, D_ACU, 0x00, 1 }, { 0xc9, D_ACU, 0x0e, 1 }, { 0xcd, D_ACU, 0x22, 1 },
+	{ 0xd3, D_ACU, 0x1f, 1 }, { 0xda, D_ACU, 0x20, 1 },
+	{ 0xe0, D_GRV, 0x00, 0 }, { 0xe8, D_GRV, 0x0e, 0 }, { 0xec, D_GRV, 0x22, 0 },
+	{ 0xf2, D_GRV, 0x1f, 0 }, { 0xf9, D_GRV, 0x20, 0 },
+	{ 0xc0, D_GRV, 0x00, 1 }, { 0xc8, D_GRV, 0x0e, 1 }, { 0xcc, D_GRV, 0x22, 1 },
+	{ 0xd2, D_GRV, 0x1f, 1 }, { 0xd9, D_GRV, 0x20, 1 },
+	{ 0xe2, D_CIR, 0x00, 0 }, { 0xea, D_CIR, 0x0e, 0 }, { 0xee, D_CIR, 0x22, 0 },
+	{ 0xf4, D_CIR, 0x1f, 0 }, { 0xfb, D_CIR, 0x20, 0 },
+	{ 0xc2, D_CIR, 0x00, 1 }, { 0xca, D_CIR, 0x0e, 1 }, { 0xce, D_CIR, 0x22, 1 },
+	{ 0xd4, D_CIR, 0x1f, 1 }, { 0xdb, D_CIR, 0x20, 1 },
+	{ 0xe3, D_TIL, 0x00, 0 }, { 0xf5, D_TIL, 0x1f, 0 }, { 0xf1, D_TIL, 0x2d, 0 },
+	{ 0xc3, D_TIL, 0x00, 1 }, { 0xd5, D_TIL, 0x1f, 1 }, { 0xd1, D_TIL, 0x2d, 1 },
+	/* Option plus a key, no accent */
+	{ 0xdf, 0, 0x01, 0 },			/* ss  = Option-s */
+	{ 0xe5, 0, 0x00, 0 }, { 0xc5, 0, 0x00, 1 },	/* a-ring */
+	{ 0xe7, 0, 0x08, 0 }, { 0xc7, 0, 0x08, 1 },	/* c-cedilla */
+	{ 0xf8, 0, 0x1f, 0 }, { 0xd8, 0, 0x1f, 1 },	/* o-slash */
+	{ 0xa7, 0, 0x16, 0 },			/* section sign = Option-6 */
+	{ 0xb0, 0, 0x1c, 1 },			/* degree = Option-Shift-8 */
+	{ 0xb5, 0, 0x2e, 0 },			/* micro = Option-m */
+	{ 0xa1, 0, 0x12, 0 },			/* inverted ! = Option-1 */
+	{ 0xbf, 0, 0x2c, 1 },			/* inverted ? = Option-Shift-/ */
+	{ 0xa3, 0, 0x14, 0 },			/* pound = Option-3 */
+	{ 0xa9, 0, 0x05, 0 },			/* copyright = Option-g */
+	{ 0 }
+};
+
+/* Keys queued for the IIgs, sent one per frame so the ROM sees each one. */
+static struct { unsigned char a2, up; } g_kq[256];
+static int	g_kq_rd, g_kq_wr;
+
+static void
+sdl_kq_add(int a2, int up)
+{
+	int	n = (g_kq_wr + 1) & 255;
+
+	if(n != g_kq_rd) {
+		g_kq[g_kq_wr].a2 = (unsigned char)a2;
+		g_kq[g_kq_wr].up = (unsigned char)up;
+		g_kq_wr = n;
+	}
+}
+
+static void
+sdl_kq_press(int a2)
+{
+	sdl_kq_add(a2, 0);
+	sdl_kq_add(a2, 1);
+}
+
+/* Queue the keys that type this character. Returns 1 if we know it. */
+static int
+sdl_type_intl_char(unsigned uc)
+{
+	const IntlKey	*k;
+
+	for(k = g_intl_keys; k->uc; k++) {
+		if(k->uc != uc) {
+			continue;
+		}
+		sdl_kq_add(K_OPT, 0);
+		if(k->dead) {
+			sdl_kq_press(k->dead);
+			sdl_kq_add(K_OPT, 1);
+			if(k->shift) sdl_kq_add(K_SHIFT, 0);
+			sdl_kq_press(k->key);
+			if(k->shift) sdl_kq_add(K_SHIFT, 1);
+		} else {
+			if(k->shift) sdl_kq_add(K_SHIFT, 0);
+			sdl_kq_press(k->key);
+			if(k->shift) sdl_kq_add(K_SHIFT, 1);
+			sdl_kq_add(K_OPT, 1);
+		}
+		return 1;
+	}
+	return 0;
+}
+
+static void
+sdl_drain_key_queue(Window_info *win)
+{
+	if(g_kq_rd != g_kq_wr) {
+		adb_physical_key_update(win->kimage_ptr, g_kq[g_kq_rd].a2, 0,
+							g_kq[g_kq_rd].up);
+		g_kq_rd = (g_kq_rd + 1) & 255;
+	}
+}
+
+static int	g_swallow_up[SDL_SCANCODE_COUNT];	/* key whose press we typed ourselves */
+
 /* Keys that type a character. Their IIgs key press waits for the host's text
  * input event, so the character the host keyboard (for example German) made
  * is what the IIgs gets: the core finds the US key that produces it. */
@@ -957,6 +1074,7 @@ sdl_poll_events(void)
 	/* Pick up fullscreen / hide-cursor changes made from the F4 config menu. */
 	sdl_sync_fullscreen(win);
 	sdl_update_cursor_visibility();
+	sdl_drain_key_queue(win);
 
 	while(SDL_PollEvent(&ev)) {
 		if(ui_handle_event(&ev)) {
@@ -1055,7 +1173,14 @@ sdl_poll_events(void)
 				size_t	tl = strlen(tp);
 				Uint32	uc = tl ? SDL_StepUTF8(&tp, &tl) : 0;
 
-				if(g_pending_sc >= 0) {
+				if(uc >= 0x80) {
+					/* umlaut, accent, ss ...: type it the Mac way */
+					if(g_pending_sc >= 0) {
+						g_swallow_up[g_pending_sc] = 1;
+						g_pending_sc = -1;
+					}
+					sdl_type_intl_char(uc);
+				} else if(g_pending_sc >= 0) {
 					int sc = g_pending_sc;
 
 					g_pending_sc = -1;
@@ -1077,6 +1202,10 @@ sdl_poll_events(void)
 				break;
 			}
 			sdl_flush_pending_key(win);
+			if(g_swallow_up[ev.key.scancode]) {
+				g_swallow_up[ev.key.scancode] = 0;	/* never pressed */
+				break;
+			}
 			sdl_handle_key(win, ev.key.scancode, 1, 0, 0);
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
