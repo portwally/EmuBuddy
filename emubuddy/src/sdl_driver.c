@@ -105,6 +105,7 @@ static int g_mouse_over_window = 0;	/* cursor is inside our window (ENTER/LEAVE)
 static int g_cursor_hidden = 0;		/* current SDL cursor state we last set */
 static int g_scanline_saved = 50;	/* intensity to restore when toggled back on */
 extern int g_ui_pause;
+extern int g_cur_a2_stat;
 static int g_screenshot_window_requested = 0;
 static int g_rec_toggle_requested = 0;
 static int g_screenshot_requested = 0;	/* set by Shift+F12, serviced at frame end */
@@ -1173,14 +1174,18 @@ sdl_poll_events(void)
 				size_t	tl = strlen(tp);
 				Uint32	uc = tl ? SDL_StepUTF8(&tp, &tl) : 0;
 
-				if(uc >= 0x80) {
-					/* umlaut, accent, ss ...: type it the Mac way */
+				if(uc >= 0x80 && (g_cur_a2_stat & ALL_STAT_SUPER_HIRES)) {
+					/* Desktop (super hi-res): umlaut, accent, ss ... are
+					 * typed the Mac way, Option dead keys. */
 					if(g_pending_sc >= 0) {
 						g_swallow_up[g_pending_sc] = 1;
 						g_pending_sc = -1;
 					}
 					sdl_type_intl_char(uc);
 				} else if(g_pending_sc >= 0) {
+					/* text screens, and ASCII: the core types the US key
+					 * (umlauts become the IIgs national codes, which the
+					 * German character set shows as umlauts) */
 					int sc = g_pending_sc;
 
 					g_pending_sc = -1;
