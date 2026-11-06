@@ -37,37 +37,39 @@ def rect(x0, y0, x1, y1, c):
             put(x, y, c)
 
 
-# rounded-square background
-for y in range(2, 30):
-    for x in range(2, 30):
-        dx = max(2 + 5 - x, x - (29 - 5), 0)
-        dy = max(2 + 5 - y, y - (29 - 5), 0)
-        if dx * dx + dy * dy <= 25:
-            put(x, y, BLUE)
-rect(7, 2, 24, 2, BLUE_L)
-rect(7, 29, 24, 29, BLUE_D)
+# rounded-square background, filling the whole canvas (no margin)
+def background():
+    for y in range(0, 32):
+        for x in range(0, 32):
+            dx = max(6 - x, x - 25, 0)
+            dy = max(6 - y, y - 25, 0)
+            if dx * dx + dy * dy <= 36:
+                put(x, y, BLUE)
 
-# monitor: outline, case, bezel, screen
-rect(6, 5, 25, 22, DARK)
-rect(7, 6, 24, 21, CREAM)
-rect(7, 21, 24, 21, SHADE)
-rect(24, 6, 24, 21, SHADE)
-rect(9, 8, 22, 18, DARK)
-rect(10, 9, 21, 17, SCREEN)
+
+background()
+
+# monitor: outline, case, bezel, screen (large, to fill the icon)
+rect(3, 3, 28, 24, DARK)
+rect(4, 4, 27, 23, CREAM)
+rect(4, 23, 27, 23, SHADE)
+rect(27, 4, 27, 23, SHADE)
+rect(7, 6, 24, 20, DARK)
+rect(8, 7, 23, 19, SCREEN)
 # smiley on the screen
-rect(12, 11, 13, 12, FACE)
-rect(18, 11, 19, 12, FACE)
-put(12, 14, FACE); put(19, 14, FACE)
-rect(13, 15, 18, 15, FACE)
+rect(11, 10, 12, 12, FACE)
+rect(19, 10, 20, 12, FACE)
+put(11, 14, FACE); put(20, 14, FACE)
+rect(12, 15, 19, 15, FACE)
 # power LED and floppy slot on the chin
-rect(20, 20, 21, 20, LED)
-rect(9, 20, 15, 20, SHADE)
+rect(23, 22, 24, 22, LED)
+rect(8, 22, 15, 22, SHADE)
 # stand and base
-rect(12, 23, 19, 23, DARK)
-rect(13, 23, 18, 23, SHADE)
-rect(9, 24, 22, 25, DARK)
-rect(10, 24, 21, 24, CREAM)
-rect(10, 25, 21, 25, SHADE)
+rect(11, 25, 20, 25, DARK)
+rect(12, 25, 19, 25, SHADE)
+rect(8, 26, 23, 28, DARK)
+rect(9, 26, 22, 26, CREAM)
+rect(9, 27, 22, 27, SHADE)
 
 
 def scaled(size):
@@ -163,21 +165,14 @@ with open(os.path.join(src, "emubuddy_icon.h"), "w") as f:
 
 # ---- the Launcher icon: the same blue square with four profile "covers" ----
 px = [[T] * N for _ in range(N)]
-for y in range(2, 30):
-    for x in range(2, 30):
-        dx = max(2 + 5 - x, x - (29 - 5), 0)
-        dy = max(2 + 5 - y, y - (29 - 5), 0)
-        if dx * dx + dy * dy <= 25:
-            put(x, y, BLUE)
-rect(7, 2, 24, 2, BLUE_L)
-rect(7, 29, 24, 29, BLUE_D)
-for tx, ty, band in ((6, 6, (230, 70, 70, 255)), (17, 6, (70, 200, 110, 255)),
-                     (6, 17, (250, 200, 50, 255)), (17, 17, (60, 200, 230, 255))):
-    rect(tx, ty, tx + 8, ty + 8, DARK)
-    rect(tx + 1, ty + 1, tx + 7, ty + 7, CREAM)
-    rect(tx + 1, ty + 1, tx + 7, ty + 3, band)
-    rect(tx + 2, ty + 5, tx + 6, ty + 5, SHADE)
-rect(15, 15, 16, 16, CREAM)
+background()
+for tx, ty, band in ((3, 3, (230, 70, 70, 255)), (17, 3, (70, 200, 110, 255)),
+                     (3, 17, (250, 200, 50, 255)), (17, 17, (60, 200, 230, 255))):
+    rect(tx, ty, tx + 11, ty + 11, DARK)
+    rect(tx + 1, ty + 1, tx + 10, ty + 10, CREAM)
+    rect(tx + 1, ty + 1, tx + 10, ty + 4, band)
+    rect(tx + 3, ty + 7, tx + 8, ty + 7, SHADE)
+    rect(tx + 3, ty + 9, tx + 8, ty + 9, SHADE)
 write_all("launchericon")
 
 # 96x96 RGBA header for the Launcher's About box and window icon
