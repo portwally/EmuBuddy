@@ -9,7 +9,7 @@ MAME-style command line built from the profile. The launcher is a graphical fron
 | Question | Recommendation |
 |---|---|
 | Where does it live? | Same repository, folder `launcher/`, built by the same CI. One version number, one release, EmuBuddy and Launcher always match. |
-| What is it written in? | C and SDL3, like EmuBuddy. The skins need full control of drawing (MacOS 1 title bars, magazine layouts), and it keeps one toolchain on macOS, Windows and Linux. A Qt or web UI would make the skins and the download larger. |
+| What is it written in? | C and SDL3, like EmuBuddy. The skins need full control of drawing (platinum title bars, magazine layouts), and it keeps one toolchain on macOS, Windows and Linux. A Qt or web UI would make the skins and the download larger. |
 | What does it share with EmuBuddy? | The font and drawing helpers of the UI toolkit (`ui.c`), moved into a small shared folder `common/`. The profile format is plain text, so no code is shared for it. |
 | Name | "EmuBuddy Launcher" (app name `EmuBuddy Launcher`, file `emubuddy-launcher`). |
 
@@ -98,7 +98,6 @@ that change the layout (Magazine, Shelf) need a layout script and come later.
 | **Modern** | Dark, flat, rounded cards, large covers, soft shadows. Default. |
 | **Retro** | The GS/OS look EmuBuddy already has: white windows, Shaston font, blue desktop. |
 | **Magazine** | Cream paper, big headlines, columns, covers like a 1980s computer magazine page. Profiles are "articles". |
-| **MacOS 1** | 1984 System 1: black and white, dithered desktop, thin title bars, Chicago-like font. |
 | **MacOS 7** | System 7 Platinum: grey bevels, striped title bars, icons on a desktop, Charcoal-like font. |
 
 My suggestions for more:
@@ -129,7 +128,7 @@ The skin picker shows a live preview.
 - Skin engine with the Modern and Retro skins, live preview.
 
 **Phase 3: more skins (about 1 week each)**
-- MacOS 7, MacOS 1, Magazine, then the suggestions you pick.
+- MacOS 7, Magazine, then the suggestions you pick.
 
 **Phase 4: polish and release**
 - App icon, About box, README section and screenshots, a combined download (EmuBuddy + Launcher), update check, translations
@@ -141,7 +140,7 @@ The skin picker shows a live preview.
 2. **The launcher also manages the library**: ROM files and disk images, not only profiles (section 8).
 3. **Covers: your own pictures first.** A profile without one gets a generated cover (the skin's colours, the profile name and a
    standard system icon such as a disk, a globe for web apps, a wrench for projects, a joystick for games). No downloads.
-4. **All skins**, including my suggestions: Modern, Retro, Magazine, MacOS 1, MacOS 7, Shelf, Cover Flow, Terminal/Amber,
+4. **All skins**, including my suggestions: Modern, Retro, Magazine, MacOS 7, Shelf, Cover Flow, Terminal/Amber,
    Apple II (1977), NeXT, BeOS. Layout skins (Magazine, Shelf, Cover Flow) share one layout engine.
 
 ## 8. Library of ROMs and disks
@@ -159,7 +158,7 @@ The skin picker shows a live preview.
 ## 9. Updated build plan
 
 Phases 0 to 2 are as in section 6. Phase 2 now also includes the library (section 8) and the generated covers. Phase 3 builds
-all skins in this order: MacOS 7, Magazine, MacOS 1, Terminal/Amber, Shelf, Cover Flow, Apple II (1977), NeXT, BeOS. Phase 4 adds
+all skins in this order: MacOS 7, Magazine, Terminal/Amber, Shelf, Cover Flow, Apple II (1977), NeXT, BeOS. Phase 4 adds
 the combined download (one installer or archive per platform with both apps).
 
 ## 10. Status
@@ -171,8 +170,8 @@ the combined download (one installer or archive per platform with both apps).
   disk drop. The window uses EmuBuddy's own toolkit (the "Retro" look), compiled from `emubuddy/src/ui*.c`.
 - **Library (first version):** you name folders; the launcher scans them (4 levels), lists ROMs (ROM 01 or 03 by size) and disks (type, ProDOS volume name, size), and shows which profiles use each file or that none does. The profile editor has a **Library** button next to each ROM and disk field. Folders are kept in `Library.folders` in the profiles folder.
 - **Library checks, copies, tags:** **Check files** marks copies of the same file and ProDOS images that look damaged (odd size, no ProDOS volume); a profile's main-window details show a path that does not exist in red as `(missing)`. **Private Copy for Profile...** copies a disk into the profile's own folder and uses the copy in the first free drive, so the original stays untouched. Each library file can have tags (kept in `Library.tags`), and the Search field looks in name, type, volume and tags.
-- **Skins and covers:** the toolkit takes colours and a window title style from a theme (EmuBuddy itself keeps the fixed GS/OS look). Nine skins are in the **Skin** menu: Retro, Modern, Magazine, MacOS 1 (dithered desktop), MacOS 7 (platinum), Terminal Amber, Apple II, NeXT, BeOS. The choice is kept in `Launcher.settings`. Every profile shows a cover: its own picture (`cover = file.png`, set in the editor) or a generated one with an icon (globe, gear, joystick or disk, chosen from the name or `icon = ...`) in the skin's colours.
+- **Skins and covers:** the toolkit takes colours and a window title style from a theme (EmuBuddy itself keeps the fixed GS/OS look). Nine skins are in the **Skin** menu: Retro, Modern, Magazine, MacOS 7 (platinum), Terminal Amber, Apple II, NeXT, BeOS. The choice is kept in `Launcher.settings`. Every profile shows a cover: its own picture (`cover = file.png`, set in the editor) or a generated one with an icon (globe, gear, joystick or disk, chosen from the name or `icon = ...`) in the skin's colours.
 - **Layout skins:** **Retro Neon** (cyan and magenta with a neon grid and sun behind the windows), **Shelf** (covers on shelf boards, 4 per row, scroll bar, click selects, second click plays, arrow keys) and **Cover Flow** (the selected cover large, neighbours getting smaller, click a neighbour or use Left/Right). Twelve skins in all; they share one font.
 - **One download:** the launcher is part of EmuBuddy's CMake project, so the macOS disk image holds both apps (`EmuBuddy.app` and `EmuBuddy Launcher.app`) and the Windows and Linux archives hold both programs side by side; the launcher finds EmuBuddy next to itself. It has its own icon (`tools/make_icon.py`).
-- **Fonts:** each skin can have its own font, loaded from the `fonts` folder (inside the app's Resources on macOS, next to the program elsewhere): Apple II (Print Char 21), Terminal Amber (PR Number 3), Commodore 64 and Retro Neon (Pet Me 64), ZX Spectrum (ZX Spectrum-7), Amstrad CPC (Amstrad CPC464); the others use the built-in Shaston 640. Three skins were added for the computer fonts: Commodore 64, ZX Spectrum, Amstrad CPC (colours from Wally's Manager). MacOS 1/7 have no Chicago/Geneva font yet because none is bundled; the layouts adapt to the width of the font. Credits: `launcher/fonts/CREDITS.md`.
+- **Fonts:** each skin can have its own font, loaded from the `fonts` folder (inside the app's Resources on macOS, next to the program elsewhere): Apple II (Print Char 21), Terminal Amber (PR Number 3), Commodore 64 and Retro Neon (Pet Me 64), ZX Spectrum (ZX Spectrum-7), Amstrad CPC (Amstrad CPC464); the others use the built-in Shaston 640. Three skins were added for the computer fonts: Commodore 64, ZX Spectrum, Amstrad CPC (colours from Wally's Manager). MacOS 7 uses the Mac's own Geneva font (read from the system, not shipped; no Chicago is bundled). MacOS 1 was removed; the layouts adapt to the width of the font. Credits: `launcher/fonts/CREDITS.md`.
 - **Next:** polish (About box, README screenshots of the launcher, German translation), update check, the skin engine, the other skins, one download with both apps.

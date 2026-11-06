@@ -13,7 +13,6 @@ static const UiTheme g_skins[] = {
 		0x4C7DFF, W, 0x14171F, UI_TITLE_FLAT, 0 },
 	{ "Magazine", 0xF4ECD8, 0x1B1A17, 0x6F634D, 0xBFB08C, 0x2E7D32, 0xB45F06, 0xB00020,
 		0x8B1E1E, 0xF4ECD8, 0xD8CCAE, UI_TITLE_MAGAZINE, 0 },
-	{ "MacOS 1", W, K, 0x555555, 0x999999, K, K, K, K, W, K, UI_TITLE_MAC1, 1 },
 	{ "MacOS 7", 0xDDDDDD, K, 0x666666, 0xBBBBBB, 0x007700, 0xCC6600, 0xCC0000,
 		0x6666CC, W, 0x6F8FB3, UI_TITLE_PLATINUM, 0 },
 	{ "Terminal Amber", 0x0A0600, 0xFFB000, 0x8A5F00, 0x5C4000, 0xFFB000, 0xFFD060,
@@ -81,7 +80,7 @@ skin_font(int i, int *ppem)
 		return "PRNumber3.ttf";
 	} else if(!strcmp(n, "Commodore 64") || !strcmp(n, "Retro Neon")) {
 		return "PetMe642Y.ttf";
-	} else if(!strcmp(n, "MacOS 1") || !strcmp(n, "MacOS 7")) {
+	} else if(!strcmp(n, "MacOS 7")) {
 		/* Apple's Geneva, from the Mac itself (not shipped with the launcher);
 		 * elsewhere the built-in font is used. */
 		*ppem = 12;
