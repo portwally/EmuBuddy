@@ -49,7 +49,7 @@ endif()
 
 # The window uses EmuBuddy's own UI toolkit and font, compiled from its folder.
 set(EB_UI ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/src)
-set(LAUNCHER_SOURCES src/main.c src/skins.c src/frontend.c ${EB_UI}/ui.c ${EB_UI}/ui_font.c ${EB_UI}/ui_font_data.c)
+set(LAUNCHER_SOURCES src/main.c src/skins.c src/frontend.c src/sound.c ${EB_UI}/ui.c ${EB_UI}/ui_font.c ${EB_UI}/ui_font_data.c)
 set(LAUNCHER_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/lib)
 
 file(GLOB LAUNCHER_FONT_FILES ${CMAKE_CURRENT_SOURCE_DIR}/fonts/*.ttf)
@@ -72,7 +72,7 @@ target_include_directories(emubuddy-launcher PRIVATE src ${EB_UI})
 target_compile_definitions(emubuddy-launcher PRIVATE
     UI_THEMABLE=1
     LAUNCHER_VERSION_STR="${EMUBUDDY_VERSION}")
-target_link_libraries(emubuddy-launcher PRIVATE launcher_profile launcher_library SDL3::SDL3)
+target_link_libraries(emubuddy-launcher PRIVATE launcher_profile launcher_library SDL3::SDL3 $<$<NOT:$<PLATFORM_ID:Windows>>:m>)
 
 if(APPLE)
     set_target_properties(emubuddy-launcher PROPERTIES

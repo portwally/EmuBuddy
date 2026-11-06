@@ -15,6 +15,7 @@
 #include "profile.h"
 #include "library.h"
 #include "skins.h"
+#include "sound.h"
 #include "frontend.h"
 #include "attract.h"
 #include "launcher_icon.h"
@@ -271,7 +272,7 @@ static const int	g_steps[6] = { 80, 100, 125, 150, 200, 300 };
 static SDL_Window	*g_win;
 static SDL_Renderer	*g_ren;
 static int		g_sel, g_top, g_running = 1;
-static UiWindow		g_lib, g_edit_win;
+static UiWindow		g_lib, g_edit_win, g_easy_win;
 static char		g_toast[200];
 
 /* text fields: one is focused at a time (pointer to its buffer) */
@@ -597,6 +598,7 @@ edit_save(void)
 	ui_message("Saved %s", g_e.name);
 	focus_clear();
 	ui_window_close(&g_edit_win);
+	ui_window_close(&g_easy_win);
 	load_profiles();
 	for(i = 0; i < g_nprof; i++) {
 		if(!strcmp(g_prof[i].path, path)) {
@@ -727,6 +729,10 @@ edit_drop(UiWindow *win, int x, int y, const char *path)
 		snprintf(g_pf[6].buf, sizeof(g_pf[6].buf), "%s", path);
 		return 1;
 	}
+	if(ext && (!SDL_strcasecmp(ext, ".png") || !SDL_strcasecmp(ext, ".bmp"))) {
+		snprintf(g_pf[8].buf, sizeof(g_pf[8].buf), "%s", path);
+		return 1;
+	}
 	if(ext && (!SDL_strcasecmp(ext, ".woz") || !SDL_strcasecmp(ext, ".dsk") ||
 			!SDL_strcasecmp(ext, ".do")) && info.size <= 150000) {
 		slot = 5;
@@ -748,11 +754,10 @@ edit_drop(UiWindow *win, int x, int y, const char *path)
 }
 
 static void
-edit_open(const Profile *src, int is_new)
+edit_open_full(void)
 {
-	edit_load(src, is_new);
 	focus_clear();
-	snprintf(g_edit_win.title, sizeof(g_edit_win.title), is_new ? "New Profile" : "Edit Profile");
+	snprintf(g_edit_win.title, sizeof(g_edit_win.title), g_e.is_new ? "New Profile" : "Edit Profile");
 	g_edit_win.w = 740;
 	g_edit_win.h = 590;
 	g_edit_win.modal = 1;
@@ -762,6 +767,294 @@ edit_open(const Profile *src, int is_new)
 	ui_window_center(&g_edit_win);
 	g_edit_win.y = 24;
 	ui_window_open(&g_edit_win);
+}
+
+/* ---- the simple editor: name, picture, two disks, a few switches ---- */
+
+static SDL_Texture	*g_prev_tex;
+static char		g_prev_path[1300];
+static int		g_prev_w, g_prev_h;
+
+static int		g_easy_fast, g_easy_sound, g_easy_net, g_easy_print;
+
+static int
+ch_index(const char *key)
+{
+	for(int i = 0; i < NCH; i++) {
+		if(!strcmp(g_ch[i].key, key)) {
+			return i;
+		}
+	}
+	return 0;
+}
+
+static const char *
+ch_value(const char *key)
+{
+	Choice *c = &g_ch[ch_index(key)];
+
+	return c->sel >= 0 ? c->labels[c->sel] : "";
+}
+
+static void
+ch_set(const char *key, const char *v)
+{
+	Choice *c = &g_ch[ch_index(key)];
+
+	c->sel = idx_of(c, v);
+}
+
+/* the switches are read from the settings and written back to them */
+static void
+easy_read(void)
+{
+	g_easy_sound = !strcmp(ch_value("sl4"), "mockingboard");
+	g_easy_net = !strcmp(ch_value("sl3"), "uthernet2") || !strcmp(ch_value("sl4"), "uthernet2");
+	g_easy_print = !strcmp(ch_value("sl1"), "imagewriter") || !strcmp(ch_value("sl1"), "postscript");
+	g_easy_fast = g_ch[ch_index("mhz")].sel >= 3;
+}
+
+static void
+easy_sound_set(void)
+{
+	ch_set("sl4", g_easy_sound ? "mockingboard" : "none");
+}
+
+static void
+easy_net_set(void)
+{
+	if(g_easy_net) {
+		ch_set("sl3", "uthernet2");
+		if(!strcmp(ch_value("sl4"), "uthernet2")) {
+			ch_set("sl4", "none");
+		}
+	} else {
+		ch_set("sl3", "none");
+		if(!strcmp(ch_value("sl4"), "uthernet2")) {
+			ch_set("sl4", "none");
+		}
+	}
+}
+
+static void
+easy_print_set(void)
+{
+	ch_set("sl1", g_easy_print ? "imagewriter" : "none");
+}
+
+static void
+easy_fast_set(void)
+{
+	ch_set("mhz", g_easy_fast ? "16" : "2.8");
+}
+
+static const char *
+base_name(const char *path)
+{
+	const char *s = strrchr(path, '/');
+	const char *b = strrchr(path, '\\');
+
+	if(b && (!s || b > s)) {
+		s = b;
+	}
+	return s ? s + 1 : path;
+}
+
+/* the picture shown in the editor: the one chosen here, else the game's own */
+static SDL_Texture *
+easy_preview(int *w, int *h)
+{
+	Profile	tmp = g_e.p;
+	char	path[1400];
+
+	profile_set(&tmp, "name", g_e.name);
+	profile_set(&tmp, "cover", g_pf[8].buf);
+	if(!fe_find_art(&tmp, g_art_root, 0, path, sizeof(path))) {
+		return NULL;
+	}
+	if(strcmp(path, g_prev_path) != 0) {
+		SDL_Surface *sf = SDL_LoadSurface(path);
+
+		if(g_prev_tex) {
+			SDL_DestroyTexture(g_prev_tex);
+			g_prev_tex = NULL;
+		}
+		snprintf(g_prev_path, sizeof(g_prev_path), "%s", path);
+		if(sf) {
+			g_prev_w = sf->w;
+			g_prev_h = sf->h;
+			g_prev_tex = SDL_CreateTextureFromSurface(g_ren, sf);
+			SDL_DestroySurface(sf);
+		}
+	}
+	*w = g_prev_w;
+	*h = g_prev_h;
+	return g_prev_tex;
+}
+
+static void
+easy_picture_choose(void)
+{
+	static const SDL_DialogFileFilter filters[] = { { "Pictures", "png;bmp" } };
+
+	g_pick_target = g_pf[8].buf;
+	g_pick_cap = (int)sizeof(g_pf[8].buf);
+	SDL_ShowOpenFileDialog(pick_cb, NULL, g_win, filters, 1, NULL, false);
+}
+
+/* one disk line: a name box, Library, Choose, clear */
+static void
+easy_disk_row(UiWindow *win, int cx, int cy, int y, int lc, const char *label, int fi, int is_rom)
+{
+	PathField *f = &g_pf[fi];
+	int	bl = text_w("Library", 70), bc = text_w("Choose...", 70), x2 = win->w - 2 - 10 - 28;
+	int	xc = x2 - 4 - bc, xl = xc - 4 - bl, w = xl - 6 - lc;
+	const char *show = f->buf[0] ? base_name(f->buf) : "(none)";
+	char	vis[200];
+	int	n;
+
+	ui_draw_text(cx + 10, cy + y + 3, label, UI_BLACK);
+	ui_fill(cx + lc, cy + y, w, 22, UI_WHITE);
+	ui_frame(cx + lc, cy + y, w, 22, UI_BLACK);
+	snprintf(vis, sizeof(vis), "%s", show);
+	n = (int)strlen(vis);
+	while(n > 3 && ui_text_width(vis) > w - 10) {
+		n--;
+		while(n > 0 && ((unsigned char)vis[n] & 0xC0) == 0x80) {
+			n--;
+		}
+		vis[n] = 0;
+	}
+	ui_draw_text(cx + lc + 5, cy + y + 4, vis, f->buf[0] ? UI_BLACK : UI_GREY);
+	if(ui_button(win, cx, cy, xl, y, bl, 22, "Library", 1)) {
+		lib_open(is_rom ? LIB_ROM : LIB_DISK, f->buf, (int)sizeof(f->buf));
+	}
+	if(ui_button(win, cx, cy, xc, y, bc, 22, "Choose...", 1)) {
+		choose(f);
+	}
+	if(ui_button(win, cx, cy, x2, y, 28, 22, "X", f->buf[0] != 0)) {
+		f->buf[0] = 0;
+	}
+}
+
+static void
+easy_draw(UiWindow *win, int cx, int cy)
+{
+	int	y = 10, lc, pw = 200, ph = 150, bx, i, was;
+	int	fl = (!g_pf[4].buf[0] && g_pf[5].buf[0]) ? 5 : 4;
+	SDL_Texture *tx;
+	int	tw = 0, th = 0;
+
+	lc = SDL_max(ui_text_width("Main disk"), ui_text_width("Floppy disk")) + 24;
+	lc = SDL_max(lc, ui_text_width("Name") + 24);
+	ui_draw_text(cx + 10, cy + y + 1, "Name", UI_BLACK);
+	field(win, cx, cy, lc, y, win->w - 2 - 10 - lc, g_e.name, sizeof(g_e.name));
+	y += 34;
+
+	/* the picture */
+	ui_fill(cx + 10, cy + y, pw, ph, 0x202428);
+	ui_frame(cx + 10, cy + y, pw, ph, UI_BLACK);
+	tx = easy_preview(&tw, &th);
+	if(tx && tw > 0 && th > 0) {
+		float s = SDL_min((float)(pw - 4) / (float)tw, (float)(ph - 4) / (float)th);
+		SDL_FRect r = { (float)(cx + 10) + ((float)pw - (float)tw * s) / 2, (float)(cy + y) + ((float)ph - (float)th * s) / 2,
+			(float)tw * s, (float)th * s };
+
+		SDL_RenderTexture(g_ren, tx, NULL, &r);
+	} else {
+		const char *t = "No picture";
+
+		ui_draw_text(cx + 10 + (pw - ui_text_width(t)) / 2, cy + y + ph / 2 - 6, t, 0x9AA0B0);
+	}
+	bx = 10 + pw + 14;
+	{
+		int	bw = text_w("Choose Picture...", 150);
+
+		if(ui_button(win, cx, cy, bx, y, bw, 24, "Choose Picture...", 1)) {
+			easy_picture_choose();
+		}
+		if(ui_button(win, cx, cy, bx, y + 30, bw, 24, "Remove Picture", g_pf[8].buf[0] != 0)) {
+			g_pf[8].buf[0] = 0;
+		}
+		ui_draw_text(cx + bx, cy + y + 66, "or drop a picture", UI_GREY);
+		ui_draw_text(cx + bx, cy + y + 84, "or a disk here", UI_GREY);
+	}
+	y += ph + 14;
+	ui_hline(cx + 10, cy + y, win->w - 22, UI_LGREY);
+	y += 10;
+	easy_disk_row(win, cx, cy, y, lc + 10, "Main disk", 1, 0);
+	y += 30;
+	easy_disk_row(win, cx, cy, y, lc + 10, "Floppy disk", fl, 0);
+	y += 36;
+	ui_hline(cx + 10, cy + y, win->w - 22, UI_LGREY);
+	y += 10;
+	{
+		int	x2 = 10 + SDL_max(ui_text_width("Sound card"), ui_text_width("Fast (16 MHz)")) + 60;
+
+		was = g_easy_sound;
+		ui_checkbox(win, cx, cy, 10, y, "Sound card", &g_easy_sound);
+		if(was != g_easy_sound) {
+			easy_sound_set();
+		}
+		was = g_easy_net;
+		ui_checkbox(win, cx, cy, x2, y, "Internet", &g_easy_net);
+		if(was != g_easy_net) {
+			easy_net_set();
+		}
+		was = g_easy_print;
+		ui_checkbox(win, cx, cy, x2 + ui_text_width("Internet") + 60, y, "Printer", &g_easy_print);
+		if(was != g_easy_print) {
+			easy_print_set();
+		}
+		y += 26;
+		was = g_easy_fast;
+		ui_checkbox(win, cx, cy, 10, y, "Fast (16 MHz)", &g_easy_fast);
+		if(was != g_easy_fast) {
+			easy_fast_set();
+		}
+		ui_checkbox(win, cx, cy, x2, y, "Full screen", &g_e.full);
+		ui_checkbox(win, cx, cy, x2 + ui_text_width("Full screen") + 60, y, "Curved screen", &g_e.crt);
+	}
+	y += 40;
+	{
+		int	wm = text_w("More settings...", 130), wc = text_w("Cancel", 80), ws = text_w("Save", 80);
+		int	xs = win->w - 2 - 10 - ws;
+
+		if(ui_button(win, cx, cy, 10, y, wm, 26, "More settings...", 1)) {
+			ui_window_close(win);
+			edit_open_full();
+			return;
+		}
+		if(ui_button(win, cx, cy, xs - 8 - wc, y, wc, 26, "Cancel", 1)) {
+			focus_clear();
+			ui_window_close(win);
+		}
+		if(ui_button(win, cx, cy, xs, y, ws, 26, "Save", g_e.name[0] != 0)) {
+			edit_save();
+		}
+	}
+	(void)i;
+}
+
+static void
+edit_open(const Profile *src, int is_new)
+{
+	edit_load(src, is_new);
+	if(getenv("LAUNCHER_EDIT") && !strcmp(getenv("LAUNCHER_EDIT"), "full")) {
+		edit_open_full();
+		return;
+	}
+	easy_read();
+	focus_clear();
+	snprintf(g_easy_win.title, sizeof(g_easy_win.title), is_new ? "New Game" : "Edit Game");
+	g_easy_win.w = 560;
+	g_easy_win.h = 20 + 10 + 34 + 150 + 14 + 10 + 60 + 36 + 10 + 26 + 40 + 26 - 6;
+	g_easy_win.modal = 1;
+	g_easy_win.closable = 1;
+	g_easy_win.draw = easy_draw;
+	g_easy_win.on_drop = edit_drop;
+	ui_window_center(&g_easy_win);
+	ui_window_open(&g_easy_win);
 }
 
 /* ---- the library window ---- */
@@ -992,6 +1285,8 @@ settings_load(void)
 			snprintf(g_art_root, sizeof(g_art_root), "%s", line + 10);
 		} else if(!strncmp(line, "fullscreen = ", 13)) {
 			g_full = atoi(line + 13) != 0;
+		} else if(!strncmp(line, "sound = ", 8)) {
+			snd_enable(atoi(line + 8) != 0);
 		}
 	}
 	if(f) {
@@ -1011,8 +1306,8 @@ settings_save(void)
 	f = fopen(path, "w");
 	if(f) {
 		fprintf(f, "skin = %s\n", skin_get(g_skin)->name);
-		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\n", g_wscale, g_full,
-			g_arcade ? "arcade" : "classic", g_art_root);
+		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\nsound = %d\n", g_wscale, g_full,
+			g_arcade ? "arcade" : "classic", g_art_root, snd_enabled());
 		fclose(f);
 	}
 }
@@ -1842,7 +2137,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_SOUND = 78, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -1868,6 +2163,7 @@ static const UiMenuItem m_view[] = {
 	{ "Window Size 3x", C_SIZE6, "Cmd-6", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Full Screen", C_FULL, "F11", 0 },
+	{ "Sounds", C_SOUND, NULL, 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Arcade View", C_VIEW, "Cmd-0", 0 },
 };
@@ -1882,7 +2178,7 @@ static const UiMenuItem m_help[] = {
 };
 static UiMenuItem m_skin[16];
 static const UiMenu g_menus[] = {
-	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "View", m_view, 10 },
+	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "View", m_view, 11 },
 	{ "Skin", m_skin, 0 }, { "Help", m_help, 1 },
 };
 static UiMenu g_menus_rw[6];
@@ -2119,7 +2415,7 @@ static const struct { const char *label; int id; } g_ovl_items[] = {
 	{ "Duplicate", C_DUP }, { "Delete...", C_DEL }, { "Disks and ROMs...", C_LIB },
 	{ "Set Picture...", C_SETPIC }, { "Remove Picture...", C_RMPIC },
 	{ "Artwork Folder...", C_ARTDIR }, { "Import from Attract-Mode...", C_IMPORT },
-	{ "Classic View", C_VIEW }, { "Full Screen", C_FULL }, { "About", C_ABOUT }, { "Quit", C_QUIT },
+	{ "Classic View", C_VIEW }, { "Full Screen", C_FULL }, { "Sounds on/off", C_SOUND }, { "About", C_ABOUT }, { "Quit", C_QUIT },
 };
 
 static int	g_ovl_sel;		/* the highlighted item (keys and game controller) */
@@ -2150,6 +2446,7 @@ ovl_key(SDL_Keycode k)
 
 			if(ovl_enabled(c)) {
 				g_ovl_sel = c;
+				snd_play(SND_MOVE);
 				break;
 			}
 		}
@@ -2159,11 +2456,13 @@ ovl_key(SDL_Keycode k)
 		int id = g_ovl_items[g_ovl_sel].id;
 
 		ui_window_close(&g_ovl);
+		snd_play(SND_SELECT);
 		app_command(id);
 		return 1;
 	}
 	if(k == SDLK_ESCAPE || k == SDLK_SPACE) {
 		ui_window_close(&g_ovl);
+		snd_play(SND_BACK);
 		return 1;
 	}
 	return 1;			/* the menu is modal: it eats the other keys */
@@ -2202,6 +2501,7 @@ ovl_open(void)
 	g_ovl.closable = 1;
 	g_ovl.draw = ovl_draw;
 	g_ovl_sel = 0;
+	snd_play(SND_MENU);
 	ui_window_center(&g_ovl);
 	ui_window_open(&g_ovl);
 }
@@ -2209,6 +2509,7 @@ ovl_open(void)
 static void
 fe_play(void)
 {
+	snd_play(SND_LAUNCH);
 	lib_play();
 }
 
@@ -2240,6 +2541,11 @@ app_command(int id)
 		set_window_size(g_steps[id - C_SIZE1]);
 		break;
 	case C_FULL: toggle_fullscreen(); break;
+	case C_SOUND:
+		snd_enable(!snd_enabled());
+		snd_play(SND_SELECT);
+		settings_save();
+		break;
 	case C_CUT: clip_copy(1); break;
 	case C_COPY: clip_copy(0); break;
 	case C_PASTE: clip_paste(); break;
@@ -2269,6 +2575,9 @@ app_state(int id)
 	}
 	if(id == C_FULL) {
 		return g_full ? UI_MI_CHECKED : 0;
+	}
+	if(id == C_SOUND) {
+		return snd_enabled() ? UI_MI_CHECKED : 0;
 	}
 	return (id >= C_SKIN0 && id - C_SKIN0 == g_skin) ? UI_MI_CHECKED : 0;
 }
@@ -2465,6 +2774,7 @@ window(void)
 		}
 	}
 	ui_init(g_win, g_ren, &g_app);
+	snd_init();
 	skin_switch(g_skin);
 	snprintf(g_lib.title, sizeof(g_lib.title), "Profiles");
 	g_lib.x = 10;
@@ -2838,6 +3148,7 @@ window(void)
 	}
 	ui_shutdown();
 	SDL_DestroyRenderer(g_ren);
+	snd_shutdown();
 	SDL_DestroyWindow(g_win);
 }
 

@@ -120,6 +120,10 @@ Set/Remove Picture.
 
 **Controller (done):** D-pad and left stick, A/B/X/Y/Start, shoulder buttons, hold-to-repeat; the Space menu works with Up/Down/Return/Esc (so also from the controller). The editor, library and import windows are still mouse and keyboard only.
 
-**Not done yet:** sounds; idle slideshow; portrait layout; favourites and sorting; German texts;
-the friendly editor with presets (the full editor is used for now); automatic snapshot when EmuBuddy quits;
+**Sounds (done):** soft tones made in memory (move, select, menu, back, launch), no sound files; View > Sounds or the Space menu switches them off, remembered in Launcher.settings.
+
+**Simple editor (done):** Edit and New Game open a small window: name, picture (choose or drop), a main disk and a floppy (Library, Choose, clear), and switches for Sound card, Internet, Printer, Fast, Full screen and Curved screen. "More settings..." opens the full editor with the same values.
+
+**Not done yet:** idle slideshow; portrait layout; favourites and sorting; German texts;
+automatic snapshot when EmuBuddy quits;
 JPG pictures (PNG and BMP load now).

@@ -1,4 +1,5 @@
 #include "frontend.h"
+#include "sound.h"
 #include "ui.h"
 #include <dirent.h>
 #include <math.h>
@@ -666,7 +667,11 @@ move(int step)
 	if(g_d.sel && n) {
 		int s = *g_d.sel + step;
 
-		*g_d.sel = s < 0 ? 0 : (s >= n ? n - 1 : s);
+		s = s < 0 ? 0 : (s >= n ? n - 1 : s);
+		if(s != *g_d.sel) {
+			snd_play(SND_MOVE);
+		}
+		*g_d.sel = s;
 	}
 }
 
@@ -706,6 +711,7 @@ fe_key(SDL_Keycode k, SDL_Keymod mod)
 		return 1;
 	case SDLK_TAB:
 		g_info = !g_info;
+		snd_play(g_info ? SND_SELECT : SND_BACK);
 		return 1;
 	case SDLK_SPACE:
 		if(g_d.overlay) {
@@ -721,7 +727,11 @@ fe_key(SDL_Keycode k, SDL_Keymod mod)
 	case SDLK_ESCAPE:
 		if(g_info) {
 			g_info = 0;
+			snd_play(SND_BACK);
 		} else {
+			if(g_search[0]) {
+				snd_play(SND_BACK);
+			}
 			g_search[0] = 0;
 		}
 		return 1;

@@ -218,6 +218,10 @@ the window); **Return** starts EmuBuddy with the matching command line (see [Com
 
 - **Game controller:** D-pad or left stick move, A plays, B goes back, X shows the details, Y or Start opens the
   menu, the shoulder buttons jump five games. The hints at the bottom switch to the controller buttons when you use it.
+- **Sounds:** short soft interface sounds when you move, choose, open the menu and start a game. Switch them off under
+  View > Sounds (or in the Space menu).
+- **Simple editor:** Edit and New Game show a small window with the name, the picture, a main disk and a floppy, and
+  switches for sound card, internet, printer, fast and full screen. "More settings..." opens the full editor.
 - **Keys:** Left/Right move, Return plays, Tab shows the details page, Space opens the menu, type to search, Esc goes
   back. The mouse works too (click, double-click, wheel). A **Classic view** with windows, menus and skins is a switch
   away (Space > Classic View).
