@@ -235,7 +235,7 @@ A program inside the IIgs reaches ONE host folder (the bridge folder) with `WDM 
   in the background), Display (scale, CRT/scanline effects, 3200-colour), Sound,
   Input (gamepad, keyboard, mouse capture key).
 - Help window instead of a PDF. About box.
-- Packaging: macOS `.dmg` (arm64, signed + notarized), Windows `.zip` with
+- Packaging: macOS `.dmg` (arm64; NOT signed or notarized by decision 2026-11-06, users remove the quarantine flag), Windows `.zip` with
   runtime DLLs (fix the TODO.md DLL blocker), Linux `.tar.gz` and later AppImage.
 
 ## Order and rough size

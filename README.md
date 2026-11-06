@@ -56,10 +56,13 @@ Prebuilt apps are built automatically for every change; look under the repositor
 [Actions](../../actions) (for the latest build) and [Releases](../../releases) (for tagged versions). Or build it
 yourself, see [Building from source](#building-from-source).
 
-The apps are not code-signed yet, so your system may warn you the first time:
+EmuBuddy's downloads are **not code-signed or notarized**, so your system blocks or warns about them the first time.
+You have to allow them yourself:
 
-- **macOS:** right-click the app, choose **Open**, then confirm. If macOS still refuses, run
-  `xattr -dr com.apple.quarantine /Applications/EmuBuddy.app`.
+- **macOS:** macOS marks downloaded apps as quarantined and refuses to open an app that is not notarized. Remove the
+  mark once, after moving the app where you want it (for example into Applications):
+  `xattr -dr com.apple.quarantine /Applications/EmuBuddy.app`. Right-clicking the app and choosing **Open** also works on
+  some versions of macOS. Apps you build yourself are not quarantined.
 - **Windows:** SmartScreen blocks unsigned downloads. Click **More info**, then **Run anyway**. Keep `SDL3.dll` next
   to the `.exe`.
 - **Linux:** unpack the `.tar.gz` and run `EmuBuddy`. It needs the SDL3 library (`libsdl3` from your package manager); the file `README-linux.txt` in the package tells how.
@@ -253,7 +256,7 @@ built and checked on every change but have had much less hands-on testing. Known
 - Writing files into a disk image from the Disk Browser, and dragging files out on Windows and Linux.
 - The Uthernet II's hardware sockets (today the card works in the raw packet mode that Marinetti uses).
 - Resource forks and more commands in the host bridge, and a matching "Mac folder" pane in GS Commander.
-- Signed and notarized downloads, and an AppImage for Linux.
+- An AppImage for Linux. (There are no plans for signed or notarized downloads: they need a paid developer account.)
 
 ## Credits and license
 
