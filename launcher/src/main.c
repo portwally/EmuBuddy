@@ -15,6 +15,7 @@
 #include "profile.h"
 #include "library.h"
 #include "skins.h"
+#include "launcher_icon.h"
 
 #define MAX_PROFILES	64
 
@@ -1444,6 +1445,65 @@ lib_open(int kind, char *target, int cap)
 	ui_window_open(&g_libwin);
 }
 
+/* ---- About ---- */
+
+static UiWindow		g_about;
+static SDL_Texture	*g_icon_tex;
+
+static void
+about_draw(UiWindow *win, int cx, int cy)
+{
+	static const char *lines[] = {
+		"EmuBuddy Launcher " LAUNCHER_VERSION_STR,
+		"Profiles and skins for EmuBuddy",
+		"",
+		"2026, Walter Tengler",
+		"",
+		"Starts EmuBuddy with the command line",
+		"of the profile you choose.",
+		"",
+		"GPL v3. UI font: Shaston 640 by",
+		"Kreative Software.",
+	};
+	int	i, cw = win->w - 2;
+
+	if(!g_icon_tex) {
+		SDL_Surface *sf = SDL_CreateSurfaceFrom(launcher_icon_size, launcher_icon_size,
+				SDL_PIXELFORMAT_RGBA32, (void *)launcher_icon_rgba, launcher_icon_size * 4);
+
+		if(sf) {
+			g_icon_tex = SDL_CreateTextureFromSurface(g_ren, sf);
+			SDL_DestroySurface(sf);
+		}
+	}
+	if(g_icon_tex) {
+		SDL_FRect d = { (float)(cx + (cw - 80) / 2), (float)(cy + 14), 80, 80 };
+
+		SDL_RenderTexture(g_ren, g_icon_tex, NULL, &d);
+	}
+	for(i = 0; i < (int)(sizeof(lines) / sizeof(lines[0])); i++) {
+		int tw = ui_text_width(lines[i]);
+
+		ui_draw_text(cx + (cw - tw) / 2, cy + 108 + i * 17, lines[i], i == 0 ? UI_BLACK : (i == 1 ? UI_GREY : UI_BLACK));
+	}
+	if(ui_button(win, cx, cy, (cw - 80) / 2, win->h - UI_TITLE_H - 38, 80, 24, "OK", 1)) {
+		ui_window_close(win);
+	}
+}
+
+static void
+about_open(void)
+{
+	snprintf(g_about.title, sizeof(g_about.title), "About EmuBuddy Launcher");
+	g_about.w = 340;
+	g_about.h = 356;
+	g_about.closable = 1;
+	g_about.modal = 1;
+	g_about.draw = about_draw;
+	ui_window_center(&g_about);
+	ui_window_open(&g_about);
+}
+
 /* ---- menus ---- */
 
 enum { C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
@@ -1492,7 +1552,7 @@ app_command(int id)
 	case C_LIB: lib_open(LIB_DISK, NULL, 0); break;
 
 	case C_ABOUT:
-		ui_message("EmuBuddy Launcher %s - 2026, Walter Tengler", LAUNCHER_VERSION_STR);
+		about_open();
 		break;
 	}
 }
@@ -1554,6 +1614,15 @@ window(void)
 	}
 	memcpy(g_menus_rw, g_menus, sizeof(g_menus));
 	g_menus_rw[2].n_items = skin_count();
+	{
+		SDL_Surface *ic = SDL_CreateSurfaceFrom(launcher_icon_size, launcher_icon_size,
+				SDL_PIXELFORMAT_RGBA32, (void *)launcher_icon_rgba, launcher_icon_size * 4);
+
+		if(ic) {
+			SDL_SetWindowIcon(g_win, ic);
+			SDL_DestroySurface(ic);
+		}
+	}
 	ui_init(g_win, g_ren, &g_app);
 	snprintf(g_lib.title, sizeof(g_lib.title), "Profiles");
 	g_lib.x = 10;
@@ -1707,6 +1776,9 @@ window(void)
 			if(frame == 3 && getenv("LAUNCHER_SKIN") && skin_find(getenv("LAUNCHER_SKIN")) >= 0) {
 				g_skin = skin_find(getenv("LAUNCHER_SKIN"));
 				skin_apply(g_skin);
+			}
+			if(frame == 5 && getenv("LAUNCHER_ABOUT")) {
+				about_open();
 			}
 			if(frame == 20 && getenv("LAUNCHER_SHOT")) {
 				SDL_Surface *sf = SDL_RenderReadPixels(g_ren, NULL);
