@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 /* core */
 int		iwm_motor_busy(void);
@@ -640,7 +639,7 @@ ui_drop_regular_file(const char *path)
 	slot++;				/* undo the loop's last step */
 	snprintf(folder, sizeof(folder), "%s", dsk->name_ptr);
 	snprintf(dst, sizeof(dst), "%s/%s", folder, base_name(path));
-	for(i = 2; access(dst, F_OK) == 0 && i < 100; i++) {
+	for(i = 2; SDL_GetPathInfo(dst, NULL) && i < 100; i++) {
 		snprintf(dst, sizeof(dst), "%s/%d %s", folder, i, base_name(path));
 	}
 	if(!SDL_CopyFile(path, dst)) {

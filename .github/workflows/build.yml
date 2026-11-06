@@ -9,7 +9,7 @@ name: build
 
 on:
   push:
-    branches: [ main, sdl3-driver ]
+    branches: [ main ]
     tags: [ 'v*' ]
   pull_request:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install tools
         run: brew install cmake ninja sdl3
       - name: Configure
@@ -32,9 +32,9 @@ jobs:
         run: cmake --build build --target gsplus-sdl
       - name: Package (.dmg)
         run: cd build && cpack
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: gsplus-macos
+          name: emubuddy-macos
           path: build/*.dmg
 
   macos-universal:
@@ -46,7 +46,7 @@ jobs:
     # -- universal. fixup_bundle then embeds the universal SDL3 into the .app.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install tools
         # NB: intentionally no `sdl3` here -- see the comment above.
         run: brew install cmake ninja
@@ -63,14 +63,14 @@ jobs:
       - name: Package (.dmg) and label universal
         run: |
           cd build && cpack
-          # CPack names it GSplus-<ver>-Darwin.dmg; rename so it doesn't collide
+          # CPack names it EmuBuddy-<ver>-Darwin.dmg; rename so it doesn't collide
           # with the arm64-only dmg when both attach to the same Release.
-          for f in GSplus-*-Darwin.dmg; do
+          for f in EmuBuddy-*-Darwin.dmg; do
             mv "$f" "${f/-Darwin.dmg/-macOS-universal.dmg}"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: gsplus-macos-universal
+          name: emubuddy-macos-universal
           path: build/*.dmg
 
   linux:
@@ -88,7 +88,7 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install tools + SDL3 build deps
         run: |
           sudo apt-get update
@@ -111,9 +111,9 @@ jobs:
         run: cmake --build build --target gsplus-sdl
       - name: Package (.tar.gz)
         run: cd build && cpack
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: gsplus-linux-${{ matrix.arch }}
+          name: emubuddy-linux-${{ matrix.arch }}
           path: build/*.tar.gz
 
   windows:
@@ -122,7 +122,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -146,9 +146,9 @@ jobs:
         run: cmake --build build --target gsplus-sdl
       - name: Package (.zip)
         run: cd build && cpack
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: gsplus-windows
+          name: emubuddy-windows
           path: build/*.zip
 
   release:
@@ -158,11 +158,11 @@ jobs:
     permissions:
       contents: write          # required for the token to create a Release
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Attach artifacts to the release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: artifacts/**/*
           # Derive the release flags from the tag name: a plain version tag
