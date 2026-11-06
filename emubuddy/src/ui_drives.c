@@ -605,6 +605,7 @@ ui_drives_tick(void)
  * files that are dropped on the window ---- */
 
 #define DEST_MAX	200
+static int	g_drop_follow_finder = 1;	/* drop into the front Finder window */
 static char	g_drop_sub[600];		/* "" = top of the shared folder */
 static UiWindow	g_dest_win;
 static char	g_dest_path[DEST_MAX][600];	/* relative path, "" = top */
@@ -713,14 +714,18 @@ dest_draw(UiWindow *win, int cx, int cy)
 	int	by = win->h - UI_TITLE_H - 34, prev = g_dest_sel;
 	char	line[200];
 
+	ui_checkbox(win, cx, cy, 10, 6, "Drop into the front Finder window",
+						&g_drop_follow_finder);
 	if(g_dest_n == 0) {
-		ui_draw_text(cx + 12, cy + 14, "No shared folder yet.", UI_BLACK);
-		ui_draw_text(cx + 12, cy + 32, "Use Disks > Share a Folder.", UI_GREY);
+		ui_draw_text(cx + 12, cy + 40, "No shared folder yet.", UI_BLACK);
+		ui_draw_text(cx + 12, cy + 58, "Use Disks > Share a Folder.", UI_GREY);
 	} else {
 		snprintf(line, sizeof(line), "Shared: %.40s", base_name(g_dest_root));
-		ui_draw_text(cx + 12, cy + 6, line, UI_BLACK);
-		ui_draw_text(cx + 12, cy + 24, "Dropped files go into:", UI_GREY);
-		ui_list(win, cx, cy, 8, 46, win->w - 2 - 16, by - 52,
+		ui_draw_text(cx + 12, cy + 32, line, UI_BLACK);
+		ui_draw_text(cx + 12, cy + 50, g_drop_follow_finder ?
+			"Otherwise (not on the shared volume):" : "Dropped files go into:",
+			UI_GREY);
+		ui_list(win, cx, cy, 8, 70, win->w - 2 - 16, by - 76,
 			(const char **)g_dest_rows, g_dest_n, &g_dest_sel,
 			&g_dest_top);
 		if(g_dest_sel != prev && g_dest_sel >= 0 && g_dest_sel < g_dest_n) {
@@ -749,7 +754,7 @@ ui_drop_dest_toggle(void)
 	dest_rebuild();
 	snprintf(g_dest_win.title, sizeof(g_dest_win.title), "Drop Destination");
 	g_dest_win.w = 360;
-	g_dest_win.h = 330;
+	g_dest_win.h = 350;
 	g_dest_win.closable = 1;
 	g_dest_win.modal = 0;
 	g_dest_win.draw = dest_draw;
@@ -759,13 +764,123 @@ ui_drop_dest_toggle(void)
 	ui_window_open(&g_dest_win);
 }
 
-/* The folder for dropped files: the chosen subfolder if it still exists. */
+/* ---- The front Finder window as the drop target ---- */
+
+int	finder_front_path(char *out, size_t n);		/* finder_probe.c */
+
+static char	g_drop_label[300];			/* where the last drop went */
+
+/* lower-case letters and digits only, so "My Folder" matches "My.Folder" */
+static void
+name_key(const char *s, char *o, size_t n)
+{
+	size_t	k = 0;
+
+	for(; *s && k + 1 < n; s++) {
+		if(SDL_isalnum((unsigned char)*s)) {
+			o[k++] = (char)SDL_tolower((unsigned char)*s);
+		}
+	}
+	o[k] = 0;
+}
+
+typedef struct { char want[300]; char found[300]; } DirFind;
+
+static SDL_EnumerationResult SDLCALL
+dirfind_cb(void *ud, const char *dirname, const char *fname)
+{
+	DirFind		*df = ud;
+	char		key[300], full[1800];
+	SDL_PathInfo	info;
+
+	name_key(fname, key, sizeof(key));
+	if(strcmp(key, df->want) != 0) {
+		return SDL_ENUM_CONTINUE;
+	}
+	snprintf(full, sizeof(full), "%s%s%s", dirname,
+			dirname[strlen(dirname) - 1] == '/' ? "" : "/", fname);
+	if(SDL_GetPathInfo(full, &info) && info.type == SDL_PATHTYPE_DIRECTORY) {
+		snprintf(df->found, sizeof(df->found), "%s", fname);
+		return SDL_ENUM_SUCCESS;
+	}
+	return SDL_ENUM_CONTINUE;
+}
+
+/* ":Volume:A:B" (the Finder's front window) -> a folder inside the shared
+ * folder root. Returns 1 if the window shows the shared volume. */
+static int
+finder_path_to_host(const char *root, const char *gsos, char *out, size_t n)
+{
+	char	rootkey[300], key[300], comp[300];
+	char	cur[1800];
+	const char *p = gsos;
+	int	first = 1;
+
+	if(*p == ':') {
+		p++;
+	}
+	name_key(base_name(root), rootkey, sizeof(rootkey));
+	snprintf(cur, sizeof(cur), "%s", root);
+	while(*p) {
+		size_t	l = strcspn(p, ":");
+
+		snprintf(comp, sizeof(comp), "%.*s", (int)(l > 250 ? 250 : l), p);
+		p += l;
+		if(*p == ':') {
+			p++;
+		}
+		if(first) {			/* the volume itself */
+			first = 0;
+			name_key(comp, key, sizeof(key));
+			if(strcmp(key, rootkey) != 0) {
+				return 0;
+			}
+			continue;
+		}
+		{
+			DirFind df;
+
+			name_key(comp, df.want, sizeof(df.want));
+			df.found[0] = 0;
+			SDL_EnumerateDirectory(cur, dirfind_cb, &df);
+			if(!df.found[0]) {
+				return 0;
+			}
+			snprintf(cur + strlen(cur), sizeof(cur) - strlen(cur), "/%s",
+								df.found);
+		}
+	}
+	if(first) {
+		return 0;
+	}
+	snprintf(out, n, "%s", cur);
+	return 1;
+}
+
+/* The folder for dropped files: the front Finder window if it shows the
+ * shared volume, else the chosen subfolder if it still exists. */
 static void
 drop_folder(const char *root, char *out, size_t n)
 {
 	SDL_PathInfo	info;
 
 	snprintf(out, n, "%s", root);
+	snprintf(g_drop_label, sizeof(g_drop_label), "%s", base_name(root));
+	if(g_drop_follow_finder) {
+		char	gp[300], host[1800];
+
+		if(finder_front_path(gp, sizeof(gp))) {
+			if(finder_path_to_host(root, gp, host, sizeof(host))) {
+				snprintf(out, n, "%s", host);
+				snprintf(g_drop_label, sizeof(g_drop_label), "%s",
+									gp + 1);
+				return;
+			}
+			snprintf(g_drop_label, sizeof(g_drop_label),
+				"%s (the front window, %s, is not the shared folder)",
+				base_name(root), gp + 1);
+		}
+	}
 	if(g_drop_sub[0]) {
 		char	sub[1800];
 
@@ -792,7 +907,7 @@ ui_drop_regular_file(const char *path)
 		snprintf(dst2, sizeof(dst2), "%s/%s", f2, base_name(path));
 		if(SDL_CopyFile(path, dst2)) {
 			g_remount.frames = REMOUNT_FRAMES;
-			ui_message("Copied %s", base_name(path));
+			ui_message("Copied %s to %s", base_name(path), g_drop_label);
 		}
 		return 1;
 	}
@@ -826,8 +941,8 @@ ui_drop_regular_file(const char *path)
 		return 1;
 	}
 	if(iwm_motor_busy()) {
-		ui_message("Copied %s - it shows up after the disk is re-read",
-							base_name(path));
+		ui_message("Copied %s to %s - it shows up after the disk is re-read",
+						base_name(path), g_drop_label);
 		return 1;
 	}
 	/* re-mount so the new file appears on the volume */
@@ -839,8 +954,7 @@ ui_drop_regular_file(const char *path)
 	g_remount.blocks = blocks;
 	g_remount.frames = REMOUNT_FRAMES;
 	snprintf(g_remount.path, sizeof(g_remount.path), "%s", folder);
-	ui_message("Copied %s - refreshing %s...", base_name(path),
-							base_name(folder));
+	ui_message("Copied %s to %s", base_name(path), g_drop_label);
 	return 1;
 }
 
