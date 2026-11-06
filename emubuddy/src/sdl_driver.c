@@ -34,7 +34,7 @@ extern int g_rom_version;
 void cfg_file_update_rom(const char *str);
 #include "protos_sdl.h"
 #ifndef __APPLE__
-# include "gsplus_icon.h"	/* embedded RGBA window icon (see below) */
+# include "emubuddy_icon.h"	/* embedded RGBA window icon (see below) */
 #endif
 
 #ifdef _WIN32
@@ -567,9 +567,9 @@ sdl_video_init(void)
 	 * small bitmap. */
 #ifndef __APPLE__
 	{
-		SDL_Surface *icon = SDL_CreateSurfaceFrom(gsplus_icon_width,
-				gsplus_icon_height, SDL_PIXELFORMAT_RGBA32,
-				(void *)gsplus_icon_rgba, gsplus_icon_width * 4);
+		SDL_Surface *icon = SDL_CreateSurfaceFrom(emubuddy_icon_width,
+				emubuddy_icon_height, SDL_PIXELFORMAT_RGBA32,
+				(void *)emubuddy_icon_rgba, emubuddy_icon_width * 4);
 		if(icon) {
 			SDL_SetWindowIcon(g_mainwin_info.window, icon);
 			SDL_DestroySurface(icon);
