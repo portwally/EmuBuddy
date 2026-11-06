@@ -987,6 +987,56 @@ ui_install_receive(void)
 	SDL_RemovePath(tmp);
 }
 
+/* ---- The automatic shared folder ----
+ * If no folder is shared as a disk (not in the saved settings, not on the
+ * command line), EmuBuddy makes "EmuBuddy Files" in the Documents folder and
+ * mounts it, so that file exchange works from the first start without any
+ * set-up. It shows in the IIgs as the disk EmuBuddy.Files. */
+
+extern int	g_auto_share;
+
+void
+ui_auto_share(void)
+{
+	const char	*docs;
+	char		path[1300], readme[1400];
+	SDL_PathInfo	info;
+	int		fresh;
+	SDL_IOStream	*io;
+	static const char text[] =
+		"This folder is a disk for the Apple IIgs in EmuBuddy (EmuBuddy.Files).\r"
+		"Files you put here show up in the IIgs, and what the IIgs saves here\r"
+		"is an ordinary file on your computer.\r"
+		"\r"
+		"Drop files on the EmuBuddy window to copy them here.\r";
+
+	if(!g_auto_share || !g_slot7_scsi || shared_root()) {
+		return;
+	}
+	docs = SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS);
+	if(!docs) {
+		docs = SDL_GetUserFolder(SDL_FOLDER_HOME);
+	}
+	if(getenv("EMUBUDDY_AUTOSHARE_DIR")) {		/* test aid */
+		snprintf(path, sizeof(path), "%s", getenv("EMUBUDDY_AUTOSHARE_DIR"));
+	} else {
+		snprintf(path, sizeof(path), "%sEmuBuddy Files", docs ? docs : "");
+	}
+	fresh = !SDL_GetPathInfo(path, &info);
+	if(!SDL_CreateDirectory(path)) {
+		return;
+	}
+	if(fresh) {
+		snprintf(readme, sizeof(readme), "%s/Read Me.txt", path);
+		io = SDL_IOFromFile(readme, "wb");
+		if(io) {
+			SDL_WriteIO(io, text, sizeof(text) - 1);
+			SDL_CloseIO(io);
+		}
+	}
+	ui_insert_auto(path);
+}
+
 /* Disks > Show Shared Folder: open the shared folder in the computer's own
  * file manager (Finder / Explorer). */
 void

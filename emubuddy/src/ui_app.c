@@ -20,6 +20,7 @@ void		ui_show_shared_folder(void);
 void		ui_bridge_choose(void);
 void		ui_install_receive(void);
 extern int	g_skin;
+extern int	g_auto_share;
 void		sdl_set_skin(int skin);
 void		ui_bridge_off(void);
 int		ui_bridge_is_on(void);
@@ -61,22 +62,20 @@ enum {
 	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT, CMD_CORE_STATUS,
 	CMD_PASTE = 45, CMD_COPY_SCREEN,
 	CMD_SIZE_1 = 50, CMD_SIZE_2, CMD_SIZE_3, CMD_SIZE_4,
-	CMD_SHOT_WIN = 55, CMD_RECORD, CMD_DROPDEST, CMD_SHOWSHARE, CMD_BRIDGE, CMD_BRIDGE_OFF, CMD_SKIN_IIGS, CMD_SKIN_SYS, CMD_INSTALL_RECEIVE,
+	CMD_SHOT_WIN = 55, CMD_RECORD, CMD_DROPDEST, CMD_SHOWSHARE, CMD_BRIDGE, CMD_BRIDGE_OFF, CMD_SKIN_IIGS, CMD_SKIN_SYS, CMD_INSTALL_RECEIVE, CMD_AUTOSHARE,
 	CMD_ABOUT = 40,
 	CMD_RECENT0 = 60,		/* 60..69 */
 };
 #define N_RECENT 10
 
-#define DISKS_FIXED	10
+#define DISKS_FIXED	8
 static UiMenuItem disks_items[DISKS_FIXED + 2 + N_RECENT] = {
 	{ "Drives Window", CMD_DRIVES, "F2", 0 },
 	{ "Open Disk Image...", CMD_OPEN_DISK, NULL, 0 },
 	{ "Share a Folder...", CMD_SHARE, NULL, 0 },
 	{ "Drop Destination...", CMD_DROPDEST, NULL, 0 },
 	{ "Show Shared Folder", CMD_SHOWSHARE, NULL, 0 },
-	{ "Bridge Folder...", CMD_BRIDGE, NULL, 0 },
-	{ "Copy Receive to Shared Folder", CMD_INSTALL_RECEIVE, NULL, 0 },
-	{ "Turn Bridge Off", CMD_BRIDGE_OFF, NULL, 0 },
+	{ "Mount Shared Folder at Start", CMD_AUTOSHARE, NULL, 0 },
 	{ "Disk Browser", CMD_BROWSER, NULL, 0 },
 	{ "Eject All", CMD_EJECT_ALL, NULL, 0 },
 };
@@ -671,6 +670,7 @@ app_command(int id)
 	case CMD_RECORD: sdl_request_record_toggle(); break;
 	case CMD_DROPDEST: ui_drop_dest_toggle(); break;
 	case CMD_SHOWSHARE: ui_show_shared_folder(); break;
+	case CMD_AUTOSHARE: g_auto_share = !g_auto_share; break;
 	case CMD_BRIDGE: ui_bridge_choose(); break;
 	case CMD_INSTALL_RECEIVE: ui_install_receive(); break;
 	case CMD_SKIN_IIGS: sdl_set_skin(0); break;
@@ -717,6 +717,7 @@ app_item_state(int id)
 	}
 	case CMD_SKIN_IIGS: return g_skin == 0 ? UI_MI_CHECKED : 0;
 	case CMD_SKIN_SYS: return g_skin == 1 ? UI_MI_CHECKED : 0;
+	case CMD_AUTOSHARE: return g_auto_share ? UI_MI_CHECKED : 0;
 	case CMD_BRIDGE: return ui_bridge_is_on() ? UI_MI_CHECKED : 0;
 	case CMD_BRIDGE_OFF: return ui_bridge_is_on() ? 0 : UI_MI_DISABLED;
 	case CMD_RECORD: return rec_active() ? UI_MI_CHECKED : 0;

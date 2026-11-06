@@ -104,8 +104,10 @@ of recently used disks.
 
 There are four ways, from the simplest to the most flexible:
 
-1. **Share a folder.** **Disks > Share a Folder...** (or drop a folder on the window) makes a folder on your computer
-   appear as a ProDOS disk. It is live: what the IIgs saves is a normal file in the folder, and a file you put in the
+1. **The automatic shared folder.** On the first start EmuBuddy makes a folder **EmuBuddy Files** in your Documents folder
+   and mounts it as the disk `EmuBuddy.Files`, so file exchange works with no set-up. Switch this off with
+   **Disks > Mount Shared Folder at Start**. **Share a Folder...** (or dropping a folder on the window) shares another
+   folder the same way: it appears as a ProDOS disk. It is live: what the IIgs saves is a normal file in the folder, and a file you put in the
    folder shows up in the IIgs. **Disks > Show Shared Folder** opens the folder in your file manager.
 2. **Drop files on the emulator.** Drop any file on the window and it is copied into the shared folder. If the front
    window of the GS/OS Finder shows the shared disk or one of its folders, the file goes **into exactly that
