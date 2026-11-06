@@ -12,16 +12,11 @@
 extern const unsigned char g_ui_font_ttf[];
 extern const unsigned int g_ui_font_ttf_len;
 
-static int	g_ppem = 16;
 #define PPEM		g_ppem
 #define SS		4			/* vertical/horizontal subsamples */
 #define ATLAS_W		512
 #define ATLAS_H		256
 
-static const unsigned char	*g_ttf = g_ui_font_ttf;
-static size_t			g_len;
-static unsigned	g_glyf, g_loca, g_hmtx, g_cmap4, g_cmap12;
-static int	g_locfmt, g_nglyphs, g_nhm, g_upem, g_asc_px;
 
 typedef struct { float x0, y0, x1, y1; } Edge;
 static Edge	*g_edges;
@@ -34,10 +29,45 @@ typedef struct {
 	int	adv;
 } Glyph;
 
-static Glyph		*g_cache;
-static SDL_Texture	*g_atlas;
+/* One font with its glyph cache and atlas. The default one is the UI font; the
+ * Launcher opens more (other files and sizes) and selects them with
+ * ui_font_set(). All the drawing code below works on the current one, C. */
+struct UiFont {
+	int			ppem;
+	const unsigned char	*ttf;
+	size_t			len;
+	unsigned		glyf, loca, hmtx, cmap4, cmap12;
+	int			locfmt, nglyphs, nhm, upem, asc_px;
+	Glyph			*cache;
+	SDL_Texture		*atlas;
+	int			pack_x, pack_y, pack_rowh;
+	unsigned char		*owned;
+};
+static struct UiFont	g_default = { 16 };
+static struct UiFont	*C = &g_default;
 static SDL_Renderer	*g_ren;
-static int		g_pack_x, g_pack_y, g_pack_rowh;
+
+#define g_ppem		(C->ppem)
+#define g_ttf		(C->ttf)
+#define g_len		(C->len)
+#define g_glyf		(C->glyf)
+#define g_loca		(C->loca)
+#define g_hmtx		(C->hmtx)
+#define g_cmap4		(C->cmap4)
+#define g_cmap12	(C->cmap12)
+#define g_locfmt	(C->locfmt)
+#define g_nglyphs	(C->nglyphs)
+#define g_nhm		(C->nhm)
+#define g_upem		(C->upem)
+#define g_asc_px	(C->asc_px)
+#define g_cache		(C->cache)
+#define g_atlas		(C->atlas)
+#define g_pack_x	(C->pack_x)
+#define g_pack_y	(C->pack_y)
+#define g_pack_rowh	(C->pack_rowh)
+#define g_owned		(C->owned)
+
+
 
 static unsigned
 u16(unsigned o)
@@ -593,7 +623,6 @@ ui_font_init(SDL_Renderer *r)
 	return font_setup();
 }
 
-static unsigned char	*g_owned;		/* a font loaded from a file */
 
 /* Use the TrueType font in a file at ppem pixels (NULL path = the built-in
  * Shaston 640 at 16). Returns 0, or -1 and keeps the font that was in use. */
@@ -631,6 +660,81 @@ ui_font_load_file(const char *path, int ppem)
 	SDL_free(g_owned);
 	g_owned = buf;
 	return 0;
+}
+
+/* Open another font (a file at a pixel size). Returns NULL on failure. */
+UiFont *
+ui_font_open(const char *path, int ppem)
+{
+	struct UiFont	*f = calloc(1, sizeof(*f)), *save = C;
+	size_t		n = 0;
+	unsigned char	*buf;
+
+	if(!f || !g_ren) {
+		free(f);
+		return NULL;
+	}
+	buf = (unsigned char *)SDL_LoadFile(path, &n);
+	if(!buf || n < 64) {
+		SDL_free(buf);
+		free(f);
+		return NULL;
+	}
+	f->ttf = buf;
+	f->len = n;
+	f->owned = buf;
+	f->ppem = ppem > 4 ? ppem : 16;
+	C = f;
+	if(font_setup() != 0) {
+		C = save;
+		SDL_free(buf);
+		free(f);
+		return NULL;
+	}
+	C = save;
+	return f;
+}
+
+void
+ui_font_close(UiFont *f)
+{
+	if(!f || f == &g_default) {
+		return;
+	}
+	if(C == f) {
+		C = &g_default;
+	}
+	if(f->atlas) {
+		SDL_DestroyTexture(f->atlas);
+	}
+	free(f->cache);
+	SDL_free(f->owned);
+	free(f);
+}
+
+/* Draw with this font from now on (NULL = the UI font). */
+void
+ui_font_set(UiFont *f)
+{
+	C = f ? f : &g_default;
+}
+
+int
+ui_font_size(void)
+{
+	return g_ppem;
+}
+
+void
+ui_draw_text_a(int x, int y, const char *s, Uint32 rgb, int alpha)
+{
+	if(g_atlas) {
+		SDL_SetTextureAlphaMod(g_atlas, (Uint8)alpha);
+	}
+	ui_draw_text(x, y, s, rgb);
+	if(g_atlas) {
+		SDL_SetTextureAlphaMod(g_atlas, 255);
+	}
 }
 
 void

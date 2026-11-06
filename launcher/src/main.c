@@ -15,6 +15,8 @@
 #include "profile.h"
 #include "library.h"
 #include "skins.h"
+#include "frontend.h"
+#include "attract.h"
 #include "launcher_icon.h"
 
 #define MAX_PROFILES	64
@@ -258,8 +260,12 @@ cli(int argc, char **argv)
 
 #define LW	800
 #define LH	640
+#define AW	1280			/* the Arcade view's logical size */
+#define AH	720
 
 static void lib_open(int kind, char *target, int cap);
+static int		g_arcade = 1, g_bw = LW, g_bh = LH;	/* the Arcade view or the Classic one; logical size */
+static char		g_art_root[1100];
 static int		g_skin, g_wscale = 100, g_full;	/* window size in percent of 800x640 */
 static const int	g_steps[6] = { 80, 100, 125, 150, 200, 300 };
 static SDL_Window	*g_win;
@@ -900,7 +906,7 @@ size_fits(int n)
 	if(!SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(g_win), &r)) {
 		return 1;
 	}
-	return LW * n / 100 <= r.w && LH * n / 100 + 30 <= r.h;
+	return g_bw * n / 100 <= r.w && g_bh * n / 100 + 30 <= r.h;
 }
 
 static void
@@ -913,7 +919,7 @@ apply_window_mode(void)
 		SDL_SetWindowFullscreen(g_win, true);
 	} else {
 		SDL_SetWindowFullscreen(g_win, false);
-		SDL_SetWindowSize(g_win, LW * g_wscale / 100, LH * g_wscale / 100);
+		SDL_SetWindowSize(g_win, g_bw * g_wscale / 100, g_bh * g_wscale / 100);
 		SDL_SetWindowPosition(g_win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 	}
 }
@@ -939,6 +945,30 @@ toggle_fullscreen(void)
 	settings_save();
 }
 
+/* The Arcade view (pictures, full window) or the Classic one (skins, windows, menu bar). */
+static void
+set_view(int arcade)
+{
+	g_arcade = arcade;
+	g_bw = arcade ? AW : LW;
+	g_bh = arcade ? AH : LH;
+	SDL_SetRenderLogicalPresentation(g_ren, g_bw, g_bh, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	g_ui_top_h = arcade ? 0 : UI_BAR_H;
+	g_ui_hide_status = arcade;
+	skin_switch(arcade ? skin_find("Modern") : g_skin);	/* dialogs over the pictures are dark */
+	if(arcade) {
+		ui_window_close(&g_lib);
+		SDL_StartTextInput(g_win);
+	} else if(!g_lib.open) {
+		ui_window_open(&g_lib);
+	}
+	if(g_wscale != 100 && !g_full && !size_fits(g_wscale)) {
+		g_wscale = 100;
+	}
+	apply_window_mode();
+	settings_save();
+}
+
 static void
 settings_load(void)
 {
@@ -956,6 +986,10 @@ settings_load(void)
 			if(g_wscale < 50 || g_wscale > 400) {
 				g_wscale = 100;
 			}
+		} else if(!strncmp(line, "view = ", 7)) {
+			g_arcade = strcmp(line + 7, "classic") != 0;
+		} else if(!strncmp(line, "artwork = ", 10)) {
+			snprintf(g_art_root, sizeof(g_art_root), "%s", line + 10);
 		} else if(!strncmp(line, "fullscreen = ", 13)) {
 			g_full = atoi(line + 13) != 0;
 		}
@@ -977,7 +1011,8 @@ settings_save(void)
 	f = fopen(path, "w");
 	if(f) {
 		fprintf(f, "skin = %s\n", skin_get(g_skin)->name);
-		fprintf(f, "size = %d\nfullscreen = %d\n", g_wscale, g_full);
+		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\n", g_wscale, g_full,
+			g_arcade ? "arcade" : "classic", g_art_root);
 		fclose(f);
 	}
 }
@@ -1263,7 +1298,7 @@ draw_flow(UiWindow *win, int cx, int cy)
 static void
 lib_draw(UiWindow *win, int cx, int cy)
 {
-	static const char *names[LH];
+	static const char *names[640];
 	static const char *keys[][2] = { { "rom", "ROM" }, { "ramsize", "Memory" },
 		{ "mhz", "Speed" }, { "sl1", "Slot 1" }, { "sl2", "Slot 2" }, { "sl3", "Slot 3" },
 		{ "sl4", "Slot 4" }, { "sl7", "Slot 7" }, { "hard1", "Hard disk 1" },
@@ -1277,7 +1312,7 @@ lib_draw(UiWindow *win, int cx, int cy)
 	} else if(skin_layout(g_skin) == SKIN_LAYOUT_FLOW) {
 		draw_flow(win, cx, cy);
 	} else {
-	for(i = 0; i < g_nprof && i < LH; i++) {
+	for(i = 0; i < g_nprof && i < 640; i++) {
 		names[i] = profile_name(&g_prof[i]);
 	}
 	r = ui_list(win, cx, cy, 10, 10, 240, 470, names, g_nprof, &g_sel, &g_top);
@@ -1807,7 +1842,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -1833,6 +1868,8 @@ static const UiMenuItem m_view[] = {
 	{ "Window Size 3x", C_SIZE6, "Cmd-6", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Full Screen", C_FULL, "F11", 0 },
+	{ "", 0, NULL, UI_MI_SEP },
+	{ "Arcade View", C_VIEW, "Cmd-0", 0 },
 };
 static const UiMenuItem m_prof[] = {
 	{ "Play", C_PLAY, "Return", 0 },
@@ -1845,10 +1882,292 @@ static const UiMenuItem m_help[] = {
 };
 static UiMenuItem m_skin[16];
 static const UiMenu g_menus[] = {
-	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "View", m_view, 8 },
+	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 4 }, { "View", m_view, 10 },
 	{ "Skin", m_skin, 0 }, { "Help", m_help, 1 },
 };
 static UiMenu g_menus_rw[6];
+
+/* ---- pictures of a game: set and remove ---- */
+
+static char		g_picpath[1300];
+static SDL_AtomicInt	g_pic_ready;
+
+static void SDLCALL
+pic_cb(void *ud, const char * const *list, int filter)
+{
+	(void)ud; (void)filter;
+	if(list && list[0]) {
+		SDL_strlcpy(g_picpath, list[0], sizeof(g_picpath));
+		SDL_SetAtomicInt(&g_pic_ready, 1);
+	}
+}
+
+static void
+pic_set_choose(void)
+{
+	static const SDL_DialogFileFilter filters[] = { { "Pictures", "png;bmp" } };
+
+	if(g_nprof) {
+		SDL_ShowOpenFileDialog(pic_cb, NULL, g_win, filters, 1, NULL, false);
+	}
+}
+
+/* where a picture for this game goes: the first picture folder of the game
+ * (from an import), else <artwork folder>/snap, else the game's own folder */
+static void
+pic_target_dir(const Profile *p, char *out, size_t n)
+{
+	char	first[1200], root[1200];
+	const char *t = profile_get(p, "art_tile");
+
+	if(t[0]) {
+		const char *semi = strchr(t, ';');
+
+		snprintf(first, sizeof(first), "%.*s", semi ? (int)(semi - t) : (int)strlen(t), t);
+		profile_expand_path(first, out, (int)n);
+		return;
+	}
+	profile_expand_path(profile_get(p, "artwork")[0] ? profile_get(p, "artwork") : g_art_root, root, sizeof(root));
+	if(root[0]) {
+		snprintf(out, n, "%s/snap", root);
+		return;
+	}
+	snprintf(out, n, "%s/%s.data/art", g_dir, profile_name(p));
+}
+
+static void
+pic_apply(const char *src)
+{
+	char	dir[1400], dst[1600], parent[1400];
+	const char *p = profile_get(&g_prof[g_sel], "art_name")[0] ? profile_get(&g_prof[g_sel], "art_name") :
+			profile_name(&g_prof[g_sel]);
+	const char *ext = strrchr(src, '.');
+
+	pic_target_dir(&g_prof[g_sel], dir, sizeof(dir));
+	snprintf(parent, sizeof(parent), "%s", dir);
+	{
+		char *sl = strrchr(parent, '/');
+
+		if(sl) {
+			*sl = 0;
+			SDL_CreateDirectory(parent);
+		}
+	}
+	SDL_CreateDirectory(dir);
+	snprintf(dst, sizeof(dst), "%s/%s%s", dir, p, ext && !SDL_strcasecmp(ext, ".bmp") ? ".bmp" : ".png");
+	if(SDL_CopyFile(src, dst)) {
+		ui_message("Picture set for %s", profile_name(&g_prof[g_sel]));
+	} else {
+		ui_message("Could not copy the picture: %s", SDL_GetError());
+	}
+}
+
+static void
+pic_remove(void)
+{
+	char	art[1400];
+	SDL_MessageBoxButtonData btn[2];
+	SDL_MessageBoxData box;
+	char	msg[1700];
+	int	pick = 2;
+
+	if(!g_nprof || !fe_find_art(&g_prof[g_sel], g_art_root, 0, art, sizeof(art))) {
+		ui_message("This game has no picture");
+		return;
+	}
+	SDL_zero(btn);
+	btn[0].buttonID = 1;
+	btn[0].text = "Delete";
+	btn[1].buttonID = 2;
+	btn[1].text = "Cancel";
+	btn[1].flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
+	snprintf(msg, sizeof(msg), "Delete the picture file of \"%s\"?\n\n%s", profile_name(&g_prof[g_sel]), art);
+	SDL_zero(box);
+	box.title = "EmuBuddy Launcher";
+	box.message = msg;
+	box.numbuttons = 2;
+	box.buttons = btn;
+	if(SDL_ShowMessageBox(&box, &pick) && pick == 1) {
+		if(SDL_RemovePath(art)) {
+			ui_message("Picture deleted");
+		} else {
+			ui_message("Could not delete: %s", SDL_GetError());
+		}
+	}
+}
+
+/* ---- Import from Attract-Mode ---- */
+
+static UiWindow	g_imp;
+static char	g_imp_names[ATTRACT_MAX_EMUS][100];
+static const char *g_imp_list[ATTRACT_MAX_EMUS];
+static int	g_imp_n, g_imp_sel, g_imp_top;
+static char	g_imp_dir[1100];
+
+static void
+import_run(void)
+{
+	static Profile	made[64];
+	char		err[200], path[1500];
+	int		n, saved = 0, existed = 0;
+
+	if(g_imp_sel < 0 || g_imp_sel >= g_imp_n) {
+		return;
+	}
+	n = attract_import(g_imp_dir, g_imp_names[g_imp_sel], made, 64, err, sizeof(err));
+	if(n < 0) {
+		ui_message("%s", err);
+		return;
+	}
+	for(int i = 0; i < n; i++) {
+		SDL_PathInfo info;
+
+		file_name_for(profile_name(&made[i]), path, sizeof(path));
+		if(SDL_GetPathInfo(path, &info)) {
+			existed++;
+			continue;
+		}
+		if(profile_save(&made[i], path) == 0) {
+			saved++;
+		}
+	}
+	load_profiles();
+	ui_message("Imported %d game%s%s", saved, saved == 1 ? "" : "s", existed ? " (the others were there already)" : "");
+	ui_window_close(&g_imp);
+}
+
+static void
+imp_draw(UiWindow *win, int cx, int cy)
+{
+	int	r, x = 10;
+
+	if(!g_imp_n) {
+		ui_draw_text(cx + 12, cy + 14, "No Attract-Mode set-up found.", UI_BAD);
+		ui_draw_text(cx + 12, cy + 36, g_imp_dir, UI_GREY);
+	} else {
+		ui_draw_text(cx + 12, cy + 8, "Which system do you want to bring in?", UI_BLACK);
+		r = ui_list(win, cx, cy, 10, 30, win->w - 22, 220, g_imp_list, g_imp_n, &g_imp_sel, &g_imp_top);
+		if(r == 2) {
+			import_run();
+			return;
+		}
+	}
+	ui_draw_text(cx + 12, cy + 258, "Your Attract-Mode folder is not changed. Games that exist already are skipped.", UI_GREY);
+	if(fit_button(win, cx, cy, &x, win->h - UI_TITLE_H - 34, 90, 26, "Cancel", 1)) {
+		ui_window_close(win);
+		return;
+	}
+	if(g_imp_n && ui_button(win, cx, cy, win->w - 112, win->h - UI_TITLE_H - 34, 100, 26, "Import", 1)) {
+		import_run();
+	}
+}
+
+static void
+import_open(void)
+{
+	const char *e = getenv("LAUNCHER_ATTRACT"), *home = getenv("HOME");
+
+	if(e && e[0]) {
+		snprintf(g_imp_dir, sizeof(g_imp_dir), "%s", e);
+	} else {
+		snprintf(g_imp_dir, sizeof(g_imp_dir), "%s/.attract", home ? home : "");
+	}
+	g_imp_n = attract_list_emulators(g_imp_dir, g_imp_names, ATTRACT_MAX_EMUS);
+	for(int i = 0; i < g_imp_n; i++) {
+		g_imp_list[i] = g_imp_names[i];
+		if(!strcmp(g_imp_names[i], "Apple IIGS")) {
+			g_imp_sel = i;
+		}
+	}
+	snprintf(g_imp.title, sizeof(g_imp.title), "Import from Attract-Mode");
+	g_imp.w = 520;
+	g_imp.h = 340;
+	g_imp.modal = 1;
+	g_imp.closable = 1;
+	g_imp.draw = imp_draw;
+	ui_window_center(&g_imp);
+	ui_window_open(&g_imp);
+}
+
+static void	app_command(int id);
+
+/* artwork folder chooser */
+static char		g_artpath[1300];
+static SDL_AtomicInt	g_art_ready;
+
+static void SDLCALL
+art_cb(void *ud, const char * const *list, int filter)
+{
+	(void)ud; (void)filter;
+	if(list && list[0]) {
+		SDL_strlcpy(g_artpath, list[0], sizeof(g_artpath));
+		SDL_SetAtomicInt(&g_art_ready, 1);
+	}
+}
+
+static void
+art_dir_choose(void)
+{
+	SDL_ShowOpenFolderDialog(art_cb, NULL, g_win, NULL, false);
+}
+
+/* The menu of the Arcade view (Space): the same commands the menu bar has. */
+static UiWindow	g_ovl;
+
+static const struct { const char *label; int id; } g_ovl_items[] = {
+	{ "Play", C_PLAY }, { "Details", C_INFO }, { "Edit...", C_EDIT }, { "New Game...", C_NEW },
+	{ "Duplicate", C_DUP }, { "Delete...", C_DEL }, { "Disks and ROMs...", C_LIB },
+	{ "Set Picture...", C_SETPIC }, { "Remove Picture...", C_RMPIC },
+	{ "Artwork Folder...", C_ARTDIR }, { "Import from Attract-Mode...", C_IMPORT },
+	{ "Classic View", C_VIEW }, { "Full Screen", C_FULL }, { "About", C_ABOUT }, { "Quit", C_QUIT },
+};
+
+static void
+ovl_draw(UiWindow *win, int cx, int cy)
+{
+	int	i, y = 8, n = (int)(sizeof(g_ovl_items) / sizeof(g_ovl_items[0]));
+
+	for(i = 0; i < n; i++) {
+		int en = (g_ovl_items[i].id == C_PLAY || g_ovl_items[i].id == C_INFO || g_ovl_items[i].id == C_EDIT ||
+			g_ovl_items[i].id == C_DUP || g_ovl_items[i].id == C_DEL) ? g_nprof > 0 : 1;
+
+		if(ui_button(win, cx, cy, 10, y, win->w - 22, 26, g_ovl_items[i].label, en)) {
+			int id = g_ovl_items[i].id;
+
+			ui_window_close(win);
+			app_command(id);
+			return;
+		}
+		y += 30;
+	}
+}
+
+static void
+ovl_open(void)
+{
+	snprintf(g_ovl.title, sizeof(g_ovl.title), "Menu");
+	g_ovl.w = 330;
+	g_ovl.h = 20 + 8 + 30 * (int)(sizeof(g_ovl_items) / sizeof(g_ovl_items[0])) + 10;
+	g_ovl.modal = 1;
+	g_ovl.closable = 1;
+	g_ovl.draw = ovl_draw;
+	ui_window_center(&g_ovl);
+	ui_window_open(&g_ovl);
+}
+
+static void
+fe_play(void)
+{
+	lib_play();
+}
+
+static void
+fe_edit(void)
+{
+	if(g_nprof) {
+		edit_open(&g_prof[g_sel], 0);
+	}
+}
 
 static void
 app_command(int id)
@@ -1860,6 +2179,12 @@ app_command(int id)
 		return;
 	}
 	switch(id) {
+	case C_VIEW: set_view(!g_arcade); break;
+	case C_INFO: fe_key(SDLK_TAB, 0); break;
+	case C_ARTDIR: art_dir_choose(); break;
+	case C_IMPORT: import_open(); break;
+	case C_SETPIC: pic_set_choose(); break;
+	case C_RMPIC: pic_remove(); break;
 	case C_SIZE1: case C_SIZE2: case C_SIZE3: case C_SIZE4: case C_SIZE5: case C_SIZE6:
 		set_window_size(g_steps[id - C_SIZE1]);
 		break;
@@ -1908,6 +2233,16 @@ app_status(char *l, char *c, char *r, int n)
 static void
 app_tick(void)
 {
+	if(SDL_GetAtomicInt(&g_pic_ready)) {
+		SDL_SetAtomicInt(&g_pic_ready, 0);
+		pic_apply(g_picpath);
+	}
+	if(SDL_GetAtomicInt(&g_art_ready)) {
+		SDL_SetAtomicInt(&g_art_ready, 0);
+		snprintf(g_art_root, sizeof(g_art_root), "%s", g_artpath);
+		settings_save();
+		ui_message("Artwork folder: %s", g_art_root);
+	}
 	if(SDL_GetAtomicInt(&g_add_ready)) {
 		SDL_SetAtomicInt(&g_add_ready, 0);
 		if(g_nlfold < 16) {
@@ -1959,19 +2294,28 @@ window(void)
 	}
 	ui_init(g_win, g_ren, &g_app);
 	skin_switch(g_skin);
-	if(g_full || g_wscale != 100) {
-		if(!g_full && !size_fits(g_wscale)) {
-			g_wscale = 100;
-		}
-		apply_window_mode();
-	}
 	snprintf(g_lib.title, sizeof(g_lib.title), "Profiles");
 	g_lib.x = 10;
 	g_lib.y = UI_BAR_H + 10;
 	g_lib.w = 780;
 	g_lib.h = 540;
 	g_lib.draw = lib_draw;
-	ui_window_open(&g_lib);
+	{
+		FeData fd = { g_prof, &g_nprof, &g_sel, g_art_root, fe_play, ovl_open, fe_edit };
+		const char *fdir = getenv("LAUNCHER_FONTS"), *base = SDL_GetBasePath();
+		char	fpath[1400];
+
+		snprintf(fpath, sizeof(fpath), "%s%s", fdir && fdir[0] ? fdir : (base ? base : ""), fdir && fdir[0] ? "" : "fonts");
+		fe_set_data(&fd);
+		if(fe_init(g_ren, fpath) != 0) {
+			fprintf(stderr, "front end fonts not found in %s: using the Classic view\n", fpath);
+			g_arcade = 0;
+		}
+	}
+	if(g_wscale != 100 && !g_full && !size_fits(g_wscale)) {
+		g_wscale = 100;
+	}
+	set_view(g_arcade);		/* sets the size, the logical size and the Profiles window */
 	while(g_running) {
 		SDL_Event e;
 
@@ -2045,6 +2389,9 @@ window(void)
 				} else if(k == SDLK_L) {
 					app_command(C_LIB);
 					continue;
+				} else if(k == SDLK_0) {
+					app_command(C_VIEW);
+					continue;
 				} else if(k == SDLK_Q) {
 					g_running = 0;
 					continue;
@@ -2062,10 +2409,31 @@ window(void)
 					g_pending_unfocus = 1;	/* unless a field takes the click */
 				}
 			}
+			if(g_arcade && !g_focus && !ui_is_modal()) {
+				if(e.type == SDL_EVENT_KEY_DOWN && !(e.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL)) &&
+						fe_key(e.key.key, e.key.mod)) {
+					continue;
+				}
+				if(e.type == SDL_EVENT_TEXT_INPUT && fe_text(e.text.text)) {
+					continue;
+				}
+				if(e.type == SDL_EVENT_MOUSE_WHEEL) {
+					fe_wheel(e.wheel.y);
+					continue;
+				}
+			}
 			if(ui_handle_event(&e)) {
 				continue;
 			}
-			if(e.type == SDL_EVENT_KEY_DOWN && !g_focus && !ui_is_modal()) {
+			if(g_arcade && !ui_is_modal() && e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+				float lx, ly;
+
+				SDL_RenderCoordinatesFromWindow(g_ren, e.button.x, e.button.y, &lx, &ly);
+				if(fe_click(lx, ly, e.button.clicks)) {
+					continue;
+				}
+			}
+			if(!g_arcade && e.type == SDL_EVENT_KEY_DOWN && !g_focus && !ui_is_modal()) {
 				if(e.key.key == SDLK_RETURN) {
 					lib_play();
 				} else {
@@ -2085,6 +2453,9 @@ window(void)
 				}
 			}
 		}
+		if(g_arcade) {
+			fe_draw(g_bw, g_bh);
+		} else {
 		{
 			Uint32 d = g_ui_theme.desktop;
 
@@ -2132,7 +2503,8 @@ window(void)
 				SDL_RenderTextureTiled(g_ren, chk, NULL, 1.0f, &all);
 			}
 		}
-		ui_draw(LW, LH);
+		}
+		ui_draw(g_bw, g_bh);
 		if(g_pending_unfocus) {
 			g_pending_unfocus = 0;
 			focus_clear();
@@ -2222,10 +2594,25 @@ window(void)
 					SDL_PushEvent(&ce);
 				}
 			}
+			if(frame == 3 && getenv("LAUNCHER_SEL") && g_nprof > 0) {		/* test aid: select a game */
+				g_sel = atoi(getenv("LAUNCHER_SEL")) % g_nprof;
+			}
+			if(frame == 25 && getenv("LAUNCHER_INFO")) {
+				fe_key(SDLK_TAB, 0);
+			}
+			if(frame == 25 && getenv("LAUNCHER_IMPORT")) {
+				import_open();
+			}
+			if(frame == 40 && getenv("LAUNCHER_IMPORT") && !strcmp(getenv("LAUNCHER_IMPORT"), "run")) {
+				import_run();
+			}
+			if(frame == 25 && getenv("LAUNCHER_OVL")) {
+				ovl_open();
+			}
 			if(frame == 5 && getenv("LAUNCHER_ABOUT")) {
 				about_open();
 			}
-			if(frame == (getenv("LAUNCHER_FIELDTEST") ? 30 : 60) && getenv("LAUNCHER_SHOT")) {
+			if(frame == (getenv("LAUNCHER_FIELDTEST") ? 30 : 90) && getenv("LAUNCHER_SHOT")) {
 				SDL_Surface *sf = SDL_RenderReadPixels(g_ren, NULL);
 
 				if(sf) {

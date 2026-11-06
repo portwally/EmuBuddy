@@ -1,0 +1,3 @@
+Figtree (Figtree-Bold.ttf, Figtree-SemiBold.ttf) is designed by Erik D. Kennedy and licensed under the
+SIL Open Font License, Version 1.1 (https://openfontlicense.org). The font files here were copied from the
+Arcadeflow Attract-Mode layout on the author's own computer.

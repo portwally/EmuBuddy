@@ -16,18 +16,21 @@ elseif(NOT DEFINED EMUBUDDY_VERSION OR EMUBUDDY_VERSION STREQUAL "")
 endif()
 
 # profile.c has no SDL; it is tested on its own.
-add_library(launcher_profile STATIC src/profile.c)
+add_library(launcher_profile STATIC src/profile.c src/attract.c)
 set(EB_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/src)
 add_library(launcher_library STATIC src/library.c ${EB_SRC}/prodos_img.c)
 target_include_directories(launcher_library PUBLIC src ${EB_SRC})
 target_link_libraries(launcher_library PUBLIC launcher_profile)
 add_executable(test_library EXCLUDE_FROM_ALL tests/test_library.c)
 target_link_libraries(test_library PRIVATE launcher_library)
+add_executable(test_attract EXCLUDE_FROM_ALL tests/test_attract.c)
+target_link_libraries(test_attract PRIVATE launcher_profile)
 add_executable(test_profile EXCLUDE_FROM_ALL tests/test_profile.c)
 target_link_libraries(test_profile PRIVATE launcher_profile)
 enable_testing()
 add_test(NAME profile COMMAND test_profile)
 add_test(NAME library COMMAND test_library)
+add_test(NAME attract COMMAND test_attract)
 
 if(NOT TARGET SDL3::SDL3)
     find_package(SDL3 CONFIG QUIET)
@@ -46,7 +49,7 @@ endif()
 
 # The window uses EmuBuddy's own UI toolkit and font, compiled from its folder.
 set(EB_UI ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/src)
-set(LAUNCHER_SOURCES src/main.c src/skins.c ${EB_UI}/ui.c ${EB_UI}/ui_font.c ${EB_UI}/ui_font_data.c)
+set(LAUNCHER_SOURCES src/main.c src/skins.c src/frontend.c ${EB_UI}/ui.c ${EB_UI}/ui_font.c ${EB_UI}/ui_font_data.c)
 set(LAUNCHER_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/lib)
 
 file(GLOB LAUNCHER_FONT_FILES ${CMAKE_CURRENT_SOURCE_DIR}/fonts/*.ttf)

@@ -3,6 +3,7 @@
 #include "ui.h"
 
 int	g_ui_top_h = UI_BAR_H;
+int	g_ui_hide_status = 0;		/* the Launcher's front end draws full screen */
 UiTheme	g_ui_theme = { "GS/OS", 0xFFFFFF, 0x000000, 0x777777, 0xCCCCCC, 0x00AA00, 0xFF6600,
 	0xDD0000, 0x000000, 0xFFFFFF, 0x2222FF, UI_TITLE_GSOS, 0 };
 #include <string.h>
@@ -1236,6 +1237,10 @@ draw_status_bar(void)
 {
 	char	l[96] = "", c[96] = "", r[96] = "";
 	int	y = g_lh - UI_BAR_H;
+
+	if(g_ui_hide_status) {
+		return;
+	}
 
 	ui_fill(0, y, g_lw, UI_BAR_H, CH_BG);
 	ui_hline(0, y, g_lw, CH_LINE);

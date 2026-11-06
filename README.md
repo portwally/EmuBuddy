@@ -211,21 +211,29 @@ The **Machine** menu has a **Soft Reset**, which restarts the machine but keeps 
 
 ## EmuBuddy Launcher
 
-The download holds a second program, **EmuBuddy Launcher**. It keeps several **profiles**, for example one for web
-apps, one for your own projects and one for games. A profile holds the whole set-up: ROM, memory, speed, every slot,
-the disks in the drives, the shared folder and the window. **Play** starts EmuBuddy with the matching command line
-(see [Command line](#command-line)); the launcher shows that line, so you can use it in your own scripts.
+The download holds a second program, **EmuBuddy Launcher**: a picture-first front end in the style of Attract-Mode's
+Arcadeflow. It shows your games (set-ups) as a row of big covers over a blurred background of the selected one. A
+**game** holds the whole machine set-up (ROM, memory, speed, every slot, the disks in the drives, the shared folder,
+the window); **Return** starts EmuBuddy with the matching command line (see [Command line](#command-line)).
 
-- **View > Window Size** 0.8x, 1x, 1.25x, 1.5x, 2x, 3x (1x is 800x640; sizes that do not fit the screen are greyed out) and **Full Screen** (F11); the choice is kept.
-- A **library** of your ROMs and disk images: you name the folders, the launcher lists what it finds with disk type
-  and ProDOS volume name, shows which profile uses each file, and can check for copies and damaged images. A profile
-  can use a **private copy** of a disk so the original stays as it is.
-- **Skins:** Retro, Modern, Magazine, MacOS 7, Terminal Amber, Apple II, Commodore 64, ZX Spectrum, Amstrad
-  CPC, NeXT, BeOS, Retro Neon, Shelf and Cover Flow. The computer skins use the matching font (Apple II: Print Char 21, MacOS 7: Geneva from the Mac itself,
-  Commodore 64: Pet Me 64, ZX Spectrum: ZX Spectrum-7, Amstrad CPC: Amstrad CPC464). Every profile has a cover, your own
-  picture or a generated one.
+- **Keys:** Left/Right move, Return plays, Tab shows the details page, Space opens the menu, type to search, Esc goes
+  back. The mouse works too (click, double-click, wheel). A **Classic view** with windows, menus and skins is a switch
+  away (Space > Classic View).
+- **Pictures:** each game shows its cover, from your own picture or from artwork folders next to your games
+  (`boxart`, `flyer`, `snap`, `video`, `wheel` for the logo, the same names Attract-Mode uses). Space > **Set Picture**
+  adds a picture, **Remove Picture** deletes it, **Artwork Folder** sets the default folder.
+- **Import from Attract-Mode** (Space > Import): reads `~/.attract`, makes a game of every entry of a system's list and
+  reads the options of its start script (`-ramsize`, `-sl4`, `-hard1`, ...) and its artwork folders. Your Attract-Mode
+  folder is not changed.
+- **Disks and ROMs:** a library of your ROMs and disk images (Space > Disks and ROMs): you name the folders, it lists what
+  it finds with disk type and ProDOS volume name, shows which game uses each file, and can check for copies and damaged
+  images. A game can use a **private copy** of a disk so the original stays as it is.
+- **Window:** View > Window Size and Full Screen (F11) in the Classic view, or the same from the Space menu.
+- **Classic view skins:** Retro, Modern, Magazine, MacOS 7, Terminal Amber, Apple II, Commodore 64, ZX Spectrum, Amstrad
+  CPC, NeXT, BeOS, Retro Neon, Shelf and Cover Flow, with their own fonts.
 
-The plan and details are in [docs/LAUNCHER_PLAN.md](docs/LAUNCHER_PLAN.md).
+The plans and details are in [docs/LAUNCHER_PLAN.md](docs/LAUNCHER_PLAN.md) and
+[docs/LAUNCHER_FRONTEND_PLAN.md](docs/LAUNCHER_FRONTEND_PLAN.md).
 
 ## Command line
 

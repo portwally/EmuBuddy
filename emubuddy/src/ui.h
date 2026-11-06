@@ -10,6 +10,7 @@
 #include <SDL3/SDL.h>
 
 #define UI_BAR_H	20		/* menu bar and status bar height */
+extern int	g_ui_hide_status;	/* 1: no status bar (Launcher front end) */
 extern int	g_ui_top_h;		/* drawn menu bar height: 20, or 0 with the native menu bar */
 #define UI_TOP_H	g_ui_top_h
 #define UI_FONT_H	16
@@ -21,6 +22,13 @@ int	ui_font_init(SDL_Renderer *r);
 int	ui_font_load_file(const char *path, int ppem);
 void	ui_font_shutdown(void);
 int	ui_text_width(const char *s);
+/* More fonts (other files and pixel sizes) for the Launcher's front end. */
+typedef struct UiFont UiFont;
+UiFont	*ui_font_open(const char *path, int ppem);
+void	ui_font_close(UiFont *f);
+void	ui_font_set(UiFont *f);			/* NULL = the UI font */
+int	ui_font_size(void);			/* pixel size of the current font */
+void	ui_draw_text_a(int x, int y, const char *s, Uint32 rgb, int alpha);
 void	ui_draw_text(int x, int y, const char *s, Uint32 rgb);
 
 /* ---- toolkit core (ui.c) ---- */

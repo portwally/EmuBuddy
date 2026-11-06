@@ -105,3 +105,19 @@ Taken from your `~/.attract/layouts/Arcadeflow-17.7` and its README:
 4. **Internet artwork lookup** wanted, or only your own pictures and automatic snapshots?
 5. Should the front end **replace** the profile list entirely, or should the profile editor stay reachable as before
    (as Advanced)? Recommendation: stay reachable, behind Edit.
+
+## 8. Decisions and status
+
+Your answers: pictures only (no video), keep the retro skins as Classic mode, wording left for later, start from the
+Apple IIgs collection screenshots in `~/Roms/apple2gs` (adding and removing pictures per game later), the profile
+editor stays reachable (Space > Edit).
+
+**Done (first version):** font contexts so several font sizes work (Figtree from Arcadeflow's fonts folder, SIL Open
+Font License); the Arcade view with the blurred background, the sliding row of covers, logo or name, friendly facts,
+details page, search by typing, keyboard and mouse; picture folders compatible with Attract-Mode; the Space menu; dark
+dialogs over the pictures; Classic view as a switch; import from Attract-Mode with the options of the start script;
+Set/Remove Picture.
+
+**Not done yet:** game controller input; sounds; idle slideshow; portrait layout; favourites and sorting; German texts;
+the friendly editor with presets (the full editor is used for now); automatic snapshot when EmuBuddy quits;
+JPG pictures (PNG and BMP load now).

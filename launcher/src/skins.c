@@ -73,7 +73,10 @@ skin_font(int i, int *ppem)
 	const char *n = skin_get(i)->name;
 
 	*ppem = 16;
-	if(!strcmp(n, "Apple II")) {
+	if(!strcmp(n, "Modern")) {
+		*ppem = 17;
+		return "Figtree-SemiBold.ttf";
+	} else if(!strcmp(n, "Apple II")) {
 		*ppem = 13;
 		return "PrintChar21.ttf";
 	} else if(!strcmp(n, "Terminal Amber")) {

@@ -38,9 +38,10 @@ jobs:
         run: cmake --build build --target gsplus-sdl emubuddy-launcher
       - name: Test the Launcher
         run: |
-          cmake --build build --target test_profile test_library
+          cmake --build build --target test_profile test_library test_attract
           ./build/launcher/test_profile
           ./build/launcher/test_library
+          ./build/launcher/test_attract
       - name: Package (.dmg)
         run: cd build && cpack
       - uses: actions/upload-artifact@v7
