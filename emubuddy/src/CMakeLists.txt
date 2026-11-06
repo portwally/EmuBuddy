@@ -365,7 +365,7 @@ endif()
 
 # Every artifact ships the project README and the GPL license text (the GPL
 # requires the license to accompany distributed binaries). These paths are
-# relative to gsplus/src, so ../.. is the repository root.
+# relative to emubuddy/src, so ../.. is the repository root.
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../README.md"
               "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
         DESTINATION .)

@@ -19,7 +19,7 @@
 
 - [ ] README: remove the stale `-novsync` flag (line 78); update the "AppImage is planned" note once the bundled-.so fix lands; note the Debian runtime package name is `libsdl3-0`.
 - [ ] Stale comments: "Shift+F12" screenshot references (`sdl_driver.c:95`, `:1308` — actual key is F10); "MILESTONE STATUS (Phase 2a)" banner at the top of `sdl_driver.c`.
-- [ ] Repo hygiene: root `.gitignore` should ignore `build/` and `.DS_Store`; delete the stray `display` file at repo root; move personal configs (`config-builder.gsp`, `config-gsos.kegs`, `config-nucleus.kegs`) out of `gsplus/src` and ignore `config-*.kegs`; decide whether to commit `docs/promo-video-script.md`.
+- [ ] Repo hygiene: root `.gitignore` should ignore `build/` and `.DS_Store`; delete the stray `display` file at repo root; move personal configs (`config-builder.gsp`, `config-gsos.kegs`, `config-nucleus.kegs`) out of `emubuddy/src` and ignore `config-*.kegs`; decide whether to commit `docs/promo-video-script.md`.
 - [ ] CMake: bump `cmake_minimum_required` to 3.21 (`$<TARGET_RUNTIME_DLLS>` needs it); wrap `gsplus_core` in `if(APPLE)` or `EXCLUDE_FROM_ALL` (currently builds a `-DMAC` core on Linux/Windows default builds); strip prerelease suffixes (`-beta1`) from `CFBundleVersion`.
 - [ ] Legacy Cocoa target's `Info.plist` is stale KEGS identity (`KEGSMAC` executable mismatch, `com.provalid.Kegs`, hardcoded 1.38, 10.13 min) — fix or declare the target unsupported.
 - [ ] CI: pin `softprops/action-gh-release` to a commit SHA; add workflow-level `permissions: contents: read`; drop the stale `sdl3-driver` branch trigger.
@@ -29,6 +29,6 @@
 
 ## Backlog
 
-- [ ] Remove `#ifdef INCLUDE_RCSID_C` / `#endif` guards from header files and `#define`/`#undef INCLUDE_RCSID_C` from `sim65816.c` and `sound.c` in `gsplus/src/`. The `const char rcsid_` lines were already removed; these are the leftover scaffolding.
+- [ ] Remove `#ifdef INCLUDE_RCSID_C` / `#endif` guards from header files and `#define`/`#undef INCLUDE_RCSID_C` from `sim65816.c` and `sound.c` in `emubuddy/src/`. The `const char rcsid_` lines were already removed; these are the leftover scaffolding.
 
 - [ ] Update Menubar titles for X/Win to match..  Mac build already updated to "GS+"

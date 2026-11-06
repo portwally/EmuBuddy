@@ -1,8 +1,8 @@
 *.o
 
 # Build / runtime artifacts
-gsplus/GSplus.app/
-gsplus/src/build/
+emubuddy/GSplus.app/
+emubuddy/src/build/
 config.kegs
 gsplus_screenshot_*.png
 
