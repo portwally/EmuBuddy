@@ -27,8 +27,8 @@ Images: `.po .hdv .2mg .dsk .do .woz .dc .shk .sdk` and more.
 
 | Option | Cards |
 |---|---|
-| `-sl1 <card>` | `imagewriter`, `modem`, `none` (printer port) |
-| `-sl2 <card>` | `modem`, `imagewriter`, `none` (modem port) |
+| `-sl1 <card>` | `imagewriter`, `postscript` (also `laserwriter`), `modem`, `none` (printer port) |
+| `-sl2 <card>` | `modem`, `imagewriter`, `postscript`, `none` (modem port) |
 | `-sl3 <card>` | `uthernet2`, `voc`, `none` |
 | `-sl4 <card>` | `mockingboard`, `uthernet2`, `none` |
 | `-sl7 <card>` | `scsi`, `none` (`cffa2`, `hsscsi` also mean `scsi`) |
@@ -76,3 +76,11 @@ EmuBuddy apple2gs -rom ROM03 -hard1 System6.hdv -flop3 Game.2mg \
 
 On macOS the program inside the app bundle is
 `EmuBuddy.app/Contents/MacOS/EmuBuddy`.
+
+## PostScript printer (`-sl1 postscript`)
+
+The printer port can act as a PostScript printer. In GS/OS open the **DC Printer**
+control panel, pick the printer port and the type **DC.PostScript**, then print.
+Each job is converted by Ghostscript (`gs`, found in PATH or the usual install
+folders; `EMUBUDDY_GS=<path>` overrides) and the pages appear in the Printer
+window like ImageWriter pages. Ghostscript is not bundled.

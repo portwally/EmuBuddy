@@ -63,9 +63,12 @@ scc_printer_fill_readbuf(dword64 dfcyc, int port, int space_left)
 }
 
 /* Called once per frame: eject an unfinished page after a pause. */
+void printer_ps_vbl(void);
+
 void
 printer_vbl(void)
 {
+	printer_ps_vbl();
 	if(g_iw_eject_vbl && g_vbl_count >= g_iw_eject_vbl) {
 		g_iw_eject_vbl = 0;
 		imagewriter_feed();

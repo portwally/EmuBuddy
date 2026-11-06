@@ -33,6 +33,10 @@ extern int g_irq_pending;
 void scc_printer_open(int port);
 void scc_printer_empty_writebuf(dword64 dfcyc, int port);
 void scc_printer_fill_readbuf(dword64 dfcyc, int port, int space_left);
+/* EmuBuddy PostScript printer (printer_ps.c) */
+void scc_ps_open(int port);
+void scc_ps_empty_writebuf(dword64 dfcyc, int port);
+void scc_ps_fill_readbuf(dword64 dfcyc, int port, int space_left);
 #define SCC_R14_DPLL_SOURCE_BRG		0x100
 #define SCC_R14_DPLL_SOURCE_RTXC	0x200
 
@@ -378,6 +382,8 @@ scc_port_open(dword64 dfcyc, int port)
 #endif
 	} else if(cfg == 4) {		// EmuBuddy: virtual ImageWriter II
 		scc_printer_open(port);
+	} else if(cfg == 5) {		// EmuBuddy: PostScript printer
+		scc_ps_open(port);
 	} else if(cfg >= 1) {
 		scc_socket_open(dfcyc, port, cfg);
 	}
@@ -435,6 +441,9 @@ scc_get_serial_status(int get_status, int port)
 		break;
 	case 4:
 		str = "ImageWriter II printer";
+		break;
+	case 5:
+		str = "PostScript printer";
 		break;
 	case 3:
 		snprintf(buf, 80, "Opened %d, sockfd:%d", 6501 + port,
@@ -522,6 +531,8 @@ scc_try_to_empty_writebuf(dword64 dfcyc, int port)
 #endif
 	} else if(cur_state == 4) {
 		scc_printer_empty_writebuf(dfcyc, port);
+	} else if(cur_state == 5) {
+		scc_ps_empty_writebuf(dfcyc, port);
 	} else if(cur_state >= 1) {
 		scc_socket_empty_writebuf(dfcyc, port);
 	}
@@ -566,6 +577,8 @@ scc_try_fill_readbuf(dword64 dfcyc, int port)
 #endif
 	} else if(cur_state == 4) {
 		scc_printer_fill_readbuf(dfcyc, port, space_left);
+	} else if(cur_state == 5) {
+		scc_ps_fill_readbuf(dfcyc, port, space_left);
 	} else if(cur_state >= 1) {
 		scc_socket_fill_readbuf(dfcyc, port, space_left);
 	}

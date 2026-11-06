@@ -71,7 +71,7 @@ usage(void)
 "  <img or folder>                put in the first free fitting drive\n"
 "\n"
 "Slots (-slN <card>):\n"
-"  -sl1  imagewriter | modem | none   printer port\n"
+"  -sl1  imagewriter | postscript | modem | none   printer port\n"
 "  -sl2  modem | imagewriter | none   modem port\n"
 "  -sl3  uthernet2 | voc | none\n"
 "  -sl4  mockingboard | uthernet2 | none\n"
@@ -160,6 +160,9 @@ slot_option(int slot, const char *card)
 		if(is(card, "imagewriter") || is(card, "printer") ||
 						is(card, "iw2")) {
 			emit2(name, "4");
+		} else if(is(card, "postscript") || is(card, "laserwriter") ||
+						is(card, "ps")) {
+			emit2(name, "5");
 		} else if(is(card, "modem") || is(card, "null_modem")) {
 			emit2(name, "1");
 		} else if(is(card, "none") || is(card, "")) {

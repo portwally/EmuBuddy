@@ -1367,7 +1367,7 @@ sdl_apply_cli(void)
 		ui_insert_auto(emubuddy_cli_later(i));
 	}
 	if(g_config_session_only) {
-		ui_message("Command-line settings: changes in this run aren't saved");
+		ui_message("Command-line settings (not saved)");
 	}
 }
 

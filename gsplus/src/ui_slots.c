@@ -21,20 +21,20 @@ void		scc_config_changed(int port, int cfg_changed, int remote_changed,
 
 typedef struct {
 	const char	*name;		/* what the slot is for */
-	const char	*labels[3];
+	const char	*labels[4];
 	int		n;		/* number of choices, 0 = fixed */
 	unsigned	enabled;	/* bit i: choice i selectable */
 	const char	*fixed;		/* text for fixed slots */
 } SlotDef;
 
 static const SlotDef g_slots[7] = {
-	{ "Printer Port", { "Idle", "Virtual Modem", "ImageWriter" }, 3, 7, NULL },
-	{ "Modem Port", { "Idle", "Virtual Modem", NULL }, 2, 3, NULL },
-	{ "Network", { "Empty", "Video Overlay", "Uthernet II" }, 3, 7, NULL },
-	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II" }, 3, 7, NULL },
-	{ "3.5\" Drives", { NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
-	{ "5.25\" Drives", { NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
-	{ "Storage", { "Empty", "SCSI Card", NULL }, 2, 3, NULL },
+	{ "Printer Port", { "Idle", "Modem", "ImageWriter", "PostScript" }, 4, 15, NULL },
+	{ "Modem Port", { "Idle", "Modem", NULL, NULL }, 2, 3, NULL },
+	{ "Network", { "Empty", "Video Overlay", "Uthernet II", NULL }, 3, 7, NULL },
+	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II", NULL }, 3, 7, NULL },
+	{ "3.5\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
+	{ "5.25\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
+	{ "Storage", { "Empty", "SCSI Card", NULL, NULL }, 2, 3, NULL },
 };
 
 static UiWindow	g_slots_win;
@@ -46,7 +46,8 @@ static int
 slot_current(int i)
 {
 	switch(i) {
-	case 0: return g_serial_cfg[0] == 4 ? 2 : g_serial_cfg[0] == 1 ? 1 :
+	case 0: return g_serial_cfg[0] == 5 ? 3 : g_serial_cfg[0] == 4 ? 2 :
+						g_serial_cfg[0] == 1 ? 1 :
 						(g_serial_cfg[0] == 0 ? 0 : -1);
 	case 1: return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
 	case 2: return g_uthernet2_slot == 3 ? 2 : (g_voc_enable ? 1 : 0);
@@ -86,8 +87,9 @@ apply(void)
 
 	for(p = 0; p < 2; p++) {
 		if(g_pend[p] != slot_current(p) && g_pend[p] >= 0) {
-			/* choice 2 = ImageWriter = serial mode 4 */
-			g_serial_cfg[p] = (g_pend[p] == 2) ? 4 : g_pend[p];
+			/* choice 2 = ImageWriter (mode 4), 3 = PostScript (mode 5) */
+			g_serial_cfg[p] = (g_pend[p] == 2) ? 4 :
+					(g_pend[p] == 3) ? 5 : g_pend[p];
 			scc_config_changed(p, 1, 0, 0);	/* reopen in new mode */
 			if(g_pend[p] == 0) {
 				/* Idle: no real device either */

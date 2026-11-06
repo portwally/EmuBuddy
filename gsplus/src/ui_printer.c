@@ -68,6 +68,42 @@ printer_page_done(const unsigned char *pixels, int w, int h, int pitch,
 	}
 }
 
+/* A finished page that is already RGB (from the PostScript printer). */
+void
+printer_page_done_rgb(const unsigned char *rgb, int w, int h, int dpi)
+{
+	Page	*p;
+	size_t	n = (size_t)w * h * 3, i;
+	int	color = 0;
+
+	if(g_npages == MAX_PAGES) {
+		ui_message("Printer: page limit reached - clear some pages");
+		return;
+	}
+	p = &g_pages[g_npages];
+	p->rgb = malloc(n);
+	if(!p->rgb) {
+		return;
+	}
+	memcpy(p->rgb, rgb, n);
+	for(i = 0; i < n; i += 3) {
+		if(rgb[i] != rgb[i + 1] || rgb[i + 1] != rgb[i + 2]) {
+			color = 1;
+			break;
+		}
+	}
+	p->w = w;
+	p->h = h;
+	p->dpi = dpi;
+	p->color = color;
+	p->tex = NULL;
+	g_cur = g_npages++;
+	ui_message("Printed page %d", g_npages);
+	if(!g_printer_win.open) {
+		ui_printer_toggle();
+	}
+}
+
 static void
 clear_pages(void)
 {
