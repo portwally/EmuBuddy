@@ -130,6 +130,8 @@ Set/Remove Picture.
 
 **Capitals (done):** the Arcade view draws all its text in capitals (display only; profile names are unchanged; Classic and the dialogs keep normal case). Font stays Figtree.
 
+**All drives (done):** the full editor (Edit > More settings) now has all 7 hard disks, both 3.5" drives and both 5.25" drives (two columns: hard disks | floppies and folders), each with Lib, ... and X. Dropped disks go to the first free hard disk.
+
 **Not done yet:** portrait layout; German texts;
 automatic snapshot when EmuBuddy quits;
 JPG pictures (PNG and BMP load now).

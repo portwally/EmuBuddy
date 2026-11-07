@@ -542,11 +542,17 @@ static PathField g_pf[] = {
 	{ "hard1", "Hard disk 1", "", 0 },
 	{ "hard2", "Hard disk 2", "", 0 },
 	{ "hard3", "Hard disk 3", "", 0 },
-	{ "flop3", "3.5\" floppy", "", 0 },
-	{ "flop1", "5.25\" floppy", "", 0 },
+	{ "flop3", "3.5\" drive 1", "", 0 },
+	{ "flop1", "5.25\" drive 1", "", 0 },
 	{ "share", "Shared folder", "", 1 },
 	{ "bridge", "Bridge folder", "", 1 },
 	{ "cover", "Cover picture", "", 0 },
+	{ "hard4", "Hard disk 4", "", 0 },
+	{ "hard5", "Hard disk 5", "", 0 },
+	{ "hard6", "Hard disk 6", "", 0 },
+	{ "hard7", "Hard disk 7", "", 0 },
+	{ "flop4", "3.5\" drive 2", "", 0 },
+	{ "flop2", "5.25\" drive 2", "", 0 },
 };
 #define NPF	((int)(sizeof(g_pf) / sizeof(g_pf[0])))
 
@@ -728,22 +734,50 @@ edit_draw(UiWindow *win, int cx, int cy)
 		field(win, cx, cy, dx + dl, y, win->w - 2 - 10 - dx - dl, g_e.desc, sizeof(g_e.desc));
 	}
 	y += 30;
-	for(i = 0; i < NPF; i++) {
-		PathField *f = &g_pf[i];
-		int end = (f->folder || i >= 6) ? fend_dir : fend_file;
+	{
+		/* ROM on its own row, then two columns: the 7 hard disks | the 4 floppy drives and the folders */
+		static const int left[] = { 1, 2, 3, 9, 10, 11, 12 }, right[] = { 4, 13, 5, 14, 6, 7, 8 };
+		int	colw = (win->w - 2 - 20 - 12) / 2, c, r, bl = text_w("Lib", 36), bc = text_w("...", 30), bx = 24;
 
-		ui_draw_text(cx + 10, cy + y + 1, f->label, UI_BLACK);
-		field(win, cx, cy, lc, y, end - lc, f->buf, sizeof(f->buf));
-		if(!f->folder && i < 6 && ui_button(win, cx, cy, xlib, y - 1, bw_lib, 20, "Library", 1)) {
-			lib_open(i == 0 ? LIB_ROM : LIB_DISK, f->buf, (int)sizeof(f->buf));
+		/* a narrower label column for the two-column part */
+		int	lw = 10;
+
+		for(i = 1; i < NPF; i++) {
+			lw = SDL_max(lw, ui_text_width(g_pf[i].label) + 14);
+		}
+		ui_draw_text(cx + 10, cy + y + 1, g_pf[0].label, UI_BLACK);
+		field(win, cx, cy, lc, y, fend_file - lc, g_pf[0].buf, sizeof(g_pf[0].buf));
+		if(ui_button(win, cx, cy, xlib, y - 1, bw_lib, 20, "Library", 1)) {
+			lib_open(LIB_ROM, g_pf[0].buf, (int)sizeof(g_pf[0].buf));
 		}
 		if(ui_button(win, cx, cy, xch, y - 1, bw_choose, 20, "Choose...", 1)) {
-			choose(f);
+			choose(&g_pf[0]);
 		}
-		if(ui_button(win, cx, cy, xclr, y - 1, 30, 20, "X", f->buf[0] != 0)) {
-			f->buf[0] = 0;
+		if(ui_button(win, cx, cy, xclr, y - 1, 30, 20, "X", g_pf[0].buf[0] != 0)) {
+			g_pf[0].buf[0] = 0;
 		}
-		y += 24;
+		y += 28;
+		for(c = 0; c < 2; c++) {
+			int	x0 = 10 + c * (colw + 12), xx = x0 + colw - bx, xc = xx - 2 - bc, xl = xc - 2 - bl;
+
+			for(r = 0; r < 7; r++) {
+				PathField *f = &g_pf[c ? right[r] : left[r]];
+				int	yy = y + r * 24, disk = !f->folder && strcmp(f->key, "cover") != 0;
+
+				ui_draw_text(cx + x0, cy + yy + 1, f->label, UI_BLACK);
+				field(win, cx, cy, x0 + lw, yy, (disk ? xl : xc) - 4 - x0 - lw, f->buf, sizeof(f->buf));
+				if(disk && ui_button(win, cx, cy, xl, yy - 1, bl, 20, "Lib", 1)) {
+					lib_open(LIB_DISK, f->buf, (int)sizeof(f->buf));
+				}
+				if(ui_button(win, cx, cy, xc, yy - 1, bc, 20, "...", 1)) {
+					choose(f);
+				}
+				if(ui_button(win, cx, cy, xx, yy - 1, bx, 20, "X", f->buf[0] != 0)) {
+					f->buf[0] = 0;
+				}
+			}
+		}
+		y += 7 * 24;
 	}
 	y += 6;
 	ui_hline(cx + 10, cy + y, win->w - 22, UI_LGREY);
@@ -806,9 +840,11 @@ edit_drop(UiWindow *win, int x, int y, const char *path)
 	} else if(info.size <= 1600000) {
 		slot = 4;
 	} else {
-		for(int i = 1; i <= 3 && slot < 0; i++) {
-			if(!g_pf[i].buf[0]) {
-				slot = i;
+		static const int hd[] = { 1, 2, 3, 9, 10, 11, 12 };
+
+		for(int i = 0; i < 7 && slot < 0; i++) {
+			if(!g_pf[hd[i]].buf[0]) {
+				slot = hd[i];
 			}
 		}
 		if(slot < 0) {
@@ -1690,8 +1726,10 @@ lib_draw(UiWindow *win, int cx, int cy)
 	static const char *keys[][2] = { { "rom", "ROM" }, { "ramsize", "Memory" },
 		{ "mhz", "Speed" }, { "sl1", "Slot 1" }, { "sl2", "Slot 2" }, { "sl3", "Slot 3" },
 		{ "sl4", "Slot 4" }, { "sl7", "Slot 7" }, { "hard1", "Hard disk 1" },
-		{ "hard2", "Hard disk 2" }, { "hard3", "Hard disk 3" }, { "flop3", "3.5\" floppy" },
-		{ "flop1", "5.25\" floppy" }, { "share", "Shared folder" }, { "scale", "Window size" },
+		{ "hard2", "Hard disk 2" }, { "hard3", "Hard disk 3" }, { "hard4", "Hard disk 4" },
+		{ "hard5", "Hard disk 5" }, { "hard6", "Hard disk 6" }, { "hard7", "Hard disk 7" },
+		{ "flop3", "3.5\" drive 1" }, { "flop4", "3.5\" drive 2" },
+		{ "flop1", "5.25\" drive 1" }, { "flop2", "5.25\" drive 2" }, { "share", "Shared folder" }, { "scale", "Window size" },
 		{ NULL, NULL } };
 	int	i, y = 10, r;
 
