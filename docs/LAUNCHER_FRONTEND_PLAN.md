@@ -128,6 +128,8 @@ Set/Remove Picture.
 
 **Idle slideshow (done):** after 60 seconds without input (and no menu or dialog open) the Arcade row moves to a random game every 5 seconds; any key, click, wheel or controller input stops it. View > Idle Slideshow switches it off (`idle = 60` or `0` in Launcher.settings). Test aid: `LAUNCHER_IDLE=<seconds>`.
 
+**Capitals (done):** the Arcade view draws all its text in capitals (display only; profile names are unchanged; Classic and the dialogs keep normal case). Font stays Figtree.
+
 **Not done yet:** portrait layout; German texts;
 automatic snapshot when EmuBuddy quits;
 JPG pictures (PNG and BMP load now).
