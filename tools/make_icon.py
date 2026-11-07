@@ -37,14 +37,10 @@ def rect(x0, y0, x1, y1, c):
             put(x, y, c)
 
 
-# rounded-square background, filling the whole canvas (no margin)
+# the blue background fills the whole square, no rounded corners and no margin: macOS masks the
+# icon itself, and transparent corners would show up as a white plate around it
 def background():
-    for y in range(0, 32):
-        for x in range(0, 32):
-            dx = max(6 - x, x - 25, 0)
-            dy = max(6 - y, y - 25, 0)
-            if dx * dx + dy * dy <= 36:
-                put(x, y, BLUE)
+    rect(0, 0, 31, 31, BLUE)
 
 
 background()
