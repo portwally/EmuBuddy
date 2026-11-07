@@ -8,8 +8,9 @@ A program such as a file manager can use it to copy files and folders between an
 
 ## Calling it
 
-The call is the CPU instruction **`WDM $EB,$00`** (the bytes `42 EB 00`). On a real IIgs WDM does nothing, so a program
-finds out whether the bridge exists by presetting the status word to `$FFFF` and checking it afterwards.
+The call is the CPU instruction **`WDM $EB`** followed by a **NOP** (the bytes `42 EB EA`). WDM is a 2-byte instruction
+that does nothing on a real IIgs or in MAME, so the NOP is simply run there. (Earlier versions used `42 EB 00`, which
+EmuBuddy still accepts, but the `00` is a BRK on any other CPU and crashed into the monitor.) A program finds out whether the bridge exists by presetting the status word to `$FFFF` and checking it afterwards.
 
 - Native mode, 16-bit accumulator.
 - **DB:A** is the address of a *parameter block* (A = 16-bit offset, DB = bank).

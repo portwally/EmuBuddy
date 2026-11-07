@@ -30,7 +30,7 @@ BCall       sta   Block
             lda   #$FFFF
             sta   Block+2
             lda   #Block
-            dfb   $42,$EB,$00      ; WDM $EB,$00 : DB:A = the block
+            dfb   $42,$EB,$EA      ; WDM $EB + NOP : DB:A = the block (no BRK byte: safe in MAME and on a real IIgs)
             lda   Block+2
             rts
 

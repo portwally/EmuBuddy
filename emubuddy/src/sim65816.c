@@ -1947,7 +1947,7 @@ bridge_mem_wr(unsigned long addr, unsigned val)
 void
 do_wdm(word32 arg)
 {
-	if(arg == 0x00eb) {
+	if((arg & 0xff) == 0xeb) {		/* WDM $EB,$00 (old) or WDM $EB + a NOP (safe on other CPUs) */
 		bridge_set_memory(bridge_mem_rd, bridge_mem_wr);
 		bridge_command(((unsigned long)engine.dbank << 16) |
 							(engine.acc & 0xffff));
