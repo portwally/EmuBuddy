@@ -280,11 +280,36 @@ vgrad(float x, float y, float w, float h, Uint32 c, int a0, int a1)
 	SDL_RenderGeometry(g_r, NULL, v, 4, idx, 6);
 }
 
+/* The Arcade view shows everything in capitals (display only; ASCII and Latin-1 letters). */
+static const char *
+upper(const char *s, char *out, size_t size)
+{
+	size_t	i = 0;
+
+	for(; *s && i + 1 < size; s++, i++) {
+		unsigned char c = (unsigned char)*s;
+
+		if(c >= 'a' && c <= 'z') {
+			out[i] = (char)(c - 32);
+		} else if(c == 0xC3 && (unsigned char)s[1] >= 0xA0 && (unsigned char)s[1] <= 0xBE && (unsigned char)s[1] != 0xB7 && i + 2 < size) {
+			out[i++] = (char)c;
+			s++;
+			out[i] = (char)((unsigned char)*s - 0x20);
+		} else {
+			out[i] = (char)c;
+		}
+	}
+	out[i] = 0;
+	return out;
+}
+
 static void
 text(UiFont *f, int x, int y, const char *s, Uint32 c, int a)
 {
+	char	u[400];
+
 	ui_font_set(f);
-	ui_draw_text_a(x, y, s, c, a);
+	ui_draw_text_a(x, y, upper(s, u, sizeof(u)), c, a);
 	ui_font_set(NULL);
 }
 
@@ -292,9 +317,10 @@ static int
 text_w(UiFont *f, const char *s)
 {
 	int w;
+	char	u[400];
 
 	ui_font_set(f);
-	w = ui_text_width(s);
+	w = ui_text_width(upper(s, u, sizeof(u)));
 	ui_font_set(NULL);
 	return w;
 }
