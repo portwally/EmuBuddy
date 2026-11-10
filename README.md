@@ -183,7 +183,7 @@ stay square.
 
 In the **File** menu:
 
-- **Save Screenshot** (F10) saves the IIgs picture to your Pictures folder.
+- **Save Screenshot** (F10) saves the IIgs picture to your Desktop.
 - **Save Window Screenshot** (Shift-F10) saves the whole window, with menu bar and windows.
 - **Record Video** (Ctrl-F10) starts and stops an MP4 recording with sound, saved in your Movies folder. The status
   bar shows REC and the time. Recording needs [FFmpeg](https://ffmpeg.org) (if it is missing, a window shows how to

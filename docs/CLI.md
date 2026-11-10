@@ -102,7 +102,7 @@ View > Window Size 1x / 2x / 3x / 4x resizes the window; sizes that don't fit th
 
 ## Screenshots and video
 
-File menu: **Save Screenshot** (F10, the IIgs picture only, to your Pictures folder), **Save Window Screenshot**
+File menu: **Save Screenshot** (F10, the IIgs picture only, to your Desktop), **Save Window Screenshot**
 (Shift-F10, with menu bar and windows) and **Record Video** (Ctrl-F10, MP4 with sound, to your Movies folder;
 the status bar shows REC and the time). Recording needs FFmpeg (`brew install ffmpeg`, `winget install ffmpeg`
 or `sudo apt install ffmpeg`); if it is missing, a window explains it. Quitting while recording saves the file.

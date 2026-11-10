@@ -1343,7 +1343,7 @@ sdl_build_screenshot_path(char *buf, size_t buflen, const char *kind)
 		const char *sep = (g_cfg_ssdir[len - 1] == '/') ? "" : "/";
 		snprintf(buf, buflen, "%s%s%s", g_cfg_ssdir, sep, fname);
 	} else {
-		const char *pics = SDL_GetUserFolder(SDL_FOLDER_PICTURES);
+		const char *pics = SDL_GetUserFolder(SDL_FOLDER_DESKTOP);
 
 		snprintf(buf, buflen, "%s%s", pics ? pics : "", fname);
 	}
@@ -1858,7 +1858,7 @@ sdl_save_screenshot(Window_info *win, int whole)
 	} else {
 		const char *base = strrchr(path, '/');
 
-		ui_message("Saved to Pictures: %s", base ? base + 1 : path);
+		ui_message("Saved to Desktop: %s", base ? base + 1 : path);
 		printf("Screenshot saved: %s (%dx%d)\n", path, w, h);
 	}
 }
