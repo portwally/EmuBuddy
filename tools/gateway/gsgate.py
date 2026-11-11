@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GSGate: a web gateway for Apple IIgs browsers (step 1: text only).
+"""GSGate: a web gateway for Apple IIgs browsers.
 
 It works as an ordinary HTTP proxy. The IIgs browser asks it for a page; it fetches the page (HTTP or
 HTTPS), throws away scripts, styles and everything else an old browser can't use, and answers with a
@@ -7,7 +7,9 @@ small, strict HTML page. Files that are not pages are passed through unchanged.
 
     python3 gsgate.py                 listen on port 8080, serve this computer only (emulators)
     python3 gsgate.py --lan           also serve other machines in the home network (a real IIgs)
-    python3 gsgate.py --port 3128
+    python3 gsgate.py --port 6502
+
+On a Raspberry Pi or a NAS: see README.md next to this file (gsgate.service, Dockerfile).
 
 An emulator that starts the gateway itself uses:
     --bind 127.0.0.1        listen on this computer only, invisible to the network
@@ -39,12 +41,13 @@ import gspic  # noqa: E402
 
 PIC_HOST = "gsgate.invalid"     # pictures are asked for at this made-up host; only the gateway answers it
 
-VERSION = "0.5"
-FORMAT = "1"                    # version of the mini page format (the contract with the browser)
+VERSION = "0.7"
+FORMAT = "2"                    # version of the mini page format (2: forms and tables, for a browser that asks)
 MAX_FETCH = 3 * 1024 * 1024     # largest page we read
 MAX_PASS = 40 * 1024 * 1024     # largest download we pass through
 MAX_PAGE = 48 * 1024            # largest page we send to the IIgs
 TIMEOUT = 20
+MAX_COLS = 6                    # columns of a table we lay out; wider ones become lines of text
 MAX_PROBE = 24                  # pictures whose size we look up for one page (what the browser shows of them)
 PROBE_TIME = 6                  # seconds we wait for those sizes, all pictures together
 ALIAS = None                    # the emulated IIgs's address for this computer (--alias)
@@ -82,23 +85,49 @@ def esc(text):
     return plain(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def attr(text):
+    """Text as the value of an attribute."""
+    return esc(text).replace('"', "&quot;")
+
+
+# How wide Peel draws the characters ' ' to '~' (the IIgs system font in 640 mode, read out of Peel itself).
+# The gateway needs them to give a table's columns their widths.
+CHAR_W = [4, 6, 8, 8, 8, 8, 9, 6, 7, 7, 7, 8, 5, 8, 4, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 5, 7, 8, 7, 8,
+          8, 8, 8, 8, 8, 7, 7, 8, 8, 8, 8, 9, 8, 9, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 8, 8, 8, 6, 8, 6, 8, 8,
+          5, 8, 8, 8, 8, 8, 7, 8, 8, 6, 7, 8, 8, 9, 8, 8, 8, 8, 7, 8, 8, 8, 9, 9, 8, 8, 8, 8, 6, 8, 9]
+
+
+def text_width(text, bold=False):
+    """Pixels the text takes in Peel's page (bold: a pixel more for each character)."""
+    return sum(CHAR_W[ord(c) - 32] if 32 <= ord(c) < 127 else 8 for c in text) + (len(text) if bold else 0)
+
+
 # ---- the page converter ----
 
 SKIP = {"script", "style", "noscript", "svg", "canvas", "iframe", "object", "embed", "video", "audio",
-        "template", "form", "button", "select", "textarea", "dialog", "map", "picture", "source", "head"}
+        "template", "button", "select", "textarea", "dialog", "map", "picture", "source", "head"}
 CHROME = {"nav", "header", "footer", "aside"}       # page furniture: kept out of the text, links collected
 BLOCK = {"p", "div", "section", "article", "main", "figure", "figcaption", "address", "details",
-         "summary", "dl", "dt", "dd", "fieldset", "table", "tbody", "thead", "tfoot", "caption"}
+         "summary", "dl", "dt", "dd", "fieldset", "table", "tbody", "thead", "tfoot", "caption", "form"}
+TEXT_INPUT = {"text", "search", "email", "url", "tel", "number"}
 VOID = {"br", "hr", "img", "input", "meta", "link", "area", "base", "col", "wbr", "source", "track", "embed"}
 INLINE = {"b": "B", "strong": "B", "i": "I", "em": "I", "cite": "I", "u": "U", "ins": "U"}
 
 
 class Converter(HTMLParser):
-    def __init__(self, base, main_only, pics=None, pic_width=600):
+    def __init__(self, base, main_only, pics=None, pic_width=600, forms=False, tables=False, flat=()):
         super().__init__(convert_charrefs=True)
         self.base = base
         self.pics = pics            # None: no pictures (Webber); "640": pictures for the page window
         self.pic_width = pic_width
+        self.want_forms = forms     # the browser can show a form's text box (Peel 1.1)
+        self.want_tables = tables   # and lay out a table whose cells have widths
+        self.flat = flat            # tables (by number) that are not simple enough: lines of text, as before
+        self.tcount = 0             # tables met so far
+        self.tbl = None             # the table being collected
+        self.bad_tables = set()     # tables that turned out not simple enough
+        self.forms = []             # every form met
+        self.form = None            # the open one (its number)
         self.pending = []           # (address, alt) of pictures whose size the page does not state
         self.main_only = main_only  # the page has <main>/<article>: keep only what is inside
         self.out = []               # finished pieces of the page
@@ -133,9 +162,15 @@ class Converter(HTMLParser):
         self.out.append(s)
 
     def flush(self, tag="P"):
+        if self.tbl is not None:    # in a table that is being collected: a new line in its cell
+            if self.tbl["cell"] is not None:
+                self.cell_break()
+            else:
+                self.line = []
+            return
         text = re.sub(r"[ \t\r\n]+", " ", "".join(self.line)).strip()
         self.line = []
-        if "<IMG" not in text and not re.sub(r"<[^>]+>", "", text).strip(" |*-"):
+        if "<IMG" not in text and "<FORMINPUT" not in text and not re.sub(r"<[^>]+>", "", text).strip(" |*-"):
             return                  # nothing, or only the separators of empty table cells
         if tag:
             self.emit("<%s>%s</%s>\n" % (tag, text, tag))
@@ -161,6 +196,14 @@ class Converter(HTMLParser):
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         kind = None
+        if tag == "table":
+            self.tcount += 1
+        if tag == "form":
+            self.form_end()         # (forms are not nested)
+            if self.want_forms and not self.skip:
+                self.form_start(a)
+        elif self.form is not None and tag in ("input", "select", "option", "textarea", "button"):
+            self.form_field(tag, a)
         if tag == "title" and not self.title:
             self.in_title = True
         elif tag in SKIP:
@@ -194,6 +237,13 @@ class Converter(HTMLParser):
                     self.line.append('<A HREF="%s">' % url)
             return
         if not self.visible():
+            return
+        if self.tbl is not None:
+            if self.table_tag(tag, a):
+                return
+        elif tag == "table" and self.want_tables and self.tcount not in self.flat:
+            self.flush()
+            self.tbl = {"idx": self.tcount, "rows": [], "row": None, "cell": None, "bad": False, "depth": 0}
             return
         if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
             self.flush()
@@ -232,7 +282,8 @@ class Converter(HTMLParser):
             self.line.append("\n" if self.pre else "<BR>")
         elif tag == "hr":
             self.flush()
-            self.emit("<HR>\n")
+            if self.tbl is None:
+                self.emit("<HR>\n")
         elif tag == "img":
             alt = (a.get("alt") or "").strip()
             tagtext = self.picture(a, alt) if self.pics else None
@@ -287,6 +338,8 @@ class Converter(HTMLParser):
             self.close_one(*self.stack.pop())
 
     def close_one(self, top, kind):
+        if top == "form":
+            self.form_end()
         if kind == "skip":
             self.skip -= 1
             return
@@ -308,7 +361,9 @@ class Converter(HTMLParser):
                 self.href = None
             return
         if self.visible():
-            if top in ("h1", "h2", "h3"):
+            if self.tbl is not None and self.table_close(top):
+                pass
+            elif top in ("h1", "h2", "h3"):
                 self.flush(top.upper())
             elif top in ("h4", "h5", "h6"):
                 self.line = ["<B>", "".join(self.line), "</B>"]
@@ -341,6 +396,219 @@ class Converter(HTMLParser):
         if kind == "main":
             self.inmain -= 1
 
+    # -- tables --
+    def cell_break(self):
+        """A new line inside the cell being collected."""
+        if "".join(self.line).strip() and self.line[-1] != "<BR>":
+            self.line.append("<BR>")
+
+    def cell_end(self):
+        t = self.tbl
+        if t["cell"] is not None:
+            text = re.sub(r"[ \t\r\n]+", " ", "".join(self.line))
+            text = re.sub(r"^(\s|<BR>)+|(\s|<BR>)+$", "", text)
+            if "<IMG" not in text and not re.sub(r"<[^>]+>", "", text).strip():
+                text = ""           # (only an empty link, or nothing)
+            t["cell"]["html"] = re.sub(r"\s*<BR>\s*", "<BR>", text)
+            t["cell"] = None
+        self.line = []
+
+    def table_tag(self, tag, a):
+        """A tag that opens inside the table being collected. True: it is dealt with."""
+        t = self.tbl
+        if tag == "table":          # a table in a table: not a simple one
+            t["bad"] = True
+            t["depth"] += 1
+            return True
+        if t["depth"]:
+            return True
+
+        def span(name):
+            try:
+                return max(1, min(50, int(a.get(name) or 1)))
+            except ValueError:
+                return 1
+
+        if tag == "tr":
+            self.cell_end()
+            t["row"] = []
+            t["rows"].append(t["row"])
+            return True
+        if tag in ("td", "th"):
+            self.cell_end()
+            if t["row"] is None:
+                t["row"] = []
+                t["rows"].append(t["row"])
+            if span("rowspan") > 1:
+                t["bad"] = True
+            t["cell"] = {"th": tag == "th", "span": span("colspan"), "html": ""}
+            t["row"].append(t["cell"])
+            return True
+        if tag == "li":
+            self.cell_break()
+            self.line.append("* ")
+            return True
+        if tag in BLOCK or tag in ("ul", "ol", "menu", "pre", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6"):
+            self.cell_break()
+            return True
+        return False
+
+    def table_close(self, top):
+        t = self.tbl
+        if top == "table":
+            if t["depth"]:
+                t["depth"] -= 1
+            else:
+                self.table_end()
+            return True
+        if t["depth"]:
+            return True
+        if top == "tr":
+            self.cell_end()
+            t["row"] = None
+            return True
+        if top in ("td", "th"):
+            self.cell_end()
+            return True
+        if top in BLOCK or top in ("ul", "ol", "menu", "li", "pre", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6"):
+            self.cell_break()
+            return True
+        return False
+
+    def table_end(self):
+        t = self.tbl
+        self.cell_end()
+        self.tbl = None
+        pieces = None if t["bad"] else table_markup(t["rows"], self.pic_width)
+        if pieces is None:          # not simple enough: the page is read again with this table as text
+            self.bad_tables.add(t["idx"])
+            return
+        for piece in pieces:
+            self.emit(piece)
+
+    # -- forms --
+    def form_start(self, a):
+        url = urllib.parse.urljoin(self.base, (a.get("action") or "").strip())
+        f = {"action": urllib.parse.urldefrag(url)[0], "method": (a.get("method") or "get").strip().lower(),
+             "hidden": [], "texts": [], "submit": None, "select": None, "bad": False, "inline": False}
+        self.forms.append(f)
+        self.form = len(self.forms) - 1
+        if self.visible() and self.tbl is None:
+            self.flush()
+            self.emit("<FORMSTART %d>\n" % self.form)
+            f["inline"] = True
+
+    def select_end(self, f):
+        sel = f["select"]
+        f["select"] = None
+        if sel and sel["name"]:     # (its field keeps the place the select has in the form)
+            value = sel["chosen"] if sel["chosen"] is not None else sel["first"]
+            f["hidden"][sel["at"]] = (sel["name"], value)
+
+    def form_field(self, tag, a):
+        f = self.forms[self.form]
+        name = a.get("name")
+        if tag == "input":
+            kind = (a.get("type") or "text").strip().lower()
+            if kind in TEXT_INPUT:
+                if not name:
+                    return
+                label = a.get("placeholder") or a.get("aria-label") or a.get("title") or ""
+                try:
+                    size = int(a.get("size") or 0)
+                except ValueError:
+                    size = 0
+                f["texts"].append({"name": name, "value": a.get("value") or "", "size": size, "label": label,
+                                   "search": kind == "search"})
+                if f["inline"] and len(f["texts"]) == 1 and self.visible() and self.tbl is None:
+                    self.line.append("<FORMINPUT %d>" % self.form)
+            elif kind == "hidden":
+                if name:
+                    f["hidden"].append((name, a.get("value") or ""))
+            elif kind in ("checkbox", "radio"):
+                if name and "checked" in a:
+                    f["hidden"].append((name, a.get("value") or "on"))
+            elif kind == "submit":
+                if f["submit"] is None:
+                    f["submit"] = (name, a.get("value") or "")
+            elif kind in ("password", "file"):
+                f["bad"] = True     # a login, an upload: not a search box
+        elif tag == "button":
+            if (a.get("type") or "submit").lower() == "submit" and f["submit"] is None:
+                f["submit"] = (name, a.get("value") or "")
+        elif tag == "textarea":
+            f["bad"] = True
+        elif tag == "select":
+            self.select_end(f)
+            f["select"] = {"name": name, "first": None, "chosen": None, "at": len(f["hidden"])}
+            if name:
+                f["hidden"].append((name, None))
+        elif tag == "option" and f["select"]:
+            if "value" not in a:
+                f["bad"] = True     # (its value would be its text)
+                return
+            if f["select"]["first"] is None:
+                f["select"]["first"] = a["value"]
+            if "selected" in a:
+                f["select"]["chosen"] = a["value"]
+
+    def form_end(self):
+        if self.form is None:
+            return
+        f = self.forms[self.form]
+        self.select_end(f)
+        if f["inline"]:
+            self.flush()
+            self.emit("<FORMEND %d>\n" % self.form)
+        self.form = None
+
+    def form_tags(self, f):
+        """(the FORM tag with its hidden fields, the INPUT tag) of a form with one text box, or None."""
+        if f["bad"] or len(f["texts"]) != 1 or f["method"] not in ("get", "post"):
+            return None
+        if not f["action"].lower().startswith(("http://", "https://")):
+            return None
+        box = f["texts"][0]
+        if not (f["submit"] or box["search"] or box["label"].strip()):
+            return None             # (a box without a button or a word about it is not meant for the reader)
+        hidden = [(n, v) for n, v in f["hidden"] if v is not None]
+        if f["submit"] and f["submit"][0]:
+            hidden.append(f["submit"])
+        if f["method"] == "post":   # the gateway sends it: the form's own address is the first field
+            action = "http://%s/post" % PIC_HOST
+            hidden.insert(0, ("u", f["action"]))
+        else:
+            action = self.link(f["action"].split("?")[0])
+            if not action:
+                return None
+        head = '<FORM ACTION="%s">' % action
+        head += "".join('<INPUT TYPE="hidden" NAME="%s" VALUE="%s">' % (attr(n), attr(v)) for n, v in hidden)
+        size = max(10, min(40, box["size"] or 24))
+        box_tag = '<INPUT NAME="%s" VALUE="%s" SIZE="%d"' % (attr(box["name"]), attr(box["value"]), size)
+        if box["label"].strip():
+            box_tag += ' PLACEHOLDER="%s"' % attr(re.sub(r"\s+", " ", box["label"]).strip()[:60])
+        return head, box_tag + ">"
+
+    def fill_forms(self, body):
+        """The forms' place holders in the page become FORM and INPUT tags (or nothing, for a form that
+        is not a search box). Returns the page and the forms that are not in its text (page furniture)."""
+        top = []
+        for n, f in enumerate(self.forms):
+            tags = self.form_tags(f)
+            start, box, end = "<FORMSTART %d>\n" % n, "<FORMINPUT %d>" % n, "<FORMEND %d>\n" % n
+            if tags and box in body:
+                body = body.replace(start, tags[0] + "\n").replace(box, tags[1])
+                body = body.replace(end, "</FORM>\n")
+                continue
+            body = body.replace(start, "").replace(box, "").replace(end, "")
+            if tags and len(top) < 2:
+                label = (f["submit"][1] if f["submit"] else "") or "Search"
+                label = re.sub(r"\s+", " ", label).strip()[:30]
+                block = "%s\n<P>%s: %s</P>\n</FORM>\n" % (tags[0], esc(label), tags[1])
+                if block not in top:
+                    top.append(block)
+        return body, top
+
     def handle_data(self, data):
         if self.in_title:
             self.title += data
@@ -354,14 +622,22 @@ class Converter(HTMLParser):
         self.line.append(esc(data))
 
     def result(self, url):
+        if self.tbl is not None:    # (a table the page never closed)
+            self.table_end()
+        self.form_end()
         self.flush()
         while self.lists:
             self.emit("</%s>\n" % self.lists.pop())
         title = re.sub(r"\s+", " ", plain(self.title)).strip() or urllib.parse.urlsplit(url).netloc
-        body = "".join(self.out)
+        body, top_forms = self.fill_forms("".join(self.out))
+        body = re.sub(r"<(P|LI)>\s*</\1>\n", "", body)
         parts = ["<HTML>\n<HEAD>\n<TITLE>%s</TITLE>\n</HEAD>\n<BODY>\n" % esc(title)]
         if "<H1>" not in body[:600]:
             parts.append("<H1>%s</H1>\n" % esc(title))
+            parts.extend(top_forms)
+        elif top_forms:             # (the page has its own heading: the search box comes after that one)
+            at = body.find("</H1>\n") + 6
+            body = body[:at] + "".join(top_forms) + body[at:]
         parts.append(body if body.strip() else "<P>This page has no text that can be shown without scripts.</P>\n")
         if self.cut:
             parts.append("<HR>\n<P><I>The page was cut here because it is very long.</I></P>\n")
@@ -374,18 +650,96 @@ class Converter(HTMLParser):
         return "".join(parts)
 
 
-def convert(text, url, pics=None, pic_width=600, allow_lan=False):
-    """A web page as mini HTML (format 1)."""
+def table_markup(rows, total=600):
+    """A collected table as TABLE, TR and TD tags, each cell with its width in pixels, in pieces (a row
+    each). None: it is not a simple table (too many columns, too much in a cell, a picture of unknown
+    size), and is better shown as lines of text."""
+    rows = [r for r in rows if any(c["html"] for c in r)]
+    if not rows:
+        return []
+    ncols = max(sum(c["span"] for c in r) for r in rows)
+    used = [False] * ncols          # columns with nothing in them are left out
+    for r in rows:
+        col = 0
+        for c in r:
+            if c["html"]:
+                used[col:col + c["span"]] = [True] * len(used[col:col + c["span"]])
+            col += c["span"]
+    if not all(used):
+        kept = []
+        for r in rows:
+            col, row = 0, []
+            for c in r:
+                span = sum(used[col:col + c["span"]])
+                col += c["span"]
+                if span:
+                    row.append(dict(c, span=span))
+            kept.append(row)
+        rows, ncols = kept, sum(used)
+    if ncols < 2 or ncols > MAX_COLS:
+        return None
+    low = [16] * ncols              # what each column needs at least (its longest word), and would like
+    want = [16] * ncols             # (its longest line)
+    for r in rows:
+        col = 0
+        for c in r:
+            text = c["html"]
+            if "<IMG PENDING" in text or text.count("<BR>") > 12:
+                return None
+            pics = [int(w) for w in re.findall(r'<IMG [^>]*WIDTH="(\d+)"', text)]
+            lines = [html.unescape(re.sub(r"<[^>]+>", "", part)).strip()
+                     for part in re.sub(r"<IMG[^>]*>", "", text).split("<BR>")]
+            if sum(len(line) for line in lines) > 400:
+                return None         # a page laid out with a table, not a table of facts
+            bold = c["th"] or "<B>" in text
+            c_low = max([text_width(w, bold) for line in lines for w in line.split()] + pics + [0]) + 10
+            c_want = max([text_width(line, bold) for line in lines] + pics + [0]) + 10
+            if c["span"] == 1 and col < ncols:
+                low[col] = max(low[col], c_low)
+                want[col] = max(want[col], c_want)
+            elif max(pics + [0]) + 10 > total:
+                return None
+            col += c["span"]
+    if sum(low) > total:
+        return None
+    if sum(want) <= total:
+        widths = want
+    else:
+        spare, more = total - sum(low), [w - l for w, l in zip(want, low)]
+        widths = [l + spare * m // sum(more) for l, m in zip(low, more)]
+    out = ["<TABLE>\n"]
+    for r in rows:
+        col, cells = 0, []
+        for c in r:
+            if col >= ncols:
+                break
+            span = min(c["span"], ncols - col)
+            tag = "TH" if c["th"] else "TD"
+            cells.append('<%s WIDTH="%d">%s</%s>' % (tag, sum(widths[col:col + span]), c["html"], tag))
+            col += span
+        out.append("<TR>%s</TR>\n" % "".join(cells))
+    out.append("</TABLE>\n")
+    return out
+
+
+def convert(text, url, pics=None, pic_width=600, allow_lan=False, forms=False, tables=False):
+    """A web page as mini HTML (format 2; forms and tables only for a browser that asks for them)."""
     low = text.lower()
     main_only = bool(re.search(r"<(main|article)[\s>]|role=[\"']main[\"']", low))
     for attempt in (main_only, False):
-        c = Converter(url, attempt, pics, pic_width)
-        try:
-            c.feed(text)
-            c.close()
-        except Exception:           # a broken page must not stop the gateway
-            pass
-        page = c.result(url)
+        flat = set()
+        for again in range(6):      # (a table that is not simple is known only at its end)
+            # tables in tables, level after level: after five readings all of them are text
+            c = Converter(url, attempt, pics, pic_width, forms, tables and again < 5, frozenset(flat))
+            try:
+                c.feed(text)
+                c.close()
+            except Exception:       # a broken page must not stop the gateway
+                pass
+            page = c.result(url)
+            if not c.bad_tables:
+                break
+            flat |= c.bad_tables
         # if "main only" left almost nothing, the page marks its content differently: take everything
         if not attempt or len(re.sub(r"<[^>]+>", "", "".join(c.out))) > 200:
             break
@@ -462,9 +816,10 @@ def target_allowed(host, allow_lan):
         ip = ipaddress.ip_address(info[4][0])
         if str(ip) in mine and not ip.is_loopback:
             continue
-        if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+        if ip.is_loopback or ip.is_multicast or ip.is_unspecified:
             return False
-        if ip.is_private and not allow_lan:
+        # (a link-local address is one of the home network's too: a Mac's name.local has an fe80:: one)
+        if (ip.is_private or ip.is_link_local) and not allow_lan:
             return False
     return True
 
@@ -481,8 +836,9 @@ def decode(raw, ctype):
         return raw.decode("utf-8", "replace")
 
 
-def fetch(url):
-    """(final url, content type, body bytes, is_page). http is tried first; redirects to https are followed."""
+def fetch(url, data=None):
+    """(final url, content type, body bytes, is_page). http is tried first; redirects to https are followed.
+    data: a form's fields, to send them with POST."""
     last = None
     tries = [url]
     parts = urllib.parse.urlsplit(url)
@@ -492,8 +848,10 @@ def fetch(url):
     elif url.lower().startswith("http://"):
         tries.append("https://" + url[7:])
     for u in tries:
-        req = urllib.request.Request(u, headers={"User-Agent": AGENT, "Accept": "text/html,*/*;q=0.5",
-                                                 "Accept-Language": "en,de;q=0.7"})
+        headers = {"User-Agent": AGENT, "Accept": "text/html,*/*;q=0.5", "Accept-Language": "en,de;q=0.7"}
+        if data is not None:
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+        req = urllib.request.Request(u, data=data, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
                 ctype = r.headers.get("Content-Type", "application/octet-stream")
@@ -575,15 +933,38 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def client_wants(self):
-        """(picture kind or None, window width) from the header a picture-capable browser sends:
-        X-GSGate-Client: pictures=640; width=600"""
+        """What the browser can show, from the header Peel sends (a browser without it gets text only):
+        X-GSGate-Client: pictures=640; width=600; forms=1; tables=1"""
         opts = dict(p.strip().split("=", 1) for p in self.headers.get("X-GSGate-Client", "").split(";") if "=" in p)
         kind = opts.get("pictures")
         try:
             width = max(64, min(640, int(opts.get("width", "600"))))
         except ValueError:
             width = 600
-        return (kind if kind in ("320", "640") else None), width
+        return {"pics": kind if kind in ("320", "640") else None, "pic_width": width,
+                "forms": opts.get("forms") == "1", "tables": opts.get("tables") == "1"}
+
+    def send_post(self, url):
+        """A form sent with POST. The browser asks with GET (all it can do):
+        http://gsgate.invalid/post?u=<the form's address>&<its fields>"""
+        fields = urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query, keep_blank_values=True)
+        if not fields or fields[0][0] != "u" or not fields[0][1].lower().startswith(("http://", "https://")):
+            self.send_page(400, message("Can't send this form", "The form's address is missing."))
+            return
+        target = fields[0][1]
+        if not target_allowed(urllib.parse.urlsplit(target).hostname or "", self.server.lan):
+            self.send_page(403, message("Not allowed", "The gateway does not send forms to addresses inside "
+                                        "the home network."))
+            return
+        try:
+            result = fetch(target, urllib.parse.urlencode(fields[1:]).encode("ascii"))
+        except urllib.error.HTTPError as e:
+            self.send_page(e.code, message("The site answered with error %d" % e.code, "%s: %s" % (target, e.reason)))
+            return
+        except Exception as e:
+            self.send_page(502, message("Can't send the form", "%s: %s" % (target, getattr(e, "reason", e))))
+            return
+        self.send_result(*result)
 
     def send_picture(self, url):
         q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
@@ -634,7 +1015,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         host = urllib.parse.urlsplit(url).hostname or ""
         if host == PIC_HOST:
-            self.send_picture(url)
+            if urllib.parse.urlsplit(url).path == "/post":
+                self.send_post(url)
+            else:
+                self.send_picture(url)
             return
         if not target_allowed(host, self.server.lan):
             self.send_page(403, message("Not allowed", "The gateway does not open addresses inside the home "
@@ -649,11 +1033,15 @@ class Handler(BaseHTTPRequestHandler):
             reason = getattr(e, "reason", e)
             self.send_page(502, message("Can't open the page", "%s: %s" % (url, reason)))
             return
+        self.send_result(final, ctype, body, is_page)
+
+    def send_result(self, final, ctype, body, is_page):
+        """What was fetched goes to the browser: a page converted, a file as it is."""
         if is_page:
             if len(body) > MAX_FETCH:
                 body = body[:MAX_FETCH]
-            self.send_page(200, convert(decode(body, ctype), final, *self.client_wants(),
-                                        allow_lan=self.server.lan))
+            self.send_page(200, convert(decode(body, ctype), final, allow_lan=self.server.lan,
+                                        **self.client_wants()))
             return
         if len(body) > MAX_PASS:
             self.send_page(502, message("File too large", "The gateway passes files of up to 40 MB."))
@@ -672,7 +1060,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_page(501, message("Not supported", "Ask for http:// addresses; the gateway fetches https itself."))
 
     def do_POST(self):
-        self.send_page(501, message("Not supported", "Forms are not supported yet."))
+        self.send_page(501, message("Not supported", "The gateway takes forms only from Peel (a search box "
+                                    "it has put into a page)."))
 
 
 def watch_stdin():
@@ -706,8 +1095,13 @@ def main():
     srv.lan = args.lan
     mine = sorted(a for a in own_addresses() if not a.startswith("127."))
     print("GSGate %s on port %d" % (VERSION, args.port))
-    print("Proxy address for the IIgs browser: %s, port %d" % (ALIAS or (mine[0] if mine else "<this computer>"),
-                                                               args.port))
+    if not ALIAS and (os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")):
+        # in a container the gateway's own address is one nobody outside can use
+        print("Proxy address for the IIgs browser: the address of the machine this container runs on, "
+              "and the port published for it (%d unless you chose another)" % args.port)
+    else:
+        print("Proxy address for the IIgs browser: %s, port %d" % (ALIAS or (mine[0] if mine else "<this computer>"),
+                                                                   args.port))
     print("Serving: %s" % ("this computer and the home network" if args.lan else "this computer only (emulators)"))
     sys.stdout.flush()
     if args.watch_stdin:
