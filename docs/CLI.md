@@ -65,6 +65,7 @@ used when its slot is set to "Your Card" in the IIgs Control Panel.
 | `-validate` | check that the ROM, disks and folders named here exist, print the result and exit (0 = fine, 1 = something is missing) |
 | `-showconfig` | print the settings this command line stands for and exit |
 | `-bridge <folder>` | folder IIgs programs may read and write (host bridge) |
+| `-webgate <port>\|off` | the web gateway for IIgs browsers: another port than 6502, or off (see README, Internet) |
 | `-skin iigs\|system` | accepted, no effect (macOS always uses its menu bar, other systems the drawn one) |
 | `-save` | also save these settings to the config file |
 | `-cfg <file>` | use another config file |
@@ -84,6 +85,15 @@ On macOS the program inside the app bundle is
 `EmuBuddy.app/Contents/MacOS/EmuBuddy`.
 
 Exit codes: 0 fine, 1 error while running (or `-validate` found a problem), 2 bad command line.
+
+## Web gateway
+
+With a network card, EmuBuddy starts the web gateway (GSGate, a Python 3 program that is part of EmuBuddy) when the
+IIgs goes online. IIgs browsers use it as a proxy at `192.168.64.254`, port `6502`. Its log is
+`gsgate-<port>.log` in the application data folder, subfolder `Gateway`. For development:
+`EMUBUDDY_GATEWAY=<path to gsgate.py>` runs another copy, `EMUBUDDY_PYTHON=<path>` picks the Python,
+`EMUBUDDY_NOGATEWAY=1` keeps it off. After changing the gateway, `tools/gateway/embed.py <folder>` puts the new
+version into EmuBuddy.
 
 ## PostScript printer (`-sl1 postscript`)
 

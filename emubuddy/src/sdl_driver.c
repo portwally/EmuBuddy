@@ -27,6 +27,7 @@
 #include "defc.h"
 #include "ui.h"
 #include "uthernet2.h"
+#include "webgate.h"
 #include "cli.h"
 extern int g_uthernet2_slot;
 void printer_vbl(void);
@@ -2353,6 +2354,7 @@ main(int argc, char **argv)
 		ret = run_16ms();
 		if(g_uthernet2_slot) {
 			uthernet2_poll();	/* network in/out, once per frame */
+			webgate_poll(uthernet2_active());
 		}
 		printer_vbl();		/* eject an unfinished printed page */
 		if(ret != 0) {
@@ -2364,6 +2366,7 @@ main(int argc, char **argv)
 		sdl_update_display(&g_mainwin_info);
 	}
 
+	webgate_stop();
 	net_shutdown();
 	if(rec_active()) {
 		rec_stop();		/* finish a recording that was still running */

@@ -6,6 +6,14 @@
  *   network 192.168.64.0/24, gateway and DNS 192.168.64.1,
  *   DHCP hands out addresses from 192.168.64.2; static addresses in the
  *   subnet (for example 192.168.64.116) work too.
+ * The computer EmuBuddy runs on is 192.168.64.254 (NET_HOST_ADDR): a
+ * connection from the IIgs to that address arrives at the computer's own
+ * 127.0.0.1, so the IIgs reaches servers on this computer (the web gateway,
+ * a test web server) at an address that never changes.
+ *   Why not .1: slirp sends TCP for its DNS address to the real DNS server
+ *   (usually the router), and the DNS address must stay .1 for existing
+ *   disks. So slirp's "host" is .254 and its "name server" is .1; slirp
+ *   answers ARP for both, and routes whatever a guest sends to either.
  * Everything runs on the emulator thread from uthernet2_poll(). */
 #include "uthernet2.h"
 #include <libslirp.h>
@@ -193,7 +201,7 @@ net_init(void)
 	cfg.in_enabled = true;
 	inet_pton(AF_INET, "192.168.64.0", &cfg.vnetwork);
 	inet_pton(AF_INET, "255.255.255.0", &cfg.vnetmask);
-	inet_pton(AF_INET, "192.168.64.1", &cfg.vhost);
+	inet_pton(AF_INET, NET_HOST_ADDR, &cfg.vhost);
 	inet_pton(AF_INET, "192.168.64.2", &cfg.vdhcp_start);
 	inet_pton(AF_INET, "192.168.64.1", &cfg.vnameserver);
 	cfg.in6_enabled = false;
@@ -206,7 +214,8 @@ net_init(void)
 		return -1;
 	}
 	printf("slirp: network up (192.168.64.0/24, gateway and DNS "
-				"192.168.64.1, DHCP from 192.168.64.2)\n");
+				"192.168.64.1, DHCP from 192.168.64.2, this computer "
+				"is " NET_HOST_ADDR ")\n");
 	return 0;
 }
 

@@ -84,6 +84,8 @@ usage(void)
 "  -hard1 <img> ... -hard7 <img>  SCSI hard disks (slot 7, drive 1-7)\n"
 "  -share <folder>                Mac/PC folder as a ProDOS volume\n"
 "  -bridge <folder>               folder IIgs programs may read/write (host bridge)\n"
+"  -webgate <port> | off          web gateway for IIgs browsers (proxy 192.168.64.254,\n"
+"                                 port 6502 unless changed here)\n"
 "  -title <text>                  window title\n"
 "  -profile <name>                 name of the Launcher profile (shown in the window title)\n"
 "  -skin iigs | system            (accepted, no effect: macOS always uses its menu bar)\n"
@@ -382,7 +384,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 		/* options with a value from here on */
 		if(!v && (is(o, "-flop1") || is(o, "-flop2") || is(o, "-flop3") ||
 				is(o, "-flop4") || !strncasecmp(o, "-hard", 5) ||
-				!strncasecmp(o, "-sl", 3) || is(o, "-share") || is(o, "-bridge") || is(o, "-skin") ||
+				!strncasecmp(o, "-sl", 3) || is(o, "-share") || is(o, "-bridge") || is(o, "-skin") || is(o, "-webgate") ||
 				is(o, "-mhz") || is(o, "-ramsize") ||
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines") ||
@@ -420,6 +422,15 @@ emubuddy_cli(int *pargc, char ***pargv)
 		} else if(is(o, "-bridge")) {
 			emit2("-g_bridge_root", v);
 			check("folder", v);
+		} else if(is(o, "-webgate")) {
+			if(is(v, "off")) {
+				emit2("-g_webgate_port", "0");
+			} else if(atoi(v) >= 1024 && atoi(v) <= 65535) {
+				emit2("-g_webgate_port", v);
+			} else {
+				fprintf(stderr, "EmuBuddy: -webgate off, or a port from 1024 to 65535\n");
+				return -1;
+			}
 		} else if(is(o, "-skin")) {
 			if(is(v, "system")) {
 				emit2("-g_skin", "1");

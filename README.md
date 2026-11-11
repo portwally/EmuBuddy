@@ -30,7 +30,8 @@ It runs on **macOS (Apple Silicon)**, **Windows (x64)** and **Linux (x64 and arm
 - **Shared folders.** A folder on your computer becomes a ProDOS disk that the IIgs can read and write. Files you
   drop on the emulator appear in it, and files the IIgs saves are ordinary files on your computer.
 - **Internet.** An Uthernet II card with a built-in network, so Marinetti and TCP/IP programs get DHCP, DNS and a
-  connection to the internet without any set-up on your side.
+  connection to the internet without any set-up on your side. A built-in web gateway lets IIgs browsers open
+  today's HTTPS sites.
 - **Printing.** Print from GS/OS to a virtual ImageWriter II or a PostScript printer. Pages appear in a preview
   window and can be saved as PDF or sent to a real printer.
 - **Configurable slots.** Choose what sits in each slot in a window, not in a text file.
@@ -153,6 +154,26 @@ Panel) get an address and can reach the internet, other computers on your networ
 Nothing has to be installed or configured on your computer. The status bar shows how many packets went out and came in.
 
 The virtual network is 192.168.64.0/24; the IIgs gets an address from .2 on, and the gateway and DNS server are .1.
+
+**Your own computer is 192.168.64.254.** A program in the IIgs that connects to that address reaches the servers
+running on the computer EmuBuddy runs on, whatever address that computer has in your home network. A web server you
+test on your computer is `http://192.168.64.254/` in an IIgs browser.
+
+#### Web gateway
+
+IIgs browsers such as Webber can't open HTTPS sites and choke on modern pages. When the IIgs goes online, EmuBuddy
+starts a small helper, the web gateway. It fetches the page for the IIgs (from HTTPS sites too), removes scripts,
+styles and everything else an old browser can't use, and hands over a small plain page.
+
+To use it, set it as the proxy in the browser. In Webber: **File > Settings**, tick **Enable Proxy**, then
+**Proxy Settings**: address `192.168.64.254`, port `6502`. The Slots window shows the same address.
+
+- The gateway listens on your own computer only. Nothing is opened to your network, and it stops with EmuBuddy.
+- It needs **Python 3** on your computer (macOS: Homebrew's, python.org's or the one that comes with Apple's developer
+  tools). Without Python the gateway stays off and everything else works as before.
+- Not every site survives: pages that are built by scripts in the browser come out nearly empty.
+- `-webgate off` switches it off, `-webgate <port>` uses another port; the setting is "Web gateway port" in the
+  configuration (0 = off).
 
 ### Printing
 

@@ -25,6 +25,8 @@ void	uthernet2_counters(unsigned *tx, unsigned *rx);
 int	uthernet2_active(void);		/* socket 0 open in MACRAW mode */
 
 /* Network backend (net_slirp.c, or net_none.c without libslirp) */
+/* The address at which the IIgs reaches the computer EmuBuddy runs on */
+#define NET_HOST_ADDR	"192.168.64.254"
 int	net_init(void);			/* 0 ok */
 void	net_send(const uint8_t *frame, int len);
 void	net_poll(void);

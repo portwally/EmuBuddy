@@ -228,6 +228,7 @@ add_executable(gsplus-sdl
     cli.c
     prodos_img.c
     bridge.c
+    webgate.c
     ${EMUBUDDY_NET_SOURCES}
     ${EMUBUDDY_PRINTER_SOURCES}
 )
