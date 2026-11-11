@@ -1864,6 +1864,61 @@ sdl_save_screenshot(Window_info *win, int whole)
 	}
 }
 
+/* -quitshot <file>: the last picture of the IIgs screen, for the Launcher (it
+ * shows it as the picture of a game that has no cover). At most 640 pixels
+ * wide. A screen of one colour (the IIgs was off or showed nothing) is not
+ * saved, so an older, better picture stays. */
+static int g_quitshot_now = 0;
+
+static void
+sdl_save_quitshot(Window_info *win)
+{
+	SDL_Surface	*conv = sdl_grab_picture(win, 0), *sm;
+	unsigned char	*packed;
+	char		tmp[1200];
+	const char	*path = emubuddy_cli_quitshot();
+	const unsigned char *first;
+	int		w, h, x, y, plain = 1;
+
+	if(!conv) {
+		return;
+	}
+	if(conv->w > 640) {
+		sm = SDL_ScaleSurface(conv, 640, conv->h * 640 / conv->w, SDL_SCALEMODE_LINEAR);
+		if(sm) {
+			SDL_DestroySurface(conv);
+			conv = sm;
+		}
+	}
+	w = conv->w;
+	h = conv->h;
+	first = (const unsigned char *)conv->pixels;
+	for(y = 0; y < h && plain; y += 4) {
+		const unsigned char *row = first + (size_t)y * conv->pitch;
+
+		for(x = 0; x < w; x += 4) {		/* RGBA bytes: is this pixel clearly another colour? */
+			if(((row[x * 4] ^ first[0]) | (row[x * 4 + 1] ^ first[1]) | (row[x * 4 + 2] ^ first[2])) & 0xf0) {
+				plain = 0;
+				break;
+			}
+		}
+	}
+	packed = plain ? NULL : sdl_pack_opaque(conv);
+	SDL_DestroySurface(conv);
+	if(!packed) {
+		return;
+	}
+	/* written under another name first, so the Launcher never reads half a file */
+	snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+	if(write_png_rgba(tmp, packed, w, h) == 0) {
+		remove(path);
+		if(rename(tmp, path) != 0) {
+			remove(tmp);
+		}
+	}
+	free(packed);
+}
+
 /* Video recording (video_rec.c): one frame per emulated 1/60 s. */
 int	rec_active(void);
 int	rec_start(int w, int h);
@@ -2169,6 +2224,10 @@ sdl_update_display(Window_info *win)
 		sdl_save_screenshot(win, 0);
 		g_screenshot_requested = 0;
 	}
+	if(g_quitshot_now) {
+		g_quitshot_now = 0;
+		sdl_save_quitshot(win);
+	}
 	if(g_rec_toggle_requested) {
 		g_rec_toggle_requested = 0;
 		if(rec_active()) {
@@ -2366,6 +2425,10 @@ main(int argc, char **argv)
 		sdl_update_display(&g_mainwin_info);
 	}
 
+	if(emubuddy_cli_quitshot()[0]) {	/* -quitshot: draw the screen once more and keep it */
+		g_quitshot_now = 1;
+		sdl_update_display(&g_mainwin_info);
+	}
 	webgate_stop();
 	net_shutdown();
 	if(rec_active()) {

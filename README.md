@@ -239,6 +239,8 @@ the window); **Return** starts EmuBuddy with the matching command line (see [Com
 
 - **Game controller:** D-pad or left stick move, A plays, B goes back, X shows the details, Y or Start opens the
   menu, the shoulder buttons jump five games. The hints at the bottom switch to the controller buttons when you use it.
+  In the dialogs (editor, library, import) the D-pad or the arrow keys move a focus frame, A or Return presses what
+  is in it, B or Esc closes the dialog. Typing a name needs a keyboard, and the file choosers are the system's own.
 - **Favourites and sorting:** Space > Add to Favourites (or Cmd/Ctrl-D) puts a star on a game. The View menu sorts by
   A-Z, favourites first, last played or most played, and can show only the favourites. The launcher counts how often
   and when you played a game (stored in the profile file as `plays` and `last_played`).
@@ -251,7 +253,14 @@ the window); **Return** starts EmuBuddy with the matching command line (see [Com
   away (Space > Classic View).
 - **Pictures:** each game shows its cover, from your own picture or from artwork folders next to your games
   (`boxart`, `flyer`, `snap`, `video`, `wheel` for the logo, the same names Attract-Mode uses). Space > **Set Picture**
-  adds a picture, **Remove Picture** deletes it, **Artwork Folder** sets the default folder.
+  adds a picture, **Remove Picture** deletes it, **Artwork Folder** sets the default folder. Pictures can be PNG, JPG
+  or BMP.
+- **Automatic picture:** a game without a picture gets one by itself: EmuBuddy saves the last IIgs screen when it
+  quits and the launcher shows it (`autosnap = 0` in a profile file switches this off for that game).
+- **Portrait screens:** when the window is taller than wide the view changes to a portrait layout (a big picture on
+  top, the row of covers below). It does so by itself on a turned screen; View > Portrait Window (or the Space menu)
+  opens an upright window.
+- **German:** the launcher speaks German on a German system; View > Deutsch (or the Space menu) switches the language.
 - **Import from Attract-Mode** (Space > Import): reads `~/.attract`, makes a game of every entry of a system's list and
   reads the options of its start script (`-ramsize`, `-sl4`, `-hard1`, ...) and its artwork folders. Your Attract-Mode
   folder is not changed.

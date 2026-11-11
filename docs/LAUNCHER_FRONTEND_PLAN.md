@@ -54,7 +54,7 @@ Taken from your `~/.attract/layouts/Arcadeflow-17.7` and its README:
 - Text at several sizes, smooth, from a modern font (Figtree or Roboto, both open licences, are in Arcadeflow's fonts
   folder; I would check the licence file before including one). Today's font code makes one size per font and is
   pixel-style.
-- Picture loading for PNG and JPG (SDL loads PNG and BMP; JPG needs the small public-domain `stb_image`), a texture
+- Picture loading for PNG and JPG (SDL loads PNG and BMP; JPG has its own small reader, `launcher/src/jpeg.c`), a texture
   cache that loads pictures in the background so scrolling never stutters.
 - A cheap blur (draw the picture tiny, scale it up smoothly), gradients, vignette, rounded corners.
 - A small animation helper (easing for scroll, scale, fade).
@@ -118,7 +118,7 @@ details page, search by typing, keyboard and mouse; picture folders compatible w
 dialogs over the pictures; Classic view as a switch; import from Attract-Mode with the options of the start script;
 Set/Remove Picture.
 
-**Controller (done):** D-pad and left stick, A/B/X/Y/Start, shoulder buttons, hold-to-repeat; the Space menu works with Up/Down/Return/Esc (so also from the controller). The editor, library and import windows are still mouse and keyboard only.
+**Controller (done):** D-pad and left stick, A/B/X/Y/Start, shoulder buttons, hold-to-repeat; the Space menu works with Up/Down/Return/Esc (so also from the controller). The dialogs followed later, see "Controller in the dialogs" below.
 
 **Sounds (done):** soft tones made in memory (move, select, menu, back, launch), no sound files; View > Sounds or the Space menu switches them off, remembered in Launcher.settings.
 
@@ -132,6 +132,14 @@ Set/Remove Picture.
 
 **All drives (done):** the full editor (Edit > More settings) now has all 7 hard disks, both 3.5" drives and both 5.25" drives (two columns: hard disks | floppies and folders), each with Lib, ... and X. Dropped disks go to the first free hard disk.
 
-**Not done yet:** portrait layout; German texts;
-automatic snapshot when EmuBuddy quits;
-JPG pictures (PNG and BMP load now).
+**JPG pictures (done):** covers and logos can be PNG, BMP, JPG or JPEG. The Launcher has its own small JPEG reader (`launcher/src/jpeg.c`, baseline and progressive, grey or colour, no library needed); it was checked against `djpeg` on 36 test pictures and with 3600 damaged files. Not read: CMYK and arithmetic-coded JPEGs (rare); such a file counts as "no picture".
+
+**Controller in the dialogs (done):** in the editor (simple and full), the library, the import and the About window the arrow keys or the D-pad/stick move a focus frame from widget to widget; Return or A presses the framed one (a button, a check box; in a text field it starts typing); inside a list Up/Down choose a row and A acts like a double-click; inside a row of choices Left/Right choose; Esc or B closes the dialog. The frame appears with the first key or controller press and hides when the mouse is used. In the Arcade view the library opens as a dialog so this works there too. Limits: typing a name still needs a keyboard, and the file choosers and "really delete?" questions are the system's own dialogs, which a controller cannot work.
+
+**Portrait layout (done):** when the window is taller than wide the Arcade view puts a big picture of the selected game on top, the name and the facts under it and the row of covers below; long hint lines break into two. This happens by itself on a turned screen in full screen or when the window is dragged tall. View > Portrait Window (Space menu: Portrait Window / Landscape Window) opens an upright window that fits the screen and is remembered (`portrait = 1` in Launcher.settings). The logical size is 800x1422 so the dialogs (up to 760 wide) fit.
+
+**German texts (done):** all menus, dialogs, messages and the Arcade view in German (`launcher/src/lang.c`, about 210 texts). The language follows the system; View > Deutsch or the Space menu (Deutsch / English) switches it and it is remembered (`language = auto | en | de`). The Amstrad CPC skin font has no umlauts, so there ae/oe/ue/ss are written. Names of slot cards, disk sizes and profile names stay as they are. Test aid: `LAUNCHER_LANG=de`.
+
+**Automatic picture (done):** the Launcher starts EmuBuddy with `-quitshot <profiles>/<name>.data/snap.png`; EmuBuddy saves the last IIgs screen there when it quits (at most 640 wide, not when the screen is one plain colour). A game without a cover or artwork shows this picture; the Launcher loads it again when its window comes back to the front. A cover or artwork picture always wins. `autosnap = 0` in a profile switches it off for that game.
+
+**Not done yet:** nothing from this plan. Ideas: an on-screen keyboard for typing with a controller; the Launcher's own "really delete?" dialog so a controller can answer it.

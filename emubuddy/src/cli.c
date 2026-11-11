@@ -25,6 +25,7 @@ static char	*g_later_insert[32];	/* shares and loose images */
 static int	g_nlater;
 static int	g_win_w, g_win_h, g_scale;
 static char	g_title[200], g_profile[100];
+static char	g_quitshot[1100];	/* -quitshot: picture of the screen when quitting */
 static char	*g_check[64];		/* paths -validate looks at: "kind path" */
 static int	g_ncheck;
 
@@ -88,6 +89,8 @@ usage(void)
 "                                 port 6502 unless changed here)\n"
 "  -title <text>                  window title\n"
 "  -profile <name>                 name of the Launcher profile (shown in the window title)\n"
+"  -quitshot <file.png>           save a picture of the IIgs screen there when EmuBuddy quits\n"
+"                                 (the Launcher uses it as the picture of a game)\n"
 "  -skin iigs | system            (accepted, no effect: macOS always uses its menu bar)\n"
 "  <img or folder>                put in the first free fitting drive\n"
 "\n"
@@ -388,7 +391,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 				is(o, "-mhz") || is(o, "-ramsize") ||
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines") ||
-				is(o, "-title") || is(o, "-profile"))) {
+				is(o, "-title") || is(o, "-profile") || is(o, "-quitshot"))) {
 			fprintf(stderr, "EmuBuddy: %s needs a value (see -help)\n", a);
 			return -1;
 		}
@@ -419,6 +422,8 @@ emubuddy_cli(int *pargc, char ***pargv)
 			snprintf(g_title, sizeof(g_title), "%s", v);
 		} else if(is(o, "-profile")) {
 			snprintf(g_profile, sizeof(g_profile), "%s", v);
+		} else if(is(o, "-quitshot")) {
+			snprintf(g_quitshot, sizeof(g_quitshot), "%s", v);
 		} else if(is(o, "-bridge")) {
 			emit2("-g_bridge_root", v);
 			check("folder", v);
@@ -505,6 +510,12 @@ emubuddy_cli(int *pargc, char ***pargv)
 	*pargc = g_nout;
 	*pargv = g_out;
 	return 0;
+}
+
+const char *
+emubuddy_cli_quitshot(void)
+{
+	return g_quitshot;
 }
 
 int

@@ -39,6 +39,17 @@ main(void)
 	CHECK(strstr(line, "-crt"));
 	CHECK(strstr(line, "-profile Games"));
 	CHECK(strstr(line, "-cfg /data/Games/emubuddy.config"));
+	CHECK(strstr(line, "-quitshot /data/Games/snap.png"));
+	{
+		Profile	off = p;			/* no automatic picture for this one */
+		char	line2[2000];
+
+		profile_set(&off, "autosnap", "0");
+		n = profile_build_args(&off, "EmuBuddy", "/data/Games", buf, sizeof(buf), argv,
+						PROFILE_MAX_ARGS, err, sizeof(err));
+		profile_cmdline(argv, n, line2, sizeof(line2));
+		CHECK(n > 0 && !strstr(line2, "-quitshot"));
+	}
 	CHECK(strstr(line, "-g_limit_speed 0"));
 	CHECK(strstr(line, "-title \"two words\""));
 	CHECK(!strstr(line, "-nowindow"));

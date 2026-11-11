@@ -16,11 +16,16 @@ elseif(NOT DEFINED EMUBUDDY_VERSION OR EMUBUDDY_VERSION STREQUAL "")
 endif()
 
 # profile.c has no SDL; it is tested on its own.
-add_library(launcher_profile STATIC src/profile.c src/attract.c)
+add_library(launcher_profile STATIC src/profile.c src/attract.c src/lang.c)
 set(EB_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/src)
 add_library(launcher_library STATIC src/library.c ${EB_SRC}/prodos_img.c)
 target_include_directories(launcher_library PUBLIC src ${EB_SRC})
 target_link_libraries(launcher_library PUBLIC launcher_profile)
+add_library(launcher_jpeg STATIC src/jpeg.c)
+target_include_directories(launcher_jpeg PUBLIC src)
+target_link_libraries(launcher_jpeg PUBLIC $<$<NOT:$<PLATFORM_ID:Windows>>:m>)
+add_executable(test_jpeg EXCLUDE_FROM_ALL tests/test_jpeg.c)
+target_link_libraries(test_jpeg PRIVATE launcher_jpeg)
 add_executable(test_library EXCLUDE_FROM_ALL tests/test_library.c)
 target_link_libraries(test_library PRIVATE launcher_library)
 add_executable(test_attract EXCLUDE_FROM_ALL tests/test_attract.c)
@@ -31,6 +36,11 @@ enable_testing()
 add_test(NAME profile COMMAND test_profile)
 add_test(NAME library COMMAND test_library)
 add_test(NAME attract COMMAND test_attract)
+add_test(NAME jpeg COMMAND test_jpeg)
+add_executable(test_lang EXCLUDE_FROM_ALL tests/test_lang.c)
+target_link_libraries(test_lang PRIVATE launcher_profile)
+target_include_directories(test_lang PRIVATE src)
+add_test(NAME lang COMMAND test_lang)
 
 if(NOT TARGET SDL3::SDL3)
     find_package(SDL3 CONFIG QUIET)
@@ -72,7 +82,7 @@ target_include_directories(emubuddy-launcher PRIVATE src ${EB_UI})
 target_compile_definitions(emubuddy-launcher PRIVATE
     UI_THEMABLE=1
     LAUNCHER_VERSION_STR="${EMUBUDDY_VERSION}")
-target_link_libraries(emubuddy-launcher PRIVATE launcher_profile launcher_library SDL3::SDL3 $<$<NOT:$<PLATFORM_ID:Windows>>:m>)
+target_link_libraries(emubuddy-launcher PRIVATE launcher_profile launcher_library launcher_jpeg SDL3::SDL3 $<$<NOT:$<PLATFORM_ID:Windows>>:m>)
 
 if(APPLE)
     set_target_properties(emubuddy-launcher PROPERTIES

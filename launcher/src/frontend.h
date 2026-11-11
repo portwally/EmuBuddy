@@ -15,12 +15,13 @@ typedef struct {
 	void	(*play)(void);
 	void	(*overlay)(void);	/* the menu on Space */
 	void	(*edit)(void);
+	const char *data_root;		/* the profiles folder: <root>/<name>.data/snap.png is the picture EmuBuddy left */
 } FeData;
 
 int	fe_init(SDL_Renderer *r, const char *fonts_dir);
 void	fe_shutdown(void);
 void	fe_set_data(const FeData *d);
-/* Draw the whole view at W x H logical pixels. */
+/* Draw the whole view at W x H logical pixels. A window taller than wide gets the portrait layout. */
 void	fe_draw(int W, int H);
 /* Keys and typed text; return 1 if used. */
 int	fe_key(SDL_Keycode k, SDL_Keymod mod);
@@ -31,6 +32,12 @@ void	fe_wheel(float dy);
 /* Look for a picture of a profile: kind 0 = tile (box art, snap, screen shot), 1 = logo (wheel).
  * Returns 1 and the path, or 0. */
 int	fe_find_art(const Profile *p, const char *root, int kind, char *out, int outsize);
+/* A picture file as a surface (PNG, BMP, JPG), or NULL. The caller destroys it. */
+SDL_Surface *fe_load_picture(const char *path);
+/* 1 if the file name ends like a picture the Launcher can show. */
+int	fe_is_picture(const char *path);
+/* Picture files may have changed on disk: load the changed ones again. */
+void	fe_refresh(void);
 int	fe_info_open(void);
 /* 1: show the controller hints (A play, X details, Y menu) instead of the key hints. */
 void	fe_set_pad_hints(int on);

@@ -62,6 +62,7 @@ used when its slot is set to "Your Card" in the IIgs Control Panel.
 |---|---|
 | `-title <text>` | window title |
 | `-profile <name>` | name of the Launcher profile; the window is titled `EmuBuddy - <name>` |
+| `-quitshot <file.png>` | saves a picture of the IIgs screen to this file when EmuBuddy quits (at most 640 pixels wide; a screen of one colour is not saved). The Launcher uses it as the picture of a game that has no cover |
 | `-validate` | check that the ROM, disks and folders named here exist, print the result and exit (0 = fine, 1 = something is missing) |
 | `-showconfig` | print the settings this command line stands for and exit |
 | `-bridge <folder>` | folder IIgs programs may read and write (host bridge) |

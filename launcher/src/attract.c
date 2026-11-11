@@ -1,3 +1,4 @@
+#include "lang.h"
 #include "attract.h"
 #include <dirent.h>
 #include <stdio.h>
@@ -252,13 +253,13 @@ attract_import(const char *dir, const char *emu, Profile *out, int max, char *er
 
 	err[0] = 0;
 	if(read_cfg(dir, emu, &c) != 0) {
-		snprintf(err, (size_t)errsize, "Can't read the settings of %s", emu);
+		snprintf(err, (size_t)errsize, T("Can't read the settings of %s"), emu);
 		return -1;
 	}
 	snprintf(path, sizeof(path), "%s/romlists/%s.txt", dir, emu);
 	f = fopen(path, "r");
 	if(!f) {
-		snprintf(err, (size_t)errsize, "There is no game list for %s", emu);
+		snprintf(err, (size_t)errsize, T("There is no game list for %s"), emu);
 		return -1;
 	}
 	while(fgets(line, sizeof(line), f) && n < max) {

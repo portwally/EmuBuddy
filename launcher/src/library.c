@@ -1,3 +1,4 @@
+#include "lang.h"
 #include "library.h"
 #include "prodos_img.h"
 #include "profile.h"
@@ -47,7 +48,7 @@ lib_classify(const char *path, long size, char *label, int labelsize)
 	}
 	if(is_disk) {
 		if(has_ext(name, ".woz")) {
-			snprintf(label, (size_t)labelsize, "WOZ disk");
+			snprintf(label, (size_t)labelsize, "%s", T("WOZ disk"));
 		} else if(size > 0 && size <= 143360 + 64) {
 			snprintf(label, (size_t)labelsize, "5.25\" 140 KB");
 		} else if(size >= 800 * 1024 && size <= 800 * 1024 + 64) {
@@ -55,9 +56,9 @@ lib_classify(const char *path, long size, char *label, int labelsize)
 		} else if(size >= 1440 * 1024 && size <= 1440 * 1024 + 64) {
 			snprintf(label, (size_t)labelsize, "3.5\" 1.4 MB");
 		} else if(size >= 2 * 1024 * 1024) {
-			snprintf(label, (size_t)labelsize, "Hard disk %ld MB", size / (1024 * 1024));
+			snprintf(label, (size_t)labelsize, T("Hard disk %ld MB"), size / (1024 * 1024));
 		} else {
-			snprintf(label, (size_t)labelsize, "Disk %ld KB", size / 1024);
+			snprintf(label, (size_t)labelsize, T("Disk %ld KB"), size / 1024);
 		}
 		return LIB_DISK;
 	}
@@ -215,7 +216,7 @@ lib_check(Library *l)
 			if(l->items[j].size == it->size && h[j] == h[i] && h[i] &&
 					l->items[j].kind == it->kind) {
 				it->flags |= LIB_DUP;
-				snprintf(it->note, sizeof(it->note), "same as %s", l->items[j].name);
+				snprintf(it->note, sizeof(it->note), T("same as %s"), l->items[j].name);
 				break;
 			}
 		}
@@ -231,10 +232,10 @@ lib_check(Library *l)
 			if(prodos_ext && !(it->flags & LIB_DUP)) {
 				if(data % 512 != 0) {
 					it->flags |= LIB_BAD;
-					snprintf(it->note, sizeof(it->note), "size is not a whole number of blocks");
+					snprintf(it->note, sizeof(it->note), "%s", T("size is not a whole number of blocks"));
 				} else if(!it->volume[0]) {
 					it->flags |= LIB_BAD;
-					snprintf(it->note, sizeof(it->note), "no ProDOS volume found");
+					snprintf(it->note, sizeof(it->note), "%s", T("no ProDOS volume found"));
 				}
 			}
 		}

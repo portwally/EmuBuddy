@@ -6,7 +6,8 @@
  *   emubuddy-launcher --cmd <name>    print the EmuBuddy command line
  *   emubuddy-launcher --play <name>   start EmuBuddy with the profile
  *   EMUBUDDY_EXE=<path>               EmuBuddy to start (else found next to this program)
- *   EMUBUDDY_PROFILES=<folder>        profile folder (else the application data folder) */
+ *   EMUBUDDY_PROFILES=<folder>        profile folder (else the application data folder)
+ *   LAUNCHER_LANG=de | en             texts in German or English, whatever the system and the setting say */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <stdio.h>
@@ -20,6 +21,7 @@
 #include "frontend.h"
 #include "attract.h"
 #include "launcher_icon.h"
+#include "lang.h"
 
 #define MAX_PROFILES	64
 
@@ -254,7 +256,7 @@ play(const Profile *p, char *msg, size_t msgsz)
 	SDL_Process	*proc;
 
 	if(!find_emubuddy(exe, sizeof(exe))) {
-		snprintf(msg, msgsz, "EmuBuddy was not found (set EMUBUDDY_EXE)");
+		snprintf(msg, msgsz, "%s", T("EmuBuddy was not found (set EMUBUDDY_EXE)"));
 		return -1;
 	}
 	n = build(p, buf, sizeof(buf), argv, err, sizeof(err), 1);
@@ -264,11 +266,11 @@ play(const Profile *p, char *msg, size_t msgsz)
 	}
 	proc = SDL_CreateProcess((const char * const *)argv, false);
 	if(!proc) {
-		snprintf(msg, msgsz, "Could not start EmuBuddy: %s", SDL_GetError());
+		snprintf(msg, msgsz, T("Could not start EmuBuddy: %s"), SDL_GetError());
 		return -1;
 	}
 	SDL_DestroyProcess(proc);
-	snprintf(msg, msgsz, "Started %s", profile_name(p));
+	snprintf(msg, msgsz, T("Started %s"), profile_name(p));
 	return 0;
 }
 
@@ -329,10 +331,15 @@ cli(int argc, char **argv)
 #define LH	640
 #define AW	1280			/* the Arcade view's logical size */
 #define AH	720
+#define PW	800			/* the same on a portrait screen (9:16); the dialogs need 760 across */
+#define PH	1422
 
 static void lib_open(int kind, char *target, int cap);
 static int		g_idle = 60;	/* seconds before the slideshow, 0 = off */
 static int		g_arcade = 1, g_bw = LW, g_bh = LH;	/* the Arcade view or the Classic one; logical size */
+static int		g_portrait;	/* the Arcade window is opened upright (View > Portrait Window) */
+static int		g_tall;		/* the window is taller than wide right now: portrait layout */
+static int		g_lang;		/* texts: 0 = like the system, 1 = English, 2 = German */
 static char		g_art_root[1100];
 static int		g_skin, g_wscale = 100, g_full;	/* window size in percent of 800x640 */
 static const int	g_steps[6] = { 80, 100, 125, 150, 200, 300 };
@@ -391,6 +398,289 @@ span_w(const char *t, int from, int to)
 	return ui_text_width(tmp);
 }
 
+/* ---- arrow keys and the game controller in dialogs ----
+ * The toolkit's widgets are made for the mouse. These wrappers note where each widget of the
+ * front dialog is; the arrow keys (or the D-pad and the stick) move a focus frame from widget to
+ * widget and Return (or A) presses the one in the frame. Inside a list Up and Down choose a row,
+ * inside a row of choices Left and Right choose one. Esc (or B) closes the dialog. */
+
+enum { NAV_BUTTON, NAV_CHECK, NAV_SEG, NAV_LIST, NAV_FIELD };
+
+typedef struct {
+	UiWindow	*win;
+	int		kind, x, y, w, h;
+	int		*sel, *top, n, rows;	/* lists and rows of choices */
+	unsigned	mask;			/* which choices can be chosen */
+} NavItem;
+
+static NavItem	g_nav[200];			/* the widgets drawn in the last frame */
+static int	g_nnav;
+static struct { UiWindow *win; int x, y; } g_nav_at[8];	/* where the frame is, per window */
+static int	g_nav_on;			/* show the frame: keys or the controller are in use */
+static int	g_nav_press;			/* Return: the widget in the frame acts in the next frame */
+static UiWindow	g_ovl;
+
+static int
+nav_slot(UiWindow *win, int make)
+{
+	int	i, free_slot = -1;
+
+	for(i = 0; i < 8; i++) {
+		if(g_nav_at[i].win == win) {
+			return i;
+		}
+		if(free_slot < 0 && (!g_nav_at[i].win || !g_nav_at[i].win->open)) {
+			free_slot = i;
+		}
+	}
+	if(make && free_slot >= 0) {
+		g_nav_at[free_slot].win = win;
+		g_nav_at[free_slot].x = g_nav_at[free_slot].y = -1;
+		return free_slot;
+	}
+	return -1;
+}
+
+/* the modal window in front, or NULL: that is where the keys go */
+static UiWindow *
+nav_front(void)
+{
+	UiWindow *front = NULL;
+
+	for(int i = 0; i < g_nnav; i++) {
+		if(g_nav[i].win->modal && g_nav[i].win->open) {
+			front = g_nav[i].win;
+		}
+	}
+	return front == &g_ovl ? NULL : front;
+}
+
+static NavItem *
+nav_current(UiWindow *front)
+{
+	int	s = nav_slot(front, 0);
+
+	for(int i = 0; s >= 0 && i < g_nnav; i++) {
+		if(g_nav[i].win == front && g_nav[i].x == g_nav_at[s].x && g_nav[i].y == g_nav_at[s].y) {
+			return &g_nav[i];
+		}
+	}
+	return NULL;
+}
+
+static void
+nav_go(const NavItem *it)
+{
+	int	s = nav_slot(it->win, 1);
+
+	if(s >= 0) {
+		g_nav_at[s].x = it->x;
+		g_nav_at[s].y = it->y;
+	}
+}
+
+/* Notes a widget. Returns 1 if the focus frame is on it (and draws the frame). */
+static int
+nav_add(UiWindow *win, int kind, int cx, int cy, int x, int y, int w, int h, int enabled)
+{
+	NavItem	*it;
+	int	s;
+
+	if(!enabled || g_nnav >= (int)(sizeof(g_nav) / sizeof(g_nav[0]))) {
+		return 0;
+	}
+	it = &g_nav[g_nnav++];
+	memset(it, 0, sizeof(*it));
+	it->win = win;
+	it->kind = kind;
+	it->x = x;
+	it->y = y;
+	it->w = w;
+	it->h = h;
+	s = nav_slot(win, 0);
+	if(!g_nav_on || !win->modal || s < 0 || g_nav_at[s].x != x || g_nav_at[s].y != y) {
+		return 0;
+	}
+	ui_frame(cx + x - 2, cy + y - 2, w + 4, h + 4, g_ui_theme.accent);
+	ui_frame(cx + x - 3, cy + y - 3, w + 6, h + 6, g_ui_theme.accent);
+	return 1;
+}
+
+static int
+nbutton(UiWindow *win, int cx, int cy, int x, int y, int w, int h, const char *label, int enabled)
+{
+	int	r = ui_button(win, cx, cy, x, y, w, h, T(label), enabled);
+
+	if(nav_add(win, NAV_BUTTON, cx, cy, x, y, w, h, enabled) && g_nav_press) {
+		g_nav_press = 0;
+		r = 1;
+	}
+	return r;
+}
+
+static int
+ncheck(UiWindow *win, int cx, int cy, int x, int y, const char *label, int *value)
+{
+	int	r = ui_checkbox(win, cx, cy, x, y, T(label), value);
+
+	if(nav_add(win, NAV_CHECK, cx, cy, x, y, 18 + ui_text_width(T(label)), 14, 1) && g_nav_press) {
+		g_nav_press = 0;
+		*value = !*value;
+		r = 1;
+	}
+	return r;
+}
+
+static int
+nsegment(UiWindow *win, int cx, int cy, int x, int y, int w, int h, const char **labels, int n, int *sel, unsigned enabled)
+{
+	int	r = ui_segment(win, cx, cy, x, y, w, h, labels, n, sel, enabled);
+
+	nav_add(win, NAV_SEG, cx, cy, x, y, w, h, enabled != 0);
+	if(g_nnav > 0 && g_nav[g_nnav - 1].kind == NAV_SEG && g_nav[g_nnav - 1].x == x && g_nav[g_nnav - 1].y == y) {
+		g_nav[g_nnav - 1].sel = sel;
+		g_nav[g_nnav - 1].n = n;
+		g_nav[g_nnav - 1].mask = enabled;
+	}
+	return r;
+}
+
+static int
+nlist(UiWindow *win, int cx, int cy, int x, int y, int w, int h, const char **items, int n_items, int *sel, int *top)
+{
+	int	r = ui_list(win, cx, cy, x, y, w, h, items, n_items, sel, top);
+	int	f = nav_add(win, NAV_LIST, cx, cy, x, y, w, h, 1);
+
+	if(g_nnav > 0 && g_nav[g_nnav - 1].kind == NAV_LIST && g_nav[g_nnav - 1].x == x && g_nav[g_nnav - 1].y == y) {
+		g_nav[g_nnav - 1].sel = sel;
+		g_nav[g_nnav - 1].top = top;
+		g_nav[g_nnav - 1].n = n_items;
+		g_nav[g_nnav - 1].rows = (h - 2) / 18;
+	}
+	if(f && g_nav_press) {
+		g_nav_press = 0;
+		if(*sel >= 0 && *sel < n_items) {
+			r = 2;				/* like a double-click on the row */
+		}
+	}
+	return r;
+}
+
+/* called before the windows are drawn: forget the widgets of the frame before */
+static void
+nav_begin(void)
+{
+	g_nnav = 0;
+}
+
+/* called after the windows are drawn: the frame goes to a sensible widget when it has none */
+static void
+nav_end(void)
+{
+	UiWindow *front = nav_front();
+
+	g_nav_press = 0;
+	if(front && g_nav_on && !nav_current(front)) {
+		NavItem *first = NULL;
+
+		for(int i = 0; i < g_nnav; i++) {
+			if(g_nav[i].win == front && (!first || (g_nav[i].kind == NAV_LIST && first->kind != NAV_LIST))) {
+				first = &g_nav[i];
+			}
+		}
+		if(first) {
+			nav_go(first);
+		}
+	}
+}
+
+static void	focus_clear(void);
+
+/* An arrow key, Return or Esc while a dialog is open. Returns 1 if the key was used. */
+static int
+nav_key(SDL_Keycode k)
+{
+	UiWindow *front = nav_front();
+	NavItem	*cur, *best = NULL;
+	float	best_score = 0;
+	int	horiz = k == SDLK_LEFT || k == SDLK_RIGHT, fwd = k == SDLK_RIGHT || k == SDLK_DOWN;
+
+	if(!front || ui_menu_is_open() || (!horiz && k != SDLK_UP && k != SDLK_DOWN && k != SDLK_RETURN && k != SDLK_ESCAPE)) {
+		return 0;
+	}
+	if(k == SDLK_ESCAPE) {
+		if(front->closable) {
+			focus_clear();
+			ui_window_close(front);
+			snd_play(SND_BACK);
+		}
+		return 1;
+	}
+	cur = nav_current(front);
+	if(!g_nav_on || !cur) {				/* the first key only shows the frame */
+		g_nav_on = 1;
+		snd_play(SND_MOVE);
+		return 1;
+	}
+	if(k == SDLK_RETURN) {
+		g_nav_press = 1;
+		snd_play(SND_SELECT);
+		return 1;
+	}
+	if(cur->kind == NAV_LIST && !horiz && cur->sel && cur->top) {
+		int s = *cur->sel + (fwd ? 1 : -1);
+
+		if(s >= 0 && s < cur->n) {
+			*cur->sel = s;
+			if(s < *cur->top) {
+				*cur->top = s;
+			} else if(cur->rows > 0 && s >= *cur->top + cur->rows) {
+				*cur->top = s - cur->rows + 1;
+			}
+			snd_play(SND_MOVE);
+			return 1;
+		}
+	}
+	if(cur->kind == NAV_SEG && horiz && cur->sel) {
+		for(int s = *cur->sel + (fwd ? 1 : -1); s >= 0 && s < cur->n; s += fwd ? 1 : -1) {
+			if((cur->mask >> s) & 1) {
+				*cur->sel = s;
+				snd_play(SND_MOVE);
+				return 1;
+			}
+		}
+	}
+	/* the nearest widget in that direction, widgets in the same row or column first */
+	for(int i = 0; i < g_nnav; i++) {
+		NavItem	*c = &g_nav[i];
+		float	ccx = (float)c->x + (float)c->w / 2, ccy = (float)c->y + (float)c->h / 2;
+		float	ox = (float)cur->x + (float)cur->w / 2, oy = (float)cur->y + (float)cur->h / 2;
+		float	along, across, score;
+
+		if(c->win != front || c == cur) {
+			continue;
+		}
+		if(horiz) {
+			along = fwd ? ccx - ox : ox - ccx;
+			across = (float)SDL_max(0, SDL_max(c->y - (cur->y + cur->h), cur->y - (c->y + c->h)));
+			score = along + across * 6 + SDL_fabsf(ccy - oy) * 0.01f;
+		} else {
+			along = fwd ? ccy - oy : oy - ccy;
+			across = (float)SDL_max(0, SDL_max(c->x - (cur->x + cur->w), cur->x - (c->x + c->w)));
+			score = along + across * 6 + (float)SDL_abs(c->x - cur->x) * 0.01f;	/* forms are left-aligned */
+		}
+		if(along > 1 && (!best || score < best_score)) {
+			best = c;
+			best_score = score;
+		}
+	}
+	if(best) {
+		nav_go(best);
+		snd_play(SND_MOVE);
+	}
+	return 1;
+}
+
 static int
 field(UiWindow *win, int cx, int cy, int x, int y, int w, char *buf, int cap)
 {
@@ -417,6 +707,13 @@ field(UiWindow *win, int cx, int cy, int x, int y, int w, char *buf, int cap)
 	if(focused && (SDL_GetTicks() / 500) % 2 == 0) {
 		ui_fill(cx + x + 4 + span_w(buf, s, caret), cy + y + 3, 1, 12, UI_BLACK);
 	}
+	if(nav_add(win, NAV_FIELD, cx, cy, x, y, w, 18, 1) && g_nav_press) {	/* Return: type here */
+		g_nav_press = 0;
+		g_focus = buf;
+		g_focus_cap = cap;
+		g_caret = len;
+		SDL_StartTextInput(g_win);
+	}
 	if(ui_hit(win, cx, cy, x, y, w, 18)) {
 		float	mx, my, lx = 0, ly = 0;
 		int	k = s, best = s;
@@ -435,6 +732,9 @@ field(UiWindow *win, int cx, int cy, int x, int y, int w, char *buf, int cap)
 		g_focus_cap = cap;
 		g_caret = best;
 		g_pending_unfocus = 0;
+		if(g_nnav > 0 && g_nav[g_nnav - 1].kind == NAV_FIELD && g_nav[g_nnav - 1].x == x && g_nav[g_nnav - 1].y == y) {
+			nav_go(&g_nav[g_nnav - 1]);		/* the arrow keys go on from here */
+		}
 		SDL_StartTextInput(g_win);
 		return 1;
 	}
@@ -462,7 +762,7 @@ clip_paste(void)
 	char	*t;
 
 	if(!g_focus) {
-		ui_message("Click in a text field first");
+		ui_message(T("Click in a text field first"));
 		return;
 	}
 	t = SDL_HasClipboardText() ? SDL_GetClipboardText() : NULL;
@@ -480,12 +780,12 @@ clip_paste(void)
 		clean[n] = 0;
 		focus_insert(clean);
 		if(n > 0 && (int)strlen(g_focus) == before) {
-			ui_message("Too long for this field");
+			ui_message(T("Too long for this field"));
 		} else {
-			ui_message("Pasted %d characters", n);
+			ui_message(T("Pasted %d characters"), n);
 		}
 	} else {
-		ui_message("The clipboard has no text (copy some text first)");
+		ui_message(T("The clipboard has no text (copy some text first)"));
 	}
 	SDL_free(t);
 }
@@ -494,7 +794,7 @@ static void
 clip_copy(int cut)
 {
 	if(!g_focus) {
-		ui_message("Click in a text field first");
+		ui_message(T("Click in a text field first"));
 		return;
 	}
 	SDL_SetClipboardText(g_focus);
@@ -502,7 +802,7 @@ clip_copy(int cut)
 		g_focus[0] = 0;
 		g_caret = 0;
 	}
-	ui_message("%s %d characters", cut ? "Cut" : "Copied", (int)strlen(g_focus));
+	ui_message(cut ? T("Cut %d characters") : T("Copied %d characters"), (int)strlen(g_focus));
 }
 
 static void
@@ -661,14 +961,14 @@ edit_save(void)
 	set_keep(&g_e.p, "fullscreen", g_e.full ? "1" : "");
 	file_name_for(g_e.name, path, sizeof(path));
 	if(profile_save(&g_e.p, path) != 0) {
-		snprintf(g_toast, sizeof(g_toast), "Could not save %s", path);
+		snprintf(g_toast, sizeof(g_toast), T("Could not save %s"), path);
 		return;
 	}
 	if(!g_e.is_new && g_e.orig_path[0] && strcmp(path, g_e.orig_path) != 0) {
 		SDL_RemovePath(g_e.orig_path);		/* renamed */
 	}
-	snprintf(g_toast, sizeof(g_toast), "Saved %s", g_e.name);
-	ui_message("Saved %s", g_e.name);
+	snprintf(g_toast, sizeof(g_toast), T("Saved %s"), g_e.name);
+	ui_message(T("Saved %s"), g_e.name);
 	focus_clear();
 	ui_window_close(&g_edit_win);
 	ui_window_close(&g_easy_win);
@@ -684,12 +984,12 @@ edit_save(void)
 static int
 fit_button(UiWindow *win, int cx, int cy, int *x, int y, int minw, int h, const char *label, int enabled)
 {
-	int	w = ui_text_width(label) + 20, r;
+	int	w = ui_text_width(T(label)) + 20, r;
 
 	if(w < minw) {
 		w = minw;
 	}
-	r = ui_button(win, cx, cy, *x, y, w, h, label, enabled);
+	r = nbutton(win, cx, cy, *x, y, w, h, label, enabled);
 	*x += w + 6;
 	return r;
 }
@@ -711,49 +1011,49 @@ edit_draw(UiWindow *win, int cx, int cy)
 
 	/* the label column is as wide as the widest label in the skin's font */
 	for(i = 0; i < NPF; i++) {
-		lc = SDL_max(lc, ui_text_width(g_pf[i].label) + 18);
+		lc = SDL_max(lc, ui_text_width(T(g_pf[i].label)) + 18);
 	}
 	for(i = 0; i < NCH; i++) {
-		lc = SDL_max(lc, ui_text_width(names[i]) + 18);
+		lc = SDL_max(lc, ui_text_width(T(names[i])) + 18);
 	}
-	lc = SDL_max(lc, ui_text_width("Extra options") + 18);
-	bw_lib = text_w("Library", 74);
-	bw_choose = text_w("Choose...", 74);
+	lc = SDL_max(lc, ui_text_width(T("Extra options")) + 18);
+	bw_lib = text_w(T("Library"), 74);
+	bw_choose = text_w(T("Choose..."), 74);
 	xclr = win->w - 2 - 40;
 	xch = xclr - 4 - bw_choose;
 	xlib = xch - 4 - bw_lib;
 	fend_file = xlib - 6;
 	fend_dir = xch - 6;
 
-	ui_draw_text(cx + 10, cy + y + 1, "Name", UI_BLACK);
+	ui_draw_text(cx + 10, cy + y + 1, T("Name"), UI_BLACK);
 	field(win, cx, cy, lc, y, 200, g_e.name, sizeof(g_e.name));
 	{
-		int dx = lc + 200 + 14, dl = ui_text_width("Description") + 8;
+		int dx = lc + 200 + 14, dl = ui_text_width(T("Description")) + 8;
 
-		ui_draw_text(cx + dx, cy + y + 1, "Description", UI_BLACK);
+		ui_draw_text(cx + dx, cy + y + 1, T("Description"), UI_BLACK);
 		field(win, cx, cy, dx + dl, y, win->w - 2 - 10 - dx - dl, g_e.desc, sizeof(g_e.desc));
 	}
 	y += 30;
 	{
 		/* ROM on its own row, then two columns: the 7 hard disks | the 4 floppy drives and the folders */
 		static const int left[] = { 1, 2, 3, 9, 10, 11, 12 }, right[] = { 4, 13, 5, 14, 6, 7, 8 };
-		int	colw = (win->w - 2 - 20 - 12) / 2, c, r, bl = text_w("Lib", 36), bc = text_w("...", 30), bx = 24;
+		int	colw = (win->w - 2 - 20 - 12) / 2, c, r, bl = text_w(T("Lib"), 36), bc = text_w("...", 30), bx = 24;
 
 		/* a narrower label column for the two-column part */
 		int	lw = 10;
 
 		for(i = 1; i < NPF; i++) {
-			lw = SDL_max(lw, ui_text_width(g_pf[i].label) + 14);
+			lw = SDL_max(lw, ui_text_width(T(g_pf[i].label)) + 14);
 		}
-		ui_draw_text(cx + 10, cy + y + 1, g_pf[0].label, UI_BLACK);
+		ui_draw_text(cx + 10, cy + y + 1, T(g_pf[0].label), UI_BLACK);
 		field(win, cx, cy, lc, y, fend_file - lc, g_pf[0].buf, sizeof(g_pf[0].buf));
-		if(ui_button(win, cx, cy, xlib, y - 1, bw_lib, 20, "Library", 1)) {
+		if(nbutton(win, cx, cy, xlib, y - 1, bw_lib, 20, "Library", 1)) {
 			lib_open(LIB_ROM, g_pf[0].buf, (int)sizeof(g_pf[0].buf));
 		}
-		if(ui_button(win, cx, cy, xch, y - 1, bw_choose, 20, "Choose...", 1)) {
+		if(nbutton(win, cx, cy, xch, y - 1, bw_choose, 20, "Choose...", 1)) {
 			choose(&g_pf[0]);
 		}
-		if(ui_button(win, cx, cy, xclr, y - 1, 30, 20, "X", g_pf[0].buf[0] != 0)) {
+		if(nbutton(win, cx, cy, xclr, y - 1, 30, 20, "X", g_pf[0].buf[0] != 0)) {
 			g_pf[0].buf[0] = 0;
 		}
 		y += 28;
@@ -764,15 +1064,15 @@ edit_draw(UiWindow *win, int cx, int cy)
 				PathField *f = &g_pf[c ? right[r] : left[r]];
 				int	yy = y + r * 24, disk = !f->folder && strcmp(f->key, "cover") != 0;
 
-				ui_draw_text(cx + x0, cy + yy + 1, f->label, UI_BLACK);
+				ui_draw_text(cx + x0, cy + yy + 1, T(f->label), UI_BLACK);
 				field(win, cx, cy, x0 + lw, yy, (disk ? xl : xc) - 4 - x0 - lw, f->buf, sizeof(f->buf));
-				if(disk && ui_button(win, cx, cy, xl, yy - 1, bl, 20, "Lib", 1)) {
+				if(disk && nbutton(win, cx, cy, xl, yy - 1, bl, 20, "Lib", 1)) {
 					lib_open(LIB_DISK, f->buf, (int)sizeof(f->buf));
 				}
-				if(ui_button(win, cx, cy, xc, yy - 1, bc, 20, "...", 1)) {
+				if(nbutton(win, cx, cy, xc, yy - 1, bc, 20, "...", 1)) {
 					choose(f);
 				}
-				if(ui_button(win, cx, cy, xx, yy - 1, bx, 20, "X", f->buf[0] != 0)) {
+				if(nbutton(win, cx, cy, xx, yy - 1, bx, 20, "X", f->buf[0] != 0)) {
 					f->buf[0] = 0;
 				}
 			}
@@ -789,26 +1089,26 @@ edit_draw(UiWindow *win, int cx, int cy)
 		for(k = 0; k < c->n; k++) {
 			cw = SDL_max(cw, ui_text_width(c->labels[k]) + 16);
 		}
-		ui_draw_text(cx + 10, cy + y + 2, names[i], UI_BLACK);
-		ui_segment(win, cx, cy, lc, y, c->n * cw, 20, c->labels, c->n, &c->sel,
+		ui_draw_text(cx + 10, cy + y + 2, T(names[i]), UI_BLACK);
+		nsegment(win, cx, cy, lc, y, c->n * cw, 20, c->labels, c->n, &c->sel,
 						(1u << c->n) - 1);
 		y += 24;
 	}
-	ui_checkbox(win, cx, cy, 10, y, "Curved CRT look", &g_e.crt);
-	ui_checkbox(win, cx, cy, 30 + ui_text_width("Curved CRT look") + 20, y, "Full screen", &g_e.full);
+	ncheck(win, cx, cy, 10, y, "Curved CRT look", &g_e.crt);
+	ncheck(win, cx, cy, 30 + ui_text_width(T("Curved CRT look")) + 20, y, "Full screen", &g_e.full);
 	y += 24;
-	ui_draw_text(cx + 10, cy + y + 1, "Extra options", UI_BLACK);
+	ui_draw_text(cx + 10, cy + y + 1, T("Extra options"), UI_BLACK);
 	field(win, cx, cy, lc, y, win->w - 2 - 10 - lc, g_e.extra, sizeof(g_e.extra));
 	y += 34;
-	ui_draw_text(cx + 10, cy + y + 4, "Drop disks and folders here", UI_GREY);
+	ui_draw_text(cx + 10, cy + y + 4, T("Drop disks and folders here"), UI_GREY);
 	{
-		int wc = text_w("Cancel", 80), ws = text_w("Save", 80), xs = win->w - 2 - 10 - ws;
+		int wc = text_w(T("Cancel"), 80), ws = text_w(T("Save"), 80), xs = win->w - 2 - 10 - ws;
 
-		if(ui_button(win, cx, cy, xs - 8 - wc, y, wc, 24, "Cancel", 1)) {
+		if(nbutton(win, cx, cy, xs - 8 - wc, y, wc, 24, "Cancel", 1)) {
 			focus_clear();
 			ui_window_close(win);
 		}
-		if(ui_button(win, cx, cy, xs, y, ws, 24, "Save", g_e.name[0] != 0)) {
+		if(nbutton(win, cx, cy, xs, y, ws, 24, "Save", g_e.name[0] != 0)) {
 			edit_save();
 		}
 	}
@@ -830,7 +1130,7 @@ edit_drop(UiWindow *win, int x, int y, const char *path)
 		snprintf(g_pf[6].buf, sizeof(g_pf[6].buf), "%s", path);
 		return 1;
 	}
-	if(ext && (!SDL_strcasecmp(ext, ".png") || !SDL_strcasecmp(ext, ".bmp"))) {
+	if(ext && fe_is_picture(path)) {
 		snprintf(g_pf[8].buf, sizeof(g_pf[8].buf), "%s", path);
 		return 1;
 	}
@@ -860,7 +1160,7 @@ static void
 edit_open_full(void)
 {
 	focus_clear();
-	snprintf(g_edit_win.title, sizeof(g_edit_win.title), g_e.is_new ? "New Profile" : "Edit Profile");
+	snprintf(g_edit_win.title, sizeof(g_edit_win.title), "%s", g_e.is_new ? T("New Profile") : T("Edit Profile"));
 	g_edit_win.w = 740;
 	g_edit_win.h = 590;
 	g_edit_win.modal = 1;
@@ -976,7 +1276,7 @@ easy_preview(int *w, int *h)
 		return NULL;
 	}
 	if(strcmp(path, g_prev_path) != 0) {
-		SDL_Surface *sf = SDL_LoadSurface(path);
+		SDL_Surface *sf = fe_load_picture(path);
 
 		if(g_prev_tex) {
 			SDL_DestroyTexture(g_prev_tex);
@@ -998,7 +1298,7 @@ easy_preview(int *w, int *h)
 static void
 easy_picture_choose(void)
 {
-	static const SDL_DialogFileFilter filters[] = { { "Pictures", "png;bmp" } };
+	static const SDL_DialogFileFilter filters[] = { { "Pictures", "png;jpg;jpeg;bmp" } };
 
 	g_pick_target = g_pf[8].buf;
 	g_pick_cap = (int)sizeof(g_pf[8].buf);
@@ -1010,13 +1310,13 @@ static void
 easy_disk_row(UiWindow *win, int cx, int cy, int y, int lc, const char *label, int fi, int is_rom)
 {
 	PathField *f = &g_pf[fi];
-	int	bl = text_w("Library", 70), bc = text_w("Choose...", 70), x2 = win->w - 2 - 10 - 28;
+	int	bl = text_w(T("Library"), 70), bc = text_w(T("Choose..."), 70), x2 = win->w - 2 - 10 - 28;
 	int	xc = x2 - 4 - bc, xl = xc - 4 - bl, w = xl - 6 - lc;
-	const char *show = f->buf[0] ? base_name(f->buf) : "(none)";
+	const char *show = f->buf[0] ? base_name(f->buf) : T("(none)");
 	char	vis[200];
 	int	n;
 
-	ui_draw_text(cx + 10, cy + y + 3, label, UI_BLACK);
+	ui_draw_text(cx + 10, cy + y + 3, T(label), UI_BLACK);
 	ui_fill(cx + lc, cy + y, w, 22, UI_WHITE);
 	ui_frame(cx + lc, cy + y, w, 22, UI_BLACK);
 	snprintf(vis, sizeof(vis), "%s", show);
@@ -1029,13 +1329,13 @@ easy_disk_row(UiWindow *win, int cx, int cy, int y, int lc, const char *label, i
 		vis[n] = 0;
 	}
 	ui_draw_text(cx + lc + 5, cy + y + 4, vis, f->buf[0] ? UI_BLACK : UI_GREY);
-	if(ui_button(win, cx, cy, xl, y, bl, 22, "Library", 1)) {
+	if(nbutton(win, cx, cy, xl, y, bl, 22, "Library", 1)) {
 		lib_open(is_rom ? LIB_ROM : LIB_DISK, f->buf, (int)sizeof(f->buf));
 	}
-	if(ui_button(win, cx, cy, xc, y, bc, 22, "Choose...", 1)) {
+	if(nbutton(win, cx, cy, xc, y, bc, 22, "Choose...", 1)) {
 		choose(f);
 	}
-	if(ui_button(win, cx, cy, x2, y, 28, 22, "X", f->buf[0] != 0)) {
+	if(nbutton(win, cx, cy, x2, y, 28, 22, "X", f->buf[0] != 0)) {
 		f->buf[0] = 0;
 	}
 }
@@ -1048,9 +1348,9 @@ easy_draw(UiWindow *win, int cx, int cy)
 	SDL_Texture *tx;
 	int	tw = 0, th = 0;
 
-	lc = SDL_max(ui_text_width("Main disk"), ui_text_width("Floppy disk")) + 24;
-	lc = SDL_max(lc, ui_text_width("Name") + 24);
-	ui_draw_text(cx + 10, cy + y + 1, "Name", UI_BLACK);
+	lc = SDL_max(ui_text_width(T("Main disk")), ui_text_width(T("Floppy disk"))) + 24;
+	lc = SDL_max(lc, ui_text_width(T("Name")) + 24);
+	ui_draw_text(cx + 10, cy + y + 1, T("Name"), UI_BLACK);
 	field(win, cx, cy, lc, y, win->w - 2 - 10 - lc, g_e.name, sizeof(g_e.name));
 	y += 34;
 
@@ -1065,22 +1365,22 @@ easy_draw(UiWindow *win, int cx, int cy)
 
 		SDL_RenderTexture(g_ren, tx, NULL, &r);
 	} else {
-		const char *t = "No picture";
+		const char *t = T("No picture");
 
 		ui_draw_text(cx + 10 + (pw - ui_text_width(t)) / 2, cy + y + ph / 2 - 6, t, 0x9AA0B0);
 	}
 	bx = 10 + pw + 14;
 	{
-		int	bw = text_w("Choose Picture...", 150);
+		int	bw = text_w(T("Choose Picture..."), 150);
 
-		if(ui_button(win, cx, cy, bx, y, bw, 24, "Choose Picture...", 1)) {
+		if(nbutton(win, cx, cy, bx, y, bw, 24, "Choose Picture...", 1)) {
 			easy_picture_choose();
 		}
-		if(ui_button(win, cx, cy, bx, y + 30, bw, 24, "Remove Picture", g_pf[8].buf[0] != 0)) {
+		if(nbutton(win, cx, cy, bx, y + 30, bw, 24, "Remove Picture", g_pf[8].buf[0] != 0)) {
 			g_pf[8].buf[0] = 0;
 		}
-		ui_draw_text(cx + bx, cy + y + 66, "or drop a picture", UI_GREY);
-		ui_draw_text(cx + bx, cy + y + 84, "or a disk here", UI_GREY);
+		ui_draw_text(cx + bx, cy + y + 66, T("or drop a picture"), UI_GREY);
+		ui_draw_text(cx + bx, cy + y + 84, T("or a disk here"), UI_GREY);
 	}
 	y += ph + 14;
 	ui_hline(cx + 10, cy + y, win->w - 22, UI_LGREY);
@@ -1092,47 +1392,47 @@ easy_draw(UiWindow *win, int cx, int cy)
 	ui_hline(cx + 10, cy + y, win->w - 22, UI_LGREY);
 	y += 10;
 	{
-		int	x2 = 10 + SDL_max(ui_text_width("Sound card"), ui_text_width("Fast (16 MHz)")) + 60;
+		int	x2 = 10 + SDL_max(ui_text_width(T("Sound card")), ui_text_width(T("Fast (16 MHz)"))) + 60;
 
 		was = g_easy_sound;
-		ui_checkbox(win, cx, cy, 10, y, "Sound card", &g_easy_sound);
+		ncheck(win, cx, cy, 10, y, "Sound card", &g_easy_sound);
 		if(was != g_easy_sound) {
 			easy_sound_set();
 		}
 		was = g_easy_net;
-		ui_checkbox(win, cx, cy, x2, y, "Internet", &g_easy_net);
+		ncheck(win, cx, cy, x2, y, "Internet", &g_easy_net);
 		if(was != g_easy_net) {
 			easy_net_set();
 		}
 		was = g_easy_print;
-		ui_checkbox(win, cx, cy, x2 + ui_text_width("Internet") + 60, y, "Printer", &g_easy_print);
+		ncheck(win, cx, cy, x2 + ui_text_width(T("Internet")) + 60, y, "Printer", &g_easy_print);
 		if(was != g_easy_print) {
 			easy_print_set();
 		}
 		y += 26;
 		was = g_easy_fast;
-		ui_checkbox(win, cx, cy, 10, y, "Fast (16 MHz)", &g_easy_fast);
+		ncheck(win, cx, cy, 10, y, "Fast (16 MHz)", &g_easy_fast);
 		if(was != g_easy_fast) {
 			easy_fast_set();
 		}
-		ui_checkbox(win, cx, cy, x2, y, "Full screen", &g_e.full);
-		ui_checkbox(win, cx, cy, x2 + ui_text_width("Full screen") + 60, y, "Curved screen", &g_e.crt);
+		ncheck(win, cx, cy, x2, y, "Full screen", &g_e.full);
+		ncheck(win, cx, cy, x2 + ui_text_width(T("Full screen")) + 60, y, "Curved screen", &g_e.crt);
 	}
 	y += 40;
 	{
-		int	wm = text_w("More settings...", 130), wc = text_w("Cancel", 80), ws = text_w("Save", 80);
+		int	wm = text_w(T("More settings..."), 130), wc = text_w(T("Cancel"), 80), ws = text_w(T("Save"), 80);
 		int	xs = win->w - 2 - 10 - ws;
 
-		if(ui_button(win, cx, cy, 10, y, wm, 26, "More settings...", 1)) {
+		if(nbutton(win, cx, cy, 10, y, wm, 26, "More settings...", 1)) {
 			ui_window_close(win);
 			edit_open_full();
 			return;
 		}
-		if(ui_button(win, cx, cy, xs - 8 - wc, y, wc, 26, "Cancel", 1)) {
+		if(nbutton(win, cx, cy, xs - 8 - wc, y, wc, 26, "Cancel", 1)) {
 			focus_clear();
 			ui_window_close(win);
 		}
-		if(ui_button(win, cx, cy, xs, y, ws, 26, "Save", g_e.name[0] != 0)) {
+		if(nbutton(win, cx, cy, xs, y, ws, 26, "Save", g_e.name[0] != 0)) {
 			edit_save();
 		}
 	}
@@ -1149,7 +1449,7 @@ edit_open(const Profile *src, int is_new)
 	}
 	easy_read();
 	focus_clear();
-	snprintf(g_easy_win.title, sizeof(g_easy_win.title), is_new ? "New Game" : "Edit Game");
+	snprintf(g_easy_win.title, sizeof(g_easy_win.title), "%s", is_new ? T("New Game") : T("Edit Game"));
 	g_easy_win.w = 560;
 	g_easy_win.h = 20 + 10 + 34 + 150 + 14 + 10 + 60 + 36 + 10 + 26 + 40 + 26 - 6;
 	g_easy_win.modal = 1;
@@ -1186,7 +1486,7 @@ duplicate_profile(void)
 		return;
 	}
 	p = g_prof[g_sel];
-	snprintf(n, sizeof(n), "%s copy", profile_name(&p));
+	snprintf(n, sizeof(n), T("%s copy"), profile_name(&p));
 	profile_set(&p, "name", n);
 	p.path[0] = 0;
 	edit_open(&p, 1);
@@ -1205,11 +1505,11 @@ delete_profile(void)
 	}
 	SDL_zero(btn);
 	btn[0].buttonID = 1;
-	btn[0].text = "Delete";
+	btn[0].text = T("Delete");
 	btn[1].buttonID = 2;
-	btn[1].text = "Cancel";
+	btn[1].text = T("Cancel");
 	btn[1].flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
-	snprintf(msg, sizeof(msg), "Delete the profile \"%s\"? The disks it uses are not touched.",
+	snprintf(msg, sizeof(msg), T("Delete the profile \"%s\"? The disks it uses are not touched."),
 							profile_name(&g_prof[g_sel]));
 	SDL_zero(box);
 	box.title = "EmuBuddy Launcher";
@@ -1275,6 +1575,7 @@ skin_switch(int i)
 	const char	*dir = getenv("LAUNCHER_FONTS"), *base = SDL_GetBasePath();
 
 	skin_apply(i);
+	lang_set_plain(file && !strcmp(file, "amstrad_cpc464.ttf"));	/* that font has no umlauts */
 	if(!file) {
 		ui_font_load_file(NULL, 16);
 		return;
@@ -1316,7 +1617,10 @@ size_fits(int n)
 	if(!SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(g_win), &r)) {
 		return 1;
 	}
-	return g_bw * n / 100 <= r.w && g_bh * n / 100 + 30 <= r.h;
+	if(g_arcade && g_portrait) {
+		return 1;			/* the upright window is made to fit */
+	}
+	return (g_arcade ? AW : g_bw) * n / 100 <= r.w && (g_arcade ? AH : g_bh) * n / 100 + 30 <= r.h;
 }
 
 static void
@@ -1328,9 +1632,38 @@ apply_window_mode(void)
 	if(g_full) {
 		SDL_SetWindowFullscreen(g_win, true);
 	} else {
+		int		up = g_arcade && g_portrait;
+		int		w = (g_arcade ? (up ? PW : AW) : LW) * g_wscale / 100;
+		int		h = (g_arcade ? (up ? PH : AH) : LH) * g_wscale / 100;
+		SDL_Rect	r;
+
+		/* an upright window is taller than most screens: make it fit */
+		if(up && SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(g_win), &r) && h > r.h - 40) {
+			w = w * (r.h - 40) / h;
+			h = r.h - 40;
+		}
 		SDL_SetWindowFullscreen(g_win, false);
-		SDL_SetWindowSize(g_win, g_bw * g_wscale / 100, g_bh * g_wscale / 100);
+		SDL_SetWindowSize(g_win, w, h);
 		SDL_SetWindowPosition(g_win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+	}
+}
+
+/* The Arcade view follows the shape of the window: taller than wide is the portrait layout
+ * (a turned screen in full screen, the Portrait Window, or a window dragged tall). */
+static void
+follow_window_shape(void)
+{
+	int	w = 0, h = 0, tall;
+
+	if(!g_arcade || !SDL_GetWindowSizeInPixels(g_win, &w, &h) || w < 1 || h < 1) {
+		return;
+	}
+	tall = h > w;
+	if(tall != g_tall) {
+		g_tall = tall;
+		g_bw = tall ? PW : AW;
+		g_bh = tall ? PH : AH;
+		SDL_SetRenderLogicalPresentation(g_ren, g_bw, g_bh, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 	}
 }
 
@@ -1338,7 +1671,7 @@ static void
 set_window_size(int n)
 {
 	if(!size_fits(n)) {
-		ui_message("That size does not fit this screen");
+		ui_message(T("That size does not fit this screen"));
 		return;
 	}
 	g_wscale = n;
@@ -1360,8 +1693,9 @@ static void
 set_view(int arcade)
 {
 	g_arcade = arcade;
-	g_bw = arcade ? AW : LW;
-	g_bh = arcade ? AH : LH;
+	g_tall = arcade && g_portrait && !g_full;
+	g_bw = arcade ? (g_tall ? PW : AW) : LW;
+	g_bh = arcade ? (g_tall ? PH : AH) : LH;
 	SDL_SetRenderLogicalPresentation(g_ren, g_bw, g_bh, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 	g_ui_top_h = arcade ? 0 : UI_BAR_H;
 	g_ui_hide_status = arcade;
@@ -1416,6 +1750,10 @@ settings_load(void)
 			}
 		} else if(!strncmp(line, "sound = ", 8)) {
 			snd_enable(atoi(line + 8) != 0);
+		} else if(!strncmp(line, "portrait = ", 11)) {
+			g_portrait = atoi(line + 11) != 0;
+		} else if(!strncmp(line, "language = ", 11)) {
+			g_lang = !strcmp(line + 11, "en") ? 1 : (!strcmp(line + 11, "de") ? 2 : 0);
 		}
 	}
 	if(f) {
@@ -1437,6 +1775,7 @@ settings_save(void)
 		fprintf(f, "skin = %s\n", skin_get(g_skin)->name);
 		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\nsound = %d\nsort = %d\nfavonly = %d\nidle = %d\n", g_wscale, g_full,
 			g_arcade ? "arcade" : "classic", g_art_root, snd_enabled(), g_sort, g_favonly, g_idle);
+		fprintf(f, "portrait = %d\nlanguage = %s\n", g_portrait, g_lang == 1 ? "en" : (g_lang == 2 ? "de" : "auto"));
 		fclose(f);
 	}
 }
@@ -1512,7 +1851,7 @@ cover_icon(const Profile *p, int ox, int oy)
 static SDL_Texture *g_cover_tex;
 static char	g_cover_path[1200];
 
-/* The profile's own picture if it has one (png or bmp), else a generated cover. */
+/* The profile's own picture if it has one (png, jpg or bmp), else a generated cover. */
 static void
 draw_cover(const Profile *p, int x, int y, int w, int h)
 {
@@ -1522,7 +1861,7 @@ draw_cover(const Profile *p, int x, int y, int w, int h)
 	profile_expand_path(v, full, sizeof(full));
 	if(v[0]) {
 		if(strcmp(full, g_cover_path) != 0) {
-			SDL_Surface *sf = SDL_LoadSurface(full);
+			SDL_Surface *sf = fe_load_picture(full);
 
 			if(g_cover_tex) {
 				SDL_DestroyTexture(g_cover_tex);
@@ -1741,7 +2080,7 @@ lib_draw(UiWindow *win, int cx, int cy)
 	for(i = 0; i < g_nprof && i < 640; i++) {
 		names[i] = profile_name(&g_prof[i]);
 	}
-	r = ui_list(win, cx, cy, 10, 10, 240, 470, names, g_nprof, &g_sel, &g_top);
+	r = nlist(win, cx, cy, 10, 10, 240, 470, names, g_nprof, &g_sel, &g_top);
 	if(r == 2) {
 		lib_play();
 	}
@@ -1758,7 +2097,7 @@ lib_draw(UiWindow *win, int cx, int cy)
 		int vx = 380;
 
 		for(i = 0; keys[i][0]; i++) {	/* the value column follows the widest label */
-			int lw = 270 + ui_text_width(keys[i][1]) + 14;
+			int lw = 270 + ui_text_width(T(keys[i][1])) + 14;
 
 			if(lw > vx) {
 				vx = lw;
@@ -1784,16 +2123,16 @@ lib_draw(UiWindow *win, int cx, int cy)
 					profile_expand_path(v, full, sizeof(full));
 					missing = !SDL_GetPathInfo(full, &pi);
 				}
-				ui_draw_text(cx + 270, cy + y, keys[i][1], UI_GREY);
+				ui_draw_text(cx + 270, cy + y, T(keys[i][1]), UI_GREY);
 				ui_draw_text(cx + vx, cy + y, t, missing ? UI_BAD : UI_BLACK);
 				if(missing) {
-					ui_draw_text(cx + vx + ui_text_width(t) + 8, cy + y, "(missing)", UI_BAD);
+					ui_draw_text(cx + vx + ui_text_width(t) + 8, cy + y, T("(missing)"), UI_BAD);
 				}
 				y += 18;
 			}
 		}
 		y += 10;
-		ui_draw_text(cx + 270, cy + y, "Command line", UI_GREY);
+		ui_draw_text(cx + 270, cy + y, T("Command line"), UI_GREY);
 		y += 18;
 		n = build(p, buf, sizeof(buf), a, err, sizeof(err), 0);
 		if(n > 0) {
@@ -1824,28 +2163,40 @@ lib_draw(UiWindow *win, int cx, int cy)
 	}
 	}
 	{
-		int x = 10, rx;
-		int we = text_w("Edit...", 100), wp = text_w("Play", 100);
+		/* six buttons in one row; with a wide skin font or long words they get less padding */
+		static const char *lab[6] = { "New", "Duplicate", "Delete", "Library...", "Edit...", "Play" };
+		static const int minw[6] = { 70, 80, 78, 100, 100, 100 };
+		int	w[6], i, pad, total, x = 10, hit = -1, room = win->w - 2 - 20;
 
-		if(fit_button(win, cx, cy, &x, 490, 70, 28, "New", 1)) {
-			new_profile();
+		for(pad = 20; pad >= 6; pad -= 7) {
+			total = 4 * 6 + 20;				/* the gaps */
+			for(i = 0; i < 6; i++) {
+				w[i] = ui_text_width(T(lab[i])) + pad;
+				if(pad == 20 && w[i] < minw[i]) {
+					w[i] = minw[i];
+				}
+				total += w[i];
+			}
+			if(total <= room) {
+				break;
+			}
 		}
-		if(fit_button(win, cx, cy, &x, 490, 80, 28, "Duplicate", g_nprof > 0)) {
-			duplicate_profile();
+		for(i = 0; i < 6; i++) {
+			if(i == 4) {					/* Edit and Play sit at the right edge */
+				x = SDL_max(x, 10 + room - w[4] - 6 - w[5]);
+			}
+			if(nbutton(win, cx, cy, x, 490, w[i], 28, lab[i], i == 0 || i == 3 || g_nprof > 0)) {
+				hit = i;
+			}
+			x += w[i] + (i == 3 ? 20 : 6);
 		}
-		if(fit_button(win, cx, cy, &x, 490, 78, 28, "Delete", g_nprof > 0)) {
-			delete_profile();
-		}
-		x += 20;
-		if(fit_button(win, cx, cy, &x, 490, 100, 28, "Library...", 1)) {
-			lib_open(LIB_DISK, NULL, 0);
-		}
-		rx = win->w - 2 - 10 - wp;
-		if(ui_button(win, cx, cy, rx - 6 - we, 490, we, 28, "Edit...", g_nprof > 0)) {
-			edit_open(&g_prof[g_sel], 0);
-		}
-		if(ui_button(win, cx, cy, rx, 490, wp, 28, "Play", g_nprof > 0)) {
-			lib_play();
+		switch(hit) {
+		case 0: new_profile(); break;
+		case 1: duplicate_profile(); break;
+		case 2: delete_profile(); break;
+		case 3: lib_open(LIB_DISK, NULL, 0); break;
+		case 4: edit_open(&g_prof[g_sel], 0); break;
+		case 5: lib_play(); break;
 		}
 	}
 }
@@ -1923,8 +2274,7 @@ lib_rescan(void)
 	lib_tags_apply(&g_library, tp);
 	g_ltag_for = -2;
 	g_lib_scanned = 1;
-	ui_message("Library: %d files in %d folder%s", g_library.n, g_nlfold,
-						g_nlfold == 1 ? "" : "s");
+	ui_message(g_nlfold == 1 ? T("Library: %d files in 1 folder") : T("Library: %d files in %d folders"), g_library.n, g_nlfold);
 }
 
 static void SDLCALL
@@ -1993,17 +2343,16 @@ private_copy(const LibItem *it)
 		}
 	}
 	if(!key[0]) {
-		ui_message("No free drive in %s for this disk", profile_name(&p));
+		ui_message(T("No free drive in %s for this disk"), profile_name(&p));
 		return;
 	}
 	SDL_zero(btn);
 	btn[0].buttonID = 1;
-	btn[0].text = "Make Copy";
+	btn[0].text = T("Make Copy");
 	btn[1].buttonID = 2;
-	btn[1].text = "Cancel";
+	btn[1].text = T("Cancel");
 	btn[1].flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
-	snprintf(msg, sizeof(msg), "Make a copy of \"%s\" (%ld MB) for the profile \"%s\" and use it as %s?\n"
-		"The original stays as it is.", it->name, it->size / (1024 * 1024), profile_name(&p), key);
+	snprintf(msg, sizeof(msg), T("Make a copy of \"%s\" (%ld MB) for the profile \"%s\" and use it as %s?\nThe original stays as it is."), it->name, it->size / (1024 * 1024), profile_name(&p), key);
 	SDL_zero(box);
 	box.title = "EmuBuddy Launcher";
 	box.message = msg;
@@ -2023,7 +2372,7 @@ private_copy(const LibItem *it)
 		snprintf(dst, sizeof(dst), "%s/%d %s", dir, n + 1, it->name);
 	}
 	if(!SDL_CopyFile(it->path, dst)) {
-		ui_message("Copy failed: %s", SDL_GetError());
+		ui_message(T("Copy failed: %s"), SDL_GetError());
 		return;
 	}
 	profile_set(&p, key, dst);
@@ -2038,7 +2387,7 @@ private_copy(const LibItem *it)
 			}
 		}
 		g_lib_scanned = 0;
-		ui_message("%s now uses its own copy as %s", profile_name(&p), key);
+		ui_message(T("%s now uses its own copy as %s"), profile_name(&p), key);
 	}
 }
 
@@ -2049,7 +2398,7 @@ static int	g_lmap[LIB_MAX_ITEMS];
 static void
 libwin_draw(UiWindow *win, int cx, int cy)
 {
-	static const char *tabs[] = { "ROMs", "Disks" };
+	const char *tabs[] = { T("ROMs"), T("Disks") };
 	int	i, n = 0, tab = g_lpick ? g_ltab : g_ltab;
 	char	used[300], line[400];
 
@@ -2057,15 +2406,15 @@ libwin_draw(UiWindow *win, int cx, int cy)
 		lib_rescan();
 	}
 	if(!g_lpick) {
-		ui_segment(win, cx, cy, 10, 8, 200, 22, tabs, 2, &g_ltab, 3);
+		nsegment(win, cx, cy, 10, 8, 200, 22, tabs, 2, &g_ltab, 3);
 	} else {
-		ui_draw_text(cx + 10, cy + 10, tab == LIB_ROM ? "Choose a ROM" : "Choose a disk", UI_BLACK);
+		ui_draw_text(cx + 10, cy + 10, tab == LIB_ROM ? T("Choose a ROM") : T("Choose a disk"), UI_BLACK);
 	}
-	ui_draw_text(cx + 226, cy + 10, "Search", UI_BLACK);
+	ui_draw_text(cx + 226, cy + 10, T("Search"), UI_BLACK);
 	field(win, cx, cy, 290, 9, 240, g_lsearch, sizeof(g_lsearch));
-	if(ui_button(win, cx, cy, 540, 8, 120, 22, "Check files", 1)) {
+	if(nbutton(win, cx, cy, 540, 8, 120, 22, "Check files", 1)) {
 		lib_check(&g_library);
-		ui_message("Checked %d files", g_library.n);
+		ui_message(T("Checked %d files"), g_library.n);
 	}
 	for(i = 0; i < g_library.n; i++) {
 		const LibItem *it = &g_library.items[i];
@@ -2075,7 +2424,7 @@ libwin_draw(UiWindow *win, int cx, int cy)
 		}
 		used_by(it->path, used, sizeof(used));
 		snprintf(g_lline[n], sizeof(g_lline[0]), "%.40s\t%s\t%s\t%.50s%s", it->name,
-				it->label, it->volume, used[0] ? used : "(not used)",
+				it->label, it->volume, used[0] ? used : T("(not used)"),
 				it->flags ? " !" : "");
 		g_lnames[n] = g_lline[n];
 		g_lmap[n++] = i;
@@ -2087,15 +2436,15 @@ libwin_draw(UiWindow *win, int cx, int cy)
 		g_lsel = 0;
 	}
 	if(!n) {
-		ui_draw_text(cx + 14, cy + 44, g_nlfold ? "Nothing found in these folders." :
-			"Add the folders that hold your ROMs and disks.", UI_GREY);
+		ui_draw_text(cx + 14, cy + 44, g_nlfold ? T("Nothing found in these folders.") :
+			T("Add the folders that hold your ROMs and disks."), UI_GREY);
 	}
 	{
 		static const int cols[] = { 4, 300, 440, 560 };
 
 		ui_list_columns(cols, 4);
 	}
-	i = ui_list(win, cx, cy, 10, 36, 740, 246, g_lnames, n, &g_lsel, &g_ltop);
+	i = nlist(win, cx, cy, 10, 36, 740, 246, g_lnames, n, &g_lsel, &g_ltop);
 	if(i == 2 && g_lpick && g_lsel >= 0) {
 		SDL_strlcpy(g_lpick, g_library.items[g_lmap[g_lsel]].path, (size_t)g_lpick_cap);
 		g_lpick = NULL;
@@ -2114,22 +2463,23 @@ libwin_draw(UiWindow *win, int cx, int cy)
 		}
 		ui_draw_text(cx + 12, cy + 290, t, UI_BLACK);
 		snprintf(line, sizeof(line), "%s, %ld KB%s%s%s", it->label, it->size / 1024,
-			it->volume[0] ? ", volume " : "", it->volume,
-			it->writable ? "" : ", write-protected");
+			it->volume[0] ? T(", volume ") : "", it->volume, it->writable ? "" : T(", write-protected"));
 		ui_draw_text(cx + 12, cy + 308, line, UI_GREY);
-		snprintf(line, sizeof(line), "Used by: %s", used[0] ? used : "no profile");
+		snprintf(line, sizeof(line), T("Used by: %s"), used[0] ? used : T("no profile"));
 		ui_draw_text(cx + 12, cy + 326, line, used[0] ? UI_BLACK : UI_WARN);
 		if(it->flags) {
-			snprintf(line, sizeof(line), "Check: %s", it->note);
+			snprintf(line, sizeof(line), T("Check: %s"), it->note);
 			ui_draw_text(cx + 300, cy + 326, line, UI_BAD);
 		}
 		if(g_ltag_for != idx) {
 			g_ltag_for = idx;
 			snprintf(g_ltag, sizeof(g_ltag), "%s", it->tags);
 		}
-		ui_draw_text(cx + 12, cy + 348, "Tags", UI_BLACK);
-		if(field(win, cx, cy, 60, 346, 300, g_ltag, sizeof(g_ltag)) || g_focus != g_ltag) {
-			/* typing changes the buffer; save when it differs */
+		ui_draw_text(cx + 12, cy + 348, T("Tags"), UI_BLACK);
+		{
+			int	tx = SDL_max(60, 12 + ui_text_width(T("Tags")) + 10);
+
+			field(win, cx, cy, tx, 346, 300, g_ltag, sizeof(g_ltag));	/* saved below when it differs */
 		}
 		if(strcmp(g_ltag, it->tags) != 0 && g_focus != g_ltag) {
 			char	tp[1300];
@@ -2137,25 +2487,29 @@ libwin_draw(UiWindow *win, int cx, int cy)
 			tags_path(tp, sizeof(tp));
 			lib_tags_set(&g_library, idx, g_ltag, tp);
 		}
-		if(!g_lpick && it->kind == LIB_DISK && ui_button(win, cx, cy, 560, 344, 190, 22,
-				"Private Copy for Profile...", g_nprof > 0)) {
-			private_copy(it);
+		{
+			int	bw = text_w(T("Private Copy for Profile..."), 190);
+
+			if(!g_lpick && it->kind == LIB_DISK && nbutton(win, cx, cy, 750 - bw, 344, bw, 22,
+					"Private Copy for Profile...", g_nprof > 0)) {
+				private_copy(it);
+			}
 		}
 	}
 	ui_hline(cx + 10, cy + 374, 740, UI_LGREY);
-	ui_draw_text(cx + 12, cy + 380, "Library folders", UI_GREY);
+	ui_draw_text(cx + 12, cy + 380, T("Library folders"), UI_GREY);
 	{
 		static const char *fn[16];
 
 		for(i = 0; i < g_nlfold; i++) {
 			fn[i] = g_lfold[i];
 		}
-		ui_list(win, cx, cy, 10, 400, 560, 76, fn, g_nlfold, &g_lfsel, &g_lftop);
+		nlist(win, cx, cy, 10, 400, 560, 76, fn, g_nlfold, &g_lfsel, &g_lftop);
 	}
-	if(ui_button(win, cx, cy, 580, 400, 170, 22, "Add Folder...", g_nlfold < 16)) {
+	if(nbutton(win, cx, cy, 580, 400, 170, 22, "Add Folder...", g_nlfold < 16)) {
 		SDL_ShowOpenFolderDialog(add_cb, NULL, g_win, NULL, false);
 	}
-	if(ui_button(win, cx, cy, 580, 427, 170, 22, "Remove Folder", g_lfsel >= 0 && g_lfsel < g_nlfold)) {
+	if(nbutton(win, cx, cy, 580, 427, 170, 22, "Remove Folder", g_lfsel >= 0 && g_lfsel < g_nlfold)) {
 		for(i = g_lfsel; i + 1 < g_nlfold; i++) {
 			memcpy(g_lfold[i], g_lfold[i + 1], sizeof(g_lfold[0]));
 		}
@@ -2164,20 +2518,20 @@ libwin_draw(UiWindow *win, int cx, int cy)
 		lfold_save();
 		lib_rescan();
 	}
-	if(ui_button(win, cx, cy, 580, 454, 170, 22, "Rescan", 1)) {
+	if(nbutton(win, cx, cy, 580, 454, 170, 22, "Rescan", 1)) {
 		lib_rescan();
 	}
 	if(g_lpick) {
-		if(ui_button(win, cx, cy, 580, 490, 80, 24, "Cancel", 1)) {
+		if(nbutton(win, cx, cy, 580, 490, 80, 24, "Cancel", 1)) {
 			g_lpick = NULL;
 			ui_window_close(win);
 		}
-		if(ui_button(win, cx, cy, 670, 490, 80, 24, "Use", g_lsel >= 0 && g_lsel < n)) {
+		if(nbutton(win, cx, cy, 670, 490, 80, 24, "Use", g_lsel >= 0 && g_lsel < n)) {
 			SDL_strlcpy(g_lpick, g_library.items[g_lmap[g_lsel]].path, (size_t)g_lpick_cap);
 			g_lpick = NULL;
 			ui_window_close(win);
 		}
-	} else if(ui_button(win, cx, cy, 670, 490, 80, 24, "Close", 1)) {
+	} else if(nbutton(win, cx, cy, 670, 490, 80, 24, "Close", 1)) {
 		ui_window_close(win);
 	}
 }
@@ -2192,10 +2546,10 @@ lib_open(int kind, char *target, int cap)
 		g_lsel = 0;
 		g_ltop = 0;
 	}
-	snprintf(g_libwin.title, sizeof(g_libwin.title), "Library");
+	snprintf(g_libwin.title, sizeof(g_libwin.title), "%s", T("Library"));
 	g_libwin.w = 760;
 	g_libwin.h = 536;
-	g_libwin.modal = target != NULL;
+	g_libwin.modal = target != NULL || g_arcade;	/* modal in the Arcade view: keys and controller work */
 	g_libwin.closable = 1;
 	g_libwin.draw = libwin_draw;
 	g_libwin.on_close = NULL;
@@ -2244,11 +2598,11 @@ about_draw(UiWindow *win, int cx, int cy)
 		SDL_RenderTexture(g_ren, g_icon_tex, NULL, &d);
 	}
 	for(i = 0; i < (int)(sizeof(lines) / sizeof(lines[0])); i++) {
-		int tw = ui_text_width(lines[i]);
+		int tw = ui_text_width(T(lines[i]));
 
-		ui_draw_text(cx + (cw - tw) / 2, cy + 108 + i * 17, lines[i], i == 0 ? UI_BLACK : (i == 1 ? UI_GREY : UI_BLACK));
+		ui_draw_text(cx + (cw - tw) / 2, cy + 108 + i * 17, T(lines[i]), i == 0 ? UI_BLACK : (i == 1 ? UI_GREY : UI_BLACK));
 	}
-	if(ui_button(win, cx, cy, (cw - 80) / 2, win->h - UI_TITLE_H - 38, 80, 24, "OK", 1)) {
+	if(nbutton(win, cx, cy, (cw - 80) / 2, win->h - UI_TITLE_H - 38, 80, 24, "OK", 1)) {
 		ui_window_close(win);
 	}
 }
@@ -2256,7 +2610,7 @@ about_draw(UiWindow *win, int cx, int cy)
 static void
 about_open(void)
 {
-	snprintf(g_about.title, sizeof(g_about.title), "About EmuBuddy Launcher");
+	snprintf(g_about.title, sizeof(g_about.title), "%s", T("About EmuBuddy Launcher"));
 	g_about.w = 340;
 	g_about.h = 374;
 	g_about.closable = 1;
@@ -2268,7 +2622,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FAV = 85, C_SORT0 = 80, C_SORT1, C_SORT2, C_SORT3, C_FAVONLY = 84, C_SORT = 86, C_SOUND = 78, C_IDLE = 77, C_FULL = 79, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FAV = 85, C_SORT0 = 80, C_SORT1, C_SORT2, C_SORT3, C_FAVONLY = 84, C_SORT = 86, C_SOUND = 78, C_IDLE = 77, C_FULL = 79, C_PORTRAIT = 76, C_LANG = 87, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -2294,8 +2648,10 @@ static const UiMenuItem m_view[] = {
 	{ "Window Size 3x", C_SIZE6, "Cmd-6", 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Full Screen", C_FULL, "F11", 0 },
+	{ "Portrait Window", C_PORTRAIT, NULL, 0 },
 	{ "Sounds", C_SOUND, NULL, 0 },
 	{ "Idle Slideshow", C_IDLE, NULL, 0 },
+	{ "Deutsch", C_LANG, NULL, 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Sort: A-Z", C_SORT0, NULL, 0 },
 	{ "Sort: Favourites First", C_SORT1, NULL, 0 },
@@ -2317,10 +2673,54 @@ static const UiMenuItem m_help[] = {
 };
 static UiMenuItem m_skin[16];
 static const UiMenu g_menus[] = {
-	{ "File", m_file, 7 }, { "Edit", m_edit, 4 }, { "Profile", m_prof, 5 }, { "View", m_view, 17 },
-	{ "Skin", m_skin, 0 }, { "Help", m_help, 1 },
+	#define NITEMS(a)	((int)(sizeof(a) / sizeof((a)[0])))
+	{ "File", m_file, NITEMS(m_file) }, { "Edit", m_edit, NITEMS(m_edit) }, { "Profile", m_prof, NITEMS(m_prof) }, { "View", m_view, NITEMS(m_view) },
+	{ "Skin", m_skin, 0 }, { "Help", m_help, NITEMS(m_help) },
 };
 static UiMenu g_menus_rw[6];
+static UiMenuItem g_menu_items[64];	/* the items in the language in use */
+
+/* The menus as the toolkit gets them: texts in the language in use, the Skin menu filled in. */
+static void
+menus_build(void)
+{
+	int	k = 0;
+
+	memcpy(g_menus_rw, g_menus, sizeof(g_menus));
+	for(int m = 0; m < 6; m++) {
+		g_menus_rw[m].title = T(g_menus[m].title);
+		if(g_menus[m].items == m_skin) {
+			g_menus_rw[m].n_items = skin_count() < 16 ? skin_count() : 16;
+			continue;
+		}
+		g_menus_rw[m].items = &g_menu_items[k];
+		for(int i = 0; i < g_menus[m].n_items && k < 64; i++, k++) {
+			g_menu_items[k] = g_menus[m].items[i];
+			g_menu_items[k].label = T(g_menus[m].items[i].label);
+		}
+	}
+}
+
+/* German when it is chosen, or when the setting is "like the system" and the system is German. */
+static void
+lang_apply(void)
+{
+	int	german = g_lang == 2;
+
+	if(g_lang == 0) {
+		int		n = 0;
+		SDL_Locale	**loc = SDL_GetPreferredLocales(&n);
+
+		german = loc && n > 0 && loc[0]->language && !strcmp(loc[0]->language, "de");
+		SDL_free(loc);
+	}
+	if(getenv("LAUNCHER_LANG")) {			/* test aid: de or en */
+		german = !strcmp(getenv("LAUNCHER_LANG"), "de");
+	}
+	lang_set_german(german);
+	menus_build();
+	snprintf(g_lib.title, sizeof(g_lib.title), "%s", T("Profiles"));
+}
 
 /* ---- pictures of a game: set and remove ---- */
 
@@ -2340,7 +2740,7 @@ pic_cb(void *ud, const char * const *list, int filter)
 static void
 pic_set_choose(void)
 {
-	static const SDL_DialogFileFilter filters[] = { { "Pictures", "png;bmp" } };
+	static const SDL_DialogFileFilter filters[] = { { "Pictures", "png;jpg;jpeg;bmp" } };
 
 	if(g_nprof) {
 		SDL_ShowOpenFileDialog(pic_cb, NULL, g_win, filters, 1, NULL, false);
@@ -2389,11 +2789,22 @@ pic_apply(const char *src)
 		}
 	}
 	SDL_CreateDirectory(dir);
-	snprintf(dst, sizeof(dst), "%s/%s%s", dir, p, ext && !SDL_strcasecmp(ext, ".bmp") ? ".bmp" : ".png");
-	if(SDL_CopyFile(src, dst)) {
-		ui_message("Picture set for %s", profile_name(&g_prof[g_sel]));
+	{	/* an older picture of this game with another ending would be found first: remove it */
+		static const char *all[] = { ".png", ".jpg", ".jpeg", ".bmp" };
+
+		for(int i = 0; i < 4; i++) {
+			snprintf(dst, sizeof(dst), "%s/%s%s", dir, p, all[i]);
+			if(strcmp(dst, src) != 0) {
+				SDL_RemovePath(dst);
+			}
+		}
+	}
+	snprintf(dst, sizeof(dst), "%s/%s%s", dir, p, ext && !SDL_strcasecmp(ext, ".bmp") ? ".bmp" :
+			ext && (!SDL_strcasecmp(ext, ".jpg") || !SDL_strcasecmp(ext, ".jpeg")) ? ".jpg" : ".png");
+	if(!strcmp(dst, src) || SDL_CopyFile(src, dst)) {
+		ui_message(T("Picture set for %s"), profile_name(&g_prof[g_sel]));
 	} else {
-		ui_message("Could not copy the picture: %s", SDL_GetError());
+		ui_message(T("Could not copy the picture: %s"), SDL_GetError());
 	}
 }
 
@@ -2407,16 +2818,16 @@ pic_remove(void)
 	int	pick = 2;
 
 	if(!g_nprof || !fe_find_art(&g_prof[g_sel], g_art_root, 0, art, sizeof(art))) {
-		ui_message("This game has no picture");
+		ui_message(T("This game has no picture"));
 		return;
 	}
 	SDL_zero(btn);
 	btn[0].buttonID = 1;
-	btn[0].text = "Delete";
+	btn[0].text = T("Delete");
 	btn[1].buttonID = 2;
-	btn[1].text = "Cancel";
+	btn[1].text = T("Cancel");
 	btn[1].flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
-	snprintf(msg, sizeof(msg), "Delete the picture file of \"%s\"?\n\n%s", profile_name(&g_prof[g_sel]), art);
+	snprintf(msg, sizeof(msg), T("Delete the picture file of \"%s\"?\n\n%s"), profile_name(&g_prof[g_sel]), art);
 	SDL_zero(box);
 	box.title = "EmuBuddy Launcher";
 	box.message = msg;
@@ -2424,9 +2835,9 @@ pic_remove(void)
 	box.buttons = btn;
 	if(SDL_ShowMessageBox(&box, &pick) && pick == 1) {
 		if(SDL_RemovePath(art)) {
-			ui_message("Picture deleted");
+			ui_message(T("Picture deleted"));
 		} else {
-			ui_message("Could not delete: %s", SDL_GetError());
+			ui_message(T("Could not delete: %s"), SDL_GetError());
 		}
 	}
 }
@@ -2467,7 +2878,7 @@ import_run(void)
 		}
 	}
 	load_profiles();
-	ui_message("Imported %d game%s%s", saved, saved == 1 ? "" : "s", existed ? " (the others were there already)" : "");
+	ui_message(saved == 1 ? T("Imported %d game%s") : T("Imported %d games%s"), saved, existed ? T(" (the others were there already)") : "");
 	ui_window_close(&g_imp);
 }
 
@@ -2477,22 +2888,22 @@ imp_draw(UiWindow *win, int cx, int cy)
 	int	r, x = 10;
 
 	if(!g_imp_n) {
-		ui_draw_text(cx + 12, cy + 14, "No Attract-Mode set-up found.", UI_BAD);
+		ui_draw_text(cx + 12, cy + 14, T("No Attract-Mode set-up found."), UI_BAD);
 		ui_draw_text(cx + 12, cy + 36, g_imp_dir, UI_GREY);
 	} else {
-		ui_draw_text(cx + 12, cy + 8, "Which system do you want to bring in?", UI_BLACK);
-		r = ui_list(win, cx, cy, 10, 30, win->w - 22, 220, g_imp_list, g_imp_n, &g_imp_sel, &g_imp_top);
+		ui_draw_text(cx + 12, cy + 8, T("Which system do you want to bring in?"), UI_BLACK);
+		r = nlist(win, cx, cy, 10, 30, win->w - 22, 220, g_imp_list, g_imp_n, &g_imp_sel, &g_imp_top);
 		if(r == 2) {
 			import_run();
 			return;
 		}
 	}
-	ui_draw_text(cx + 12, cy + 258, "Your Attract-Mode folder is not changed. Games that exist already are skipped.", UI_GREY);
+	ui_draw_text(cx + 12, cy + 258, T("Your Attract-Mode folder is not changed. Games that exist already are skipped."), UI_GREY);
 	if(fit_button(win, cx, cy, &x, win->h - UI_TITLE_H - 34, 90, 26, "Cancel", 1)) {
 		ui_window_close(win);
 		return;
 	}
-	if(g_imp_n && ui_button(win, cx, cy, win->w - 112, win->h - UI_TITLE_H - 34, 100, 26, "Import", 1)) {
+	if(g_imp_n && nbutton(win, cx, cy, win->w - 112, win->h - UI_TITLE_H - 34, 100, 26, "Import", 1)) {
 		import_run();
 	}
 }
@@ -2514,7 +2925,7 @@ import_open(void)
 			g_imp_sel = i;
 		}
 	}
-	snprintf(g_imp.title, sizeof(g_imp.title), "Import from Attract-Mode");
+	snprintf(g_imp.title, sizeof(g_imp.title), "%s", T("Import from Attract-Mode"));
 	g_imp.w = 520;
 	g_imp.h = 340;
 	g_imp.modal = 1;
@@ -2547,14 +2958,14 @@ art_dir_choose(void)
 }
 
 /* The menu of the Arcade view (Space): the same commands the menu bar has. */
-static UiWindow	g_ovl;
 
 static struct { const char *label; int id; } g_ovl_items[] = {
 	{ "Play", C_PLAY }, { "Details", C_INFO }, { "Favourite", C_FAV }, { "Sort", C_SORT }, { "Edit...", C_EDIT }, { "New Game...", C_NEW },
 	{ "Duplicate", C_DUP }, { "Delete...", C_DEL }, { "Disks and ROMs...", C_LIB },
 	{ "Set Picture...", C_SETPIC }, { "Remove Picture...", C_RMPIC },
 	{ "Artwork Folder...", C_ARTDIR }, { "Import from Attract-Mode...", C_IMPORT },
-	{ "Classic View", C_VIEW }, { "Full Screen", C_FULL }, { "Sounds on/off", C_SOUND }, { "About", C_ABOUT }, { "Quit", C_QUIT },
+	{ "Classic View", C_VIEW }, { "Full Screen", C_FULL }, { "Portrait Window", C_PORTRAIT }, { "Sounds on/off", C_SOUND },
+	{ "Language", C_LANG }, { "About", C_ABOUT }, { "Quit", C_QUIT },
 };
 
 static int	g_ovl_sel;		/* the highlighted item (keys and game controller) */
@@ -2619,7 +3030,7 @@ ovl_draw(UiWindow *win, int cx, int cy)
 			ui_frame(cx + 7, cy + y - 3, win->w - 16, 32, UI_BLACK);
 			ui_frame(cx + 8, cy + y - 2, win->w - 18, 30, UI_BLACK);
 		}
-		if(ui_button(win, cx, cy, 10, y, win->w - 22, 26, g_ovl_items[i].label, en)) {
+		if(nbutton(win, cx, cy, 10, y, win->w - 22, 26, g_ovl_items[i].label, en)) {
 			int id = g_ovl_items[i].id;
 
 			ui_window_close(win);
@@ -2633,21 +3044,30 @@ ovl_draw(UiWindow *win, int cx, int cy)
 static void
 ovl_open(void)
 {
-	snprintf(g_ovl.title, sizeof(g_ovl.title), "Menu");
+	snprintf(g_ovl.title, sizeof(g_ovl.title), "%s", T("Menu"));
 	{
-		static char fav[48], sort[48];
+		static char fav[48], sort[48], lang[48], up[48];
 
-		snprintf(fav, sizeof(fav), "%s", g_nprof && is_fav(&g_prof[g_sel]) ? "Remove from Favourites" : "Add to Favourites");
-		snprintf(sort, sizeof(sort), "Sort: %s", g_sort_names[g_sort]);
+		snprintf(fav, sizeof(fav), "%s", g_nprof && is_fav(&g_prof[g_sel]) ? T("Remove from Favourites") : T("Add to Favourites"));
+		snprintf(sort, sizeof(sort), T("Sort: %s"), T(g_sort_names[g_sort]));
 		for(int i = 0; i < (int)(sizeof(g_ovl_items) / sizeof(g_ovl_items[0])); i++) {
 			if(g_ovl_items[i].id == C_FAV) {
 				g_ovl_items[i].label = fav;
 			} else if(g_ovl_items[i].id == C_SORT) {
 				g_ovl_items[i].label = sort;
+			} else if(g_ovl_items[i].id == C_LANG) {	/* says what a click changes to */
+				snprintf(lang, sizeof(lang), "%s", lang_german() ? "English" : "Deutsch");
+				g_ovl_items[i].label = lang;
+			} else if(g_ovl_items[i].id == C_PORTRAIT) {
+				snprintf(up, sizeof(up), "%s", g_portrait ? T("Landscape Window") : T("Portrait Window"));
+				g_ovl_items[i].label = up;
 			}
 		}
 	}
 	g_ovl.w = 330;
+	for(int i = 0; i < (int)(sizeof(g_ovl_items) / sizeof(g_ovl_items[0])); i++) {	/* wide enough for every line */
+		g_ovl.w = SDL_max(g_ovl.w, ui_text_width(T(g_ovl_items[i].label)) + 60);
+	}
 	g_ovl.h = 20 + 8 + 30 * (int)(sizeof(g_ovl_items) / sizeof(g_ovl_items[0])) + 10;
 	g_ovl.modal = 1;
 	g_ovl.closable = 1;
@@ -2693,6 +3113,21 @@ app_command(int id)
 		set_window_size(g_steps[id - C_SIZE1]);
 		break;
 	case C_FULL: toggle_fullscreen(); break;
+	case C_PORTRAIT:
+		g_portrait = !g_portrait;
+		g_full = 0;
+		if(!g_arcade) {
+			set_view(1);			/* the upright window belongs to the Arcade view */
+		} else {
+			apply_window_mode();
+			settings_save();
+		}
+		break;
+	case C_LANG:
+		g_lang = lang_german() ? 1 : 2;
+		lang_apply();
+		settings_save();
+		break;
 	case C_FAV:
 		if(g_nprof) {
 			Profile	*p = &g_prof[g_sel];
@@ -2708,7 +3143,7 @@ app_command(int id)
 			} else if(g_sort == 1) {
 				resort_keep();
 			}
-			snprintf(g_toast, sizeof(g_toast), "%s", is_fav(&g_prof[g_sel]) ? "Added to Favourites" : "Removed from Favourites");
+			snprintf(g_toast, sizeof(g_toast), "%s", is_fav(&g_prof[g_sel]) ? T("Added to Favourites") : T("Removed from Favourites"));
 		}
 		break;
 	case C_SORT0: case C_SORT1: case C_SORT2: case C_SORT3: case C_SORT:
@@ -2777,6 +3212,12 @@ app_state(int id)
 	if(id == C_IDLE) {
 		return g_idle ? UI_MI_CHECKED : 0;
 	}
+	if(id == C_PORTRAIT) {
+		return g_portrait ? UI_MI_CHECKED : 0;
+	}
+	if(id == C_LANG) {
+		return lang_german() ? UI_MI_CHECKED : 0;
+	}
 	if(id == C_SOUND) {
 		return snd_enabled() ? UI_MI_CHECKED : 0;
 	}
@@ -2796,7 +3237,7 @@ static void
 app_status(char *l, char *c, char *r, int n)
 {
 	(void)c;
-	snprintf(l, (size_t)n, "%d profile%s", g_nprof, g_nprof == 1 ? "" : "s");
+	snprintf(l, (size_t)n, g_nprof == 1 ? T("%d profile") : T("%d profiles"), g_nprof);
 	snprintf(r, (size_t)n, "EmuBuddy Launcher");
 }
 
@@ -2811,7 +3252,7 @@ app_tick(void)
 		SDL_SetAtomicInt(&g_art_ready, 0);
 		snprintf(g_art_root, sizeof(g_art_root), "%s", g_artpath);
 		settings_save();
-		ui_message("Artwork folder: %s", g_art_root);
+		ui_message(T("Artwork folder: %s"), g_art_root);
 	}
 	if(SDL_GetAtomicInt(&g_add_ready)) {
 		SDL_SetAtomicInt(&g_add_ready, 0);
@@ -2890,6 +3331,7 @@ pad_event(const SDL_Event *e)
 {
 	if(e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION) {
 		fe_set_pad_hints(1);
+		g_nav_on = 1;				/* dialogs show the focus frame right away */
 	}
 	switch(e->type) {
 	case SDL_EVENT_GAMEPAD_ADDED:
@@ -2973,8 +3415,7 @@ window(void)
 		m_skin[i].label = skin_get(i)->name;
 		m_skin[i].id = C_SKIN0 + i;
 	}
-	memcpy(g_menus_rw, g_menus, sizeof(g_menus));
-	g_menus_rw[4].n_items = skin_count();
+	lang_apply();
 	{
 		SDL_Surface *ic = SDL_CreateSurfaceFrom(launcher_icon_size, launcher_icon_size,
 				SDL_PIXELFORMAT_RGBA32, (void *)launcher_icon_rgba, launcher_icon_size * 4);
@@ -2987,14 +3428,13 @@ window(void)
 	ui_init(g_win, g_ren, &g_app);
 	snd_init();
 	skin_switch(g_skin);
-	snprintf(g_lib.title, sizeof(g_lib.title), "Profiles");
 	g_lib.x = 10;
 	g_lib.y = UI_BAR_H + 10;
 	g_lib.w = 780;
 	g_lib.h = 540;
 	g_lib.draw = lib_draw;
 	{
-		FeData fd = { g_prof, &g_nprof, &g_sel, g_art_root, fe_play, ovl_open, fe_edit };
+		FeData fd = { g_prof, &g_nprof, &g_sel, g_art_root, fe_play, ovl_open, fe_edit, g_dir };
 		const char *fdir = getenv("LAUNCHER_FONTS"), *base = SDL_GetBasePath();
 		char	fpath[1400];
 
@@ -3024,6 +3464,9 @@ window(void)
 			if(e.type == SDL_EVENT_QUIT) {
 				g_running = 0;
 				continue;
+			}
+			if(e.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+				fe_refresh();			/* back from EmuBuddy: it may have left a new picture */
 			}
 			if((e.type == SDL_EVENT_KEY_DOWN && e.key.key != SDLK_UNKNOWN && e.key.scancode != SDL_SCANCODE_UNKNOWN) ||
 					e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
@@ -3073,6 +3516,11 @@ window(void)
 				} else if(k == SDLK_RETURN || k == SDLK_TAB || k == SDLK_ESCAPE) {
 					focus_clear();
 					continue;
+				} else if((k == SDLK_UP || k == SDLK_DOWN) && nav_front()) {
+					focus_clear();			/* leave the text and move on */
+					g_nav_on = 1;
+					nav_key(k);
+					continue;
 				} else if(k == SDLK_V && cmd) {
 					clip_paste();
 					continue;
@@ -3111,6 +3559,10 @@ window(void)
 					continue;
 				}
 			}
+			if(e.type == SDL_EVENT_KEY_DOWN && !g_focus && !(e.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL)) &&
+					nav_key(e.key.key)) {
+				continue;
+			}
 			if(e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_F11 && !e.key.repeat) {
 				toggle_fullscreen();
 				continue;
@@ -3122,6 +3574,7 @@ window(void)
 				if(!ui_menu_is_open() && ly >= UI_BAR_H) {
 					g_pending_unfocus = 1;	/* unless a field takes the click */
 				}
+				g_nav_on = 0;			/* the mouse is in use: no focus frame */
 			}
 			if(g_arcade && !g_focus && !ui_is_modal()) {
 				if(e.type == SDL_EVENT_KEY_DOWN && !(e.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL)) &&
@@ -3167,6 +3620,7 @@ window(void)
 				}
 			}
 		}
+		follow_window_shape();
 		if(g_arcade) {
 			fe_draw(g_bw, g_bh);
 		} else {
@@ -3218,7 +3672,9 @@ window(void)
 			}
 		}
 		}
+		nav_begin();
 		ui_draw(g_bw, g_bh);
+		nav_end();
 		if(g_pending_unfocus) {
 			g_pending_unfocus = 0;
 			focus_clear();

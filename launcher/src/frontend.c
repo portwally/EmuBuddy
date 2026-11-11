@@ -1,4 +1,6 @@
 #include "frontend.h"
+#include "jpeg.h"
+#include "lang.h"
 #include "sound.h"
 #include "ui.h"
 #include <dirent.h>
@@ -30,6 +32,7 @@ typedef struct {
 	int		w, h;
 	int		failed;
 	Uint64		used;
+	SDL_Time	mtime;		/* of the file when it was loaded */
 } Pic;
 
 static Pic	g_cache[CACHE_MAX];
@@ -42,11 +45,52 @@ name_eq(const char *a, const char *b)
 	return !strcasecmp(a, b);
 }
 
-/* dir/<name>.png (or .jpg) found without caring about upper/lower case */
+/* A picture file as a surface: PNG and BMP through SDL, JPG through our own reader. */
+SDL_Surface *
+fe_load_picture(const char *path)
+{
+	SDL_Surface	*sf = SDL_LoadSurface(path), *raw;
+	size_t		n = 0;
+	unsigned char	*data, *px;
+	int		w = 0, h = 0;
+
+	if(sf) {
+		return sf;
+	}
+	data = SDL_LoadFile(path, &n);
+	if(!data) {
+		return NULL;
+	}
+	px = jpeg_is(data, n) ? jpeg_decode(data, n, &w, &h) : NULL;
+	SDL_free(data);
+	if(!px) {
+		return NULL;
+	}
+	raw = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32, px, w * 4);
+	sf = raw ? SDL_DuplicateSurface(raw) : NULL;	/* a copy that owns its pixels */
+	SDL_DestroySurface(raw);
+	free(px);
+	return sf;
+}
+
+int
+fe_is_picture(const char *path)
+{
+	static const char *exts[] = { ".png", ".bmp", ".jpg", ".jpeg", NULL };
+	const char	*dot = strrchr(path, '.');
+
+	for(int i = 0; dot && exts[i]; i++) {
+		if(!strcasecmp(dot, exts[i])) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* dir/<name>.png (or .jpg, .bmp) found without caring about upper/lower case */
 static int
 find_in(const char *dir, const char *name, char *out, int outsize)
 {
-	static const char *exts[] = { ".png", ".PNG", ".bmp", NULL };
 	DIR		*d = opendir(dir);
 	struct dirent	*e;
 	int		found = 0;
@@ -57,17 +101,8 @@ find_in(const char *dir, const char *name, char *out, int outsize)
 	while((e = readdir(d)) != NULL && !found) {
 		const char *dot = strrchr(e->d_name, '.');
 		char	stem[300];
-		int	ok = 0, i;
 
-		if(!dot || e->d_name[0] == '.') {
-			continue;
-		}
-		for(i = 0; exts[i]; i++) {
-			if(!strcasecmp(dot, exts[i])) {
-				ok = 1;
-			}
-		}
-		if(!ok) {
+		if(!dot || e->d_name[0] == '.' || !fe_is_picture(e->d_name)) {
 			continue;
 		}
 		snprintf(stem, sizeof(stem), "%.*s", (int)(dot - e->d_name), e->d_name);
@@ -122,7 +157,35 @@ fe_find_art(const Profile *p, const char *root, int kind, char *out, int outsize
 			}
 		}
 	}
+	if(kind == 0 && g_d.data_root && g_d.data_root[0]) {	/* the picture EmuBuddy left when it quit */
+		SDL_PathInfo info;
+
+		snprintf(out, (size_t)outsize, "%s/%s.data/snap.png", g_d.data_root, profile_name(p));
+		if(SDL_GetPathInfo(out, &info) && info.type == SDL_PATHTYPE_FILE) {
+			return 1;
+		}
+	}
 	return 0;
+}
+
+/* Picture files may have changed (EmuBuddy left a new one): forget the ones that did. */
+void
+fe_refresh(void)
+{
+	for(int i = 0; i < CACHE_MAX; i++) {
+		Pic		*p = &g_cache[i];
+		SDL_PathInfo	info;
+
+		if(p->path[0] && (!SDL_GetPathInfo(p->path, &info) || info.modify_time != p->mtime)) {
+			if(p->tex) {
+				SDL_DestroyTexture(p->tex);
+			}
+			if(p->blur) {
+				SDL_DestroyTexture(p->blur);
+			}
+			memset(p, 0, sizeof(*p));
+		}
+	}
 }
 
 /* a few passes of a 3x3 box blur make a soft, round blur (about a gaussian) */
@@ -197,7 +260,7 @@ pic_get(const char *path)
 	snprintf(p->path, sizeof(p->path), "%s", path);
 	p->used = ++g_tick;
 	{
-		SDL_Surface *sf = SDL_LoadSurface(path), *sm;
+		SDL_Surface *sf = fe_load_picture(path), *sm;
 
 		if(!sf) {
 			p->failed = 1;
@@ -209,6 +272,11 @@ pic_get(const char *path)
 				SDL_DestroySurface(sf);
 				sf = sm;
 			}
+		}
+		{
+			SDL_PathInfo info;
+
+			p->mtime = SDL_GetPathInfo(path, &info) ? info.modify_time : 0;
 		}
 		p->w = sf->w;
 		p->h = sf->h;
@@ -434,6 +502,15 @@ hue_color(const char *name)
 
 /* friendly facts instead of settings */
 static void
+fact(char *out, int n, const char *t)
+{
+	if(out[0]) {
+		SDL_strlcat(out, "  -  ", (size_t)n);
+	}
+	SDL_strlcat(out, t, (size_t)n);
+}
+
+static void
 facts(const Profile *p, char *out, int n)
 {
 	char	t[200];
@@ -441,21 +518,21 @@ facts(const Profile *p, char *out, int n)
 
 	out[0] = 0;
 	if(profile_get(p, "ramsize")[0]) {
-		snprintf(t, sizeof(t), "%s memory", profile_get(p, "ramsize"));
-		SDL_strlcat(out, t, (size_t)n);
+		snprintf(t, sizeof(t), T("%s memory"), profile_get(p, "ramsize"));
+		fact(out, n, t);
 	}
 	if(profile_get(p, "mhz")[0]) {
-		snprintf(t, sizeof(t), "%s%s MHz", out[0] ? "  -  " : "", profile_get(p, "mhz"));
-		SDL_strlcat(out, t, (size_t)n);
+		snprintf(t, sizeof(t), "%s MHz", profile_get(p, "mhz"));
+		fact(out, n, t);
 	}
 	if(!strcmp(profile_get(p, "sl3"), "uthernet2") || !strcmp(profile_get(p, "sl4"), "uthernet2")) {
-		SDL_strlcat(out, "  -  Internet", (size_t)n);
+		fact(out, n, T("Internet"));
 	}
 	if(!strcmp(profile_get(p, "sl4"), "mockingboard")) {
-		SDL_strlcat(out, "  -  Sound card", (size_t)n);
+		fact(out, n, T("Sound card"));
 	}
 	if(!strcmp(profile_get(p, "sl1"), "imagewriter") || !strcmp(profile_get(p, "sl1"), "postscript")) {
-		SDL_strlcat(out, "  -  Printer", (size_t)n);
+		fact(out, n, T("Printer"));
 	}
 	for(int i = 1; i <= 7; i++) {
 		char k[16];
@@ -470,8 +547,8 @@ facts(const Profile *p, char *out, int n)
 		flop += profile_get(p, k)[0] != 0;
 	}
 	if(hard + flop) {
-		snprintf(t, sizeof(t), "%s%d disk%s", out[0] ? "  -  " : "", hard + flop, hard + flop == 1 ? "" : "s");
-		SDL_strlcat(out, t, (size_t)n);
+		snprintf(t, sizeof(t), hard + flop == 1 ? T("%d disk") : T("%d disks"), hard + flop);
+		fact(out, n, t);
 	}
 }
 
@@ -603,13 +680,66 @@ idle_tick(int n)
 	}
 }
 
+/* The largest of the three fonts in which the text is no wider than maxw. */
+static UiFont *
+fit_font(const char *s, int maxw)
+{
+	return text_w(g_big, s) <= maxw ? g_big : (text_w(g_mid, s) <= maxw ? g_mid : g_small);
+}
+
+/* A title centred on cx, in the largest font that fits. y is where the big font would start. */
+static void
+title(int cx, int y, int maxw, const char *s)
+{
+	UiFont	*f = fit_font(s, maxw);
+
+	text(f, cx - text_w(f, s) / 2, y + (f == g_big ? 0 : (f == g_mid ? 12 : 17)), s, 0xFFFFFF, 255);
+}
+
+/* The key hints at the bottom: one line, or two when the window is narrow. */
+static void
+hints(int W, int H, float u)
+{
+	static const char *keys[] = { "Return  play", "Tab  details", "Space  menu", "type to search" };
+	static const char *pad[] = { "A  play", "X  details", "Y  menu", "B  back", "L / R  jump" };
+	const char **part = g_pad_hints ? pad : keys;
+	int	n = g_pad_hints ? 5 : 4, lines, i, k;
+	char	line[2][300];
+
+	for(lines = 1; lines <= 2; lines++) {
+		int per = (n + lines - 1) / lines, fits = 1;
+
+		line[0][0] = line[1][0] = 0;
+		for(i = 0; i < n; i++) {
+			k = i / per;
+			if(line[k][0]) {
+				SDL_strlcat(line[k], "        ", sizeof(line[0]));
+			}
+			SDL_strlcat(line[k], T(part[i]), sizeof(line[0]));
+		}
+		for(k = 0; k < lines; k++) {
+			fits = fits && text_w(g_small, line[k]) <= W - 40;
+		}
+		if(fits || lines == 2) {
+			break;
+		}
+	}
+	for(k = 0; k < lines; k++) {
+		text(g_small, W / 2 - text_w(g_small, line[k]) / 2, (int)(H - 44 * u - (lines - 1 - k) * 28 * u), line[k], 0x9AA0B0, 255);
+	}
+}
+
+/* The view is laid out for a wide window (a row of covers in the middle) or, when the window is
+ * taller than wide, for a portrait screen (a big picture on top, the row of covers below). */
 void
 fe_draw(int W, int H)
 {
 	Uint64	now = SDL_GetTicks();
 	float	dt = g_last ? (now - g_last) / 1000.0f : 0.016f;
-	int	n = g_d.count ? *g_d.count : 0, sel = g_d.sel ? *g_d.sel : 0, i;
-	float	u = H / 720.0f, tile_h = 230 * u, tile_w = tile_h * 1.5f, gap = 30 * u;
+	int	n = g_d.count ? *g_d.count : 0, sel = g_d.sel ? *g_d.sel : 0, i, tall = H > W;
+	float	u = tall ? W / 800.0f : H / 720.0f;
+	float	tile_h = (tall ? 210 : 230) * u, tile_w = tile_h * 1.5f, gap = (tall ? 24 : 30) * u;
+	float	grow = tall ? 0.25f : 0.32f, row_cy = tall ? H * 0.725f : H * 0.50f;
 	char	art[1300];
 
 	g_last = now;
@@ -621,7 +751,10 @@ fe_draw(int W, int H)
 	rgba(0x0A0B10, 255);
 	SDL_RenderClear(g_r);
 	if(n == 0) {
-		text(g_mid, W / 2 - 220, H / 2 - 20, "No games yet. Press Space to add one.", 0xFFFFFF, 220);
+		const char *t = T(g_pad_hints ? "No games yet. Press Y to add one." : "No games yet. Press Space to add one.");
+		UiFont	*f = text_w(g_mid, t) <= W - 40 ? g_mid : g_small;
+
+		text(f, W / 2 - text_w(f, t) / 2, H / 2 - 20, t, 0xFFFFFF, 220);
 		return;
 	}
 	if(sel >= n) {
@@ -661,84 +794,121 @@ fe_draw(int W, int H)
 	vgrad(0, (float)H * 0.55f, (float)W, (float)H * 0.45f, 0x000000, 0, 235);	/* fade into the bottom */
 	vgrad(0, 0, (float)W, (float)H * 0.25f, 0x000000, 170, 0);
 
-	/* the logo of the selected game, else its name */
+	/* portrait: the picture of the selected game, large, at the top */
+	if(tall) {
+		float	px = 40 * u, py = 84 * u, pw = W - 80 * u, ph = pw / 1.5f;
+		Pic	*prev = g_bg_fade < 1.0f ? pic_get(g_bg_prev) : NULL, *cur = pic_get(g_bg_cur);
+
+		fill(px - 6, py + 8, pw + 12, ph + 8, 0x000000, 70);
+		if(prev) {
+			draw_pic_cover(prev, px, py, pw, ph, 255);
+		}
+		if(cur) {
+			draw_pic_cover(cur, px, py, pw, ph, (int)(255 * g_bg_fade));
+		} else if(!g_bg_cur[0]) {			/* no picture: a coloured card with the first letter */
+			char	ini[2] = { profile_name(&g_d.list[sel])[0], 0 };
+
+			fill(px, py, pw, ph, hue_color(profile_name(&g_d.list[sel])), (int)(255 * g_bg_fade));
+			vgrad(px, py, pw, ph, 0x000000, 0, (int)(128 * g_bg_fade));
+			text(g_big, (int)(px + pw / 2 - text_w(g_big, ini) / 2), (int)(py + ph / 2 - 30), ini, 0xFFFFFF, (int)(230 * g_bg_fade));
+		}
+		rgba(0xFFFFFF, 200);
+		for(i = 0; i < 2; i++) {
+			SDL_FRect b = { px - i, py - i, pw + 2 * i, ph + 2 * i };
+
+			SDL_RenderRect(g_r, &b);
+		}
+	}
+
+	/* the logo of the selected game, else its name; then a short line and the facts */
 	{
 		Pic	*logo = NULL;
-		char	lp[1300];
-		const char *nm = profile_name(&g_d.list[sel]);
+		char	lp[1300], f[300];
+		const char *nm = profile_name(&g_d.list[sel]), *desc = profile_get(&g_d.list[sel], "description");
+		float	ty = tall ? 84 * u + (W - 80 * u) / 1.5f + 30 * u : 40 * u;	/* top of the title area */
+		float	dy = tall ? ty + 116 * u : H * 0.80f;				/* the description line */
+		UiFont	*df;
 
 		if(fe_find_art(&g_d.list[sel], g_d.artwork_root, 1, lp, sizeof(lp))) {
 			logo = pic_get(lp);
 		}
 		if(logo) {
-			draw_pic_fit(logo, W / 2 - 200 * u, 40 * u, 400 * u, 130 * u, 255);
+			draw_pic_fit(logo, W / 2 - 200 * u, ty, 400 * u, 130 * u, 255);
 		} else {
-			text(g_big, W / 2 - text_w(g_big, nm) / 2, (int)(70 * u), nm, 0xFFFFFF, 255);
+			title(W / 2, (int)(ty + 30 * u), W - (tall ? 60 : 320), nm);
+		}
+		facts(&g_d.list[sel], f, sizeof(f));
+		if(desc[0]) {
+			df = text_w(g_small, desc) <= W - 40 ? g_small : NULL;
+			if(df) {
+				text(df, W / 2 - text_w(df, desc) / 2, (int)dy, desc, 0xFFFFFF, 220);
+			} else {				/* too long for one line: cut it */
+				char	cut[300];
+				int	len;
+
+				snprintf(cut, sizeof(cut), "%s", desc);
+				len = (int)strlen(cut);
+				while(len > 4 && text_w(g_small, cut) > W - 60) {
+					len--;
+					while(len > 0 && ((unsigned char)cut[len] & 0xC0) == 0x80) {
+						len--;
+					}
+					snprintf(cut + len, sizeof(cut) - (size_t)len, "...");
+				}
+				text(g_small, W / 2 - text_w(g_small, cut) / 2, (int)dy, cut, 0xFFFFFF, 220);
+			}
+		}
+		if(f[0] && text_w(g_small, f) <= W - 40) {
+			text(g_small, W / 2 - text_w(g_small, f) / 2, (int)(dy + 30 * u), f, 0xB8BCC8, 220);
 		}
 	}
 
 	/* the row of covers */
 	g_ntiles = 0;
-	{
-		float	cy = H * 0.50f;
+	for(int pass = 0; pass < 2; pass++) {
+		for(i = 0; i < n; i++) {
+			float	d = (float)i - g_pos, ad = fabsf(d), s, x, y, w, h;
+			int	alpha;
 
-		for(int pass = 0; pass < 2; pass++) {
-			for(i = 0; i < n; i++) {
-				float	d = (float)i - g_pos, ad = fabsf(d), s, x, y, w, h;
-				int	alpha;
+			if(ad > 4.5f || (pass == 0) == (ad < 0.5f)) {
+				continue;		/* far ones first, the selected last */
+			}
+			s = 1.0f + grow * SDL_max(0.0f, 1.0f - ad);		/* the one in the middle grows */
+			w = tile_w * s;
+			h = tile_h * s;
+			x = W / 2.0f + d * (tile_w + gap) - w / 2 + (d > 0 ? 1.0f : -1.0f) * SDL_min(1.0f, ad) * grow * 0.5f * tile_w;
+			y = row_cy - h / 2;
+			alpha = (int)(255 * (1.0f - SDL_min(1.0f, ad / 5.0f) * 0.7f));
+			if(!search_match(profile_name(&g_d.list[i]))) {
+				alpha = alpha / 4;
+			}
+			draw_tile(&g_d.list[i], x, y, w, h, SDL_max(0.0f, 1.0f - ad), alpha);
+			if(g_ntiles < 64) {
+				g_tx[g_ntiles] = x; g_ty[g_ntiles] = y; g_tw[g_ntiles] = w; g_th[g_ntiles] = h;
+				g_ti[g_ntiles] = i;
+				g_ntiles++;
+			}
+			if(ad < 0.6f) {
+				const char *nm = profile_name(&g_d.list[i]);
+				UiFont	*nf = text_w(g_mid, nm) <= W - 40 ? g_mid : g_small;
 
-				if(ad > 4.5f || (pass == 0) == (ad < 0.5f)) {
-					continue;		/* far ones first, the selected last */
-				}
-				s = 1.0f + 0.32f * SDL_max(0.0f, 1.0f - ad);		/* the one in the middle grows */
-				w = tile_w * s;
-				h = tile_h * s;
-				x = W / 2.0f + d * (tile_w + gap) - w / 2 + (d > 0 ? 1.0f : -1.0f) * SDL_min(1.0f, ad) * 0.16f * tile_w;
-				y = cy - h / 2;
-				alpha = (int)(255 * (1.0f - SDL_min(1.0f, ad / 5.0f) * 0.7f));
-				if(!search_match(profile_name(&g_d.list[i]))) {
-					alpha = alpha / 4;
-				}
-				draw_tile(&g_d.list[i], x, y, w, h, SDL_max(0.0f, 1.0f - ad), alpha);
-				if(g_ntiles < 64) {
-					g_tx[g_ntiles] = x; g_ty[g_ntiles] = y; g_tw[g_ntiles] = w; g_th[g_ntiles] = h;
-					g_ti[g_ntiles] = i;
-					g_ntiles++;
-				}
-				if(ad < 0.6f) {
-					const char *nm = profile_name(&g_d.list[i]);
-
-					text(g_mid, (int)(x + w / 2 - text_w(g_mid, nm) / 2), (int)(y + h + 22 * u), nm, 0xFFFFFF, 255);
-				}
+				text(nf, (int)(x + w / 2 - text_w(nf, nm) / 2), (int)(y + h + 22 * u), nm, 0xFFFFFF, 255);
 			}
 		}
 	}
-	/* a short line under the title, the hints and the counter */
+	/* the counter, the search text and the hints */
 	{
-		const char *desc = profile_get(&g_d.list[sel], "description");
-		char	f[300], cnt[40];
+		char	cnt[40];
 
-		facts(&g_d.list[sel], f, sizeof(f));
-		if(desc[0]) {
-			text(g_small, W / 2 - text_w(g_small, desc) / 2, (int)(H * 0.80f), desc, 0xFFFFFF, 220);
-		}
-		if(f[0]) {
-			text(g_small, W / 2 - text_w(g_small, f) / 2, (int)(H * 0.80f + 28 * u), f, 0xB8BCC8, 220);
-		}
 		snprintf(cnt, sizeof(cnt), "%d / %d", sel + 1, n);
 		text(g_small, W - 30 - text_w(g_small, cnt), (int)(24 * u), cnt, 0xB8BCC8, 255);
 		if(g_search[0]) {
 			char s[100];
 
-			snprintf(s, sizeof(s), "Search: %s", g_search);
+			snprintf(s, sizeof(s), T("Search: %s"), g_search);
 			text(g_small, 30, (int)(24 * u), s, 0xFFD060, 255);
 		}
-		{
-			const char *hint = g_pad_hints ? "A  play        X  details        Y  menu        B  back        L / R  jump" :
-				"Return  play        Tab  details        Space  menu        type to search";
-
-			text(g_small, W / 2 - text_w(g_small, hint) / 2, (int)(H - 44 * u), hint, 0x9AA0B0, 255);
-		}
+		hints(W, H, u);
 	}
 
 	if(g_info) {				/* the details page over everything */
@@ -746,7 +916,11 @@ fe_draw(int W, int H)
 		const char *desc = profile_get(p, "description");
 		char	f[300], line[900];
 		Pic	*pic = NULL;
-		float	px = W * 0.08f, py = H * 0.12f, pw = W * 0.84f, ph = H * 0.74f;
+		float	px = W * (tall ? 0.05f : 0.08f), py = H * 0.12f, pw = W - 2 * px, ph = H * 0.74f;
+		float	iw = tall ? pw - 48 * u : pw * 0.5f, ih = iw * 0.66f;
+		float	tx = tall ? px + 24 * u : px + pw * 0.5f + 56 * u, ty = tall ? py + 24 * u + ih + 30 * u : py + 30 * u;
+		int	room = (int)(px + pw - 24 * u - tx);
+		UiFont	*nf = fit_font(profile_name(p), room);
 
 		fill(0, 0, (float)W, (float)H, 0x000000, 170);
 		fill(px, py, pw, ph, 0x14161D, 245);
@@ -754,27 +928,29 @@ fe_draw(int W, int H)
 			pic = pic_get(art);
 		}
 		if(pic) {
-			draw_pic_cover(pic, px + 24 * u, py + 24 * u, pw * 0.5f, pw * 0.5f * 0.66f, 255);
+			draw_pic_cover(pic, px + 24 * u, py + 24 * u, iw, ih, 255);
 		}
-		{
-			float tx = px + pw * 0.5f + 56 * u, ty = py + 30 * u;
-
-			text(g_big, (int)tx, (int)ty, profile_name(p), 0xFFFFFF, 255);
-			ty += 80 * u;
-			if(desc[0]) {
-				text(g_small, (int)tx, (int)ty, desc, 0xD0D4E0, 255);
-				ty += 40 * u;
-			}
-			facts(p, f, sizeof(f));
-			text(g_small, (int)tx, (int)ty, f, 0xFFD060, 255);
-			ty += 50 * u;
-			if(profile_get(p, "scale")[0]) {
-				snprintf(line, sizeof(line), "Window %sx", profile_get(p, "scale"));
-				text(g_small, (int)tx, (int)ty, line, 0x9AA0B0, 255);
-			}
+		text(nf, (int)tx, (int)ty, profile_name(p), 0xFFFFFF, 255);
+		ty += 80 * u;
+		if(desc[0]) {
+			text(g_small, (int)tx, (int)ty, desc, 0xD0D4E0, 255);
+			ty += 40 * u;
+		}
+		facts(p, f, sizeof(f));
+		text(g_small, (int)tx, (int)ty, f, 0xFFD060, 255);
+		ty += 50 * u;
+		if(profile_get(p, "scale")[0]) {
+			snprintf(line, sizeof(line), T("Window %sx"), profile_get(p, "scale"));
+			text(g_small, (int)tx, (int)ty, line, 0x9AA0B0, 255);
+			ty += 34 * u;
+		}
+		if(atol(profile_get(p, "plays")) > 0) {
+			snprintf(line, sizeof(line), atol(profile_get(p, "plays")) == 1 ? T("Played %ld time") : T("Played %ld times"),
+					atol(profile_get(p, "plays")));
+			text(g_small, (int)tx, (int)ty, line, 0x9AA0B0, 255);
 		}
 		text(g_small, (int)(px + 24 * u), (int)(py + ph - 44 * u),
-			g_pad_hints ? "A  play        B  back" : "Return  play        E  edit        Esc  back", 0x9AA0B0, 255);
+			T(g_pad_hints ? "A  play        B  back" : "Return  play        E  edit        Esc  back"), 0x9AA0B0, 255);
 	}
 }
 

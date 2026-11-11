@@ -12,6 +12,8 @@ const char *emubuddy_cli_later(int i);
 void	emubuddy_cli_window(int *w, int *h, int *scale);
 /* Window title from -title / -profile ("" = default). */
 const char *emubuddy_cli_title(void);
+/* File from -quitshot: a PNG of the screen is saved there when EmuBuddy quits ("" = none). */
+const char *emubuddy_cli_quitshot(void);
 /* 1 when settings came from the command line and must not be saved. */
 extern int	g_config_session_only;
 

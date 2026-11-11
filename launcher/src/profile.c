@@ -1,3 +1,4 @@
+#include "lang.h"
 #include "profile.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -250,7 +251,7 @@ profile_build_args(const Profile *p, const char *exe, const char *cfgdir,
 		snprintf(key, sizeof(key), "sl%d", i);
 		if((v = profile_get(p, key))[0]) {
 			if(i == 5 || i == 6) {
-				snprintf(err, (size_t)errsize, "slot %d holds the built-in drives", i);
+				snprintf(err, (size_t)errsize, T("slot %d holds the built-in drives"), i);
 				return -1;
 			}
 			add(&o, i == 1 ? "-sl1" : i == 2 ? "-sl2" : i == 3 ? "-sl3" :
@@ -310,11 +311,17 @@ profile_build_args(const Profile *p, const char *exe, const char *cfgdir,
 		add(&o, "-cfg");
 		add(&o, cfg);
 	}
+	if(cfgdir && cfgdir[0] && !((v = profile_get(p, "autosnap"))[0] && is_off(v))) {
+		/* EmuBuddy leaves a picture of the last screen there; the Launcher shows it for a game without a cover */
+		snprintf(cfg, sizeof(cfg), "%s/snap.png", cfgdir);
+		add(&o, "-quitshot");
+		add(&o, cfg);
+	}
 	if((v = profile_get(p, "extra"))[0]) {
 		add_words(&o, v);
 	}
 	if(o.overflow) {
-		snprintf(err, (size_t)errsize, "the profile is too large");
+		snprintf(err, (size_t)errsize, "%s", T("the profile is too large"));
 		return -1;
 	}
 	return o.argc;
