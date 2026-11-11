@@ -39,12 +39,14 @@ import gspic  # noqa: E402
 
 PIC_HOST = "gsgate.invalid"     # pictures are asked for at this made-up host; only the gateway answers it
 
-VERSION = "0.4"
+VERSION = "0.5"
 FORMAT = "1"                    # version of the mini page format (the contract with the browser)
 MAX_FETCH = 3 * 1024 * 1024     # largest page we read
 MAX_PASS = 40 * 1024 * 1024     # largest download we pass through
 MAX_PAGE = 48 * 1024            # largest page we send to the IIgs
 TIMEOUT = 20
+MAX_PROBE = 24                  # pictures whose size we look up for one page (what the browser shows of them)
+PROBE_TIME = 6                  # seconds we wait for those sizes, all pictures together
 ALIAS = None                    # the emulated IIgs's address for this computer (--alias)
 AGENT = "Mozilla/5.0 (compatible; GSGate/%s; Apple IIgs gateway)" % VERSION
 
@@ -97,6 +99,7 @@ class Converter(HTMLParser):
         self.base = base
         self.pics = pics            # None: no pictures (Webber); "640": pictures for the page window
         self.pic_width = pic_width
+        self.pending = []           # (address, alt) of pictures whose size the page does not state
         self.main_only = main_only  # the page has <main>/<article>: keep only what is inside
         self.out = []               # finished pieces of the page
         self.line = []              # the paragraph being collected
@@ -246,16 +249,24 @@ class Converter(HTMLParser):
         url = urllib.parse.urljoin(self.base, src.strip())
         if not url.lower().startswith(("http://", "https://")):
             return None
-        size = ""
         try:
             w, h = int(a.get("width", "")), int(a.get("height", ""))
-            if w < 24 or h < 24:
-                return None             # tracking pixels, bullets and spacers
-            tw, th = gspic.target_size(w, h, self.pics, self.pic_width)
-            # WIDTH and HEIGHT are in square "web" pixels; the browser turns them into screen lines
-            size = ' WIDTH="%d" HEIGHT="%d"' % (tw, round(th / gspic.ASPECT[self.pics]))
         except ValueError:
-            pass
+            # The page does not say how big the picture is. The mini format promises a size on every IMG,
+            # so the picture itself is looked at, after the page has been read (fill_pictures).
+            if len(self.pending) >= MAX_PROBE:
+                return None
+            self.pending.append((url, alt))
+            return "<IMG PENDING=%d>" % (len(self.pending) - 1)
+        return self.pic_tag(url, alt, w, h)
+
+    def pic_tag(self, url, alt, w, h):
+        """The IMG tag for a picture of w x h pixels, or None for one too small to be worth showing."""
+        if w < 24 or h < 24:
+            return None                 # tracking pixels, bullets and spacers
+        tw, th = gspic.target_size(w, h, self.pics, self.pic_width)
+        # WIDTH and HEIGHT are in square "web" pixels; the browser turns them into screen lines
+        size = ' WIDTH="%d" HEIGHT="%d"' % (tw, round(th / gspic.ASPECT[self.pics]))
         q = urllib.parse.urlencode({"k": self.pics, "w": self.pic_width, "u": url})
         return '<IMG SRC="http://%s/pic?%s"%s ALT="%s">' % (PIC_HOST, q, size, esc(alt).replace('"', "'"))
 
@@ -363,7 +374,7 @@ class Converter(HTMLParser):
         return "".join(parts)
 
 
-def convert(text, url, pics=None, pic_width=600):
+def convert(text, url, pics=None, pic_width=600, allow_lan=False):
     """A web page as mini HTML (format 1)."""
     low = text.lower()
     main_only = bool(re.search(r"<(main|article)[\s>]|role=[\"']main[\"']", low))
@@ -377,8 +388,46 @@ def convert(text, url, pics=None, pic_width=600):
         page = c.result(url)
         # if "main only" left almost nothing, the page marks its content differently: take everything
         if not attempt or len(re.sub(r"<[^>]+>", "", "".join(c.out))) > 200:
-            return page
-    return page
+            break
+    return fill_pictures(page, c, allow_lan)
+
+
+def fill_pictures(page, c, allow_lan):
+    """The pictures the page gave no size for: each becomes an IMG with its real size, or its text."""
+    if not c.pending:
+        return page
+    sizes = picture_sizes([url for url, _alt in c.pending], allow_lan)
+
+    def one(m):
+        url, alt = c.pending[int(m.group(1))]
+        size = sizes[int(m.group(1))]
+        tag = c.pic_tag(url, alt, *size) if size else None
+        return tag or ("[%s]" % esc(alt) if alt else "")
+
+    page = re.sub(r"<IMG PENDING=(\d+)>", one, page)
+    return re.sub(r"<(P|LI)>\s*</\1>\n", "", page)     # paragraphs that held only a picture we left out
+
+
+def picture_sizes(urls, allow_lan):
+    """(width, height) of each picture, or None. They are fetched at the same time; whatever has not
+    come after PROBE_TIME seconds counts as unknown. The fetched pictures stay in the cache for the
+    request that asks for them converted."""
+    found = {}
+
+    def one(url):
+        try:
+            if target_allowed(urllib.parse.urlsplit(url).hostname or "", allow_lan):
+                found[url] = gspic.picture_size(cached_fetch(url)[2])
+        except Exception:
+            pass
+
+    threads = [threading.Thread(target=one, args=(u,), daemon=True) for u in dict.fromkeys(urls)]
+    for t in threads:
+        t.start()
+    deadline = time.time() + PROBE_TIME
+    for t in threads:
+        t.join(max(0.0, deadline - time.time()))
+    return [found.get(u) for u in urls]
 
 
 # ---- fetching ----
@@ -464,18 +513,21 @@ def fetch(url):
 
 
 _cache = {}                     # url -> (time, result); browsers ask with HEAD and then with GET
+_cache_lock = threading.Lock()  # (requests are served, and picture sizes looked up, in threads)
 
 
 def cached_fetch(url):
     now = time.time()
-    for k in [k for k, v in _cache.items() if now - v[0] > 120]:
-        _cache.pop(k, None)
-    hit = _cache.get(url)
+    with _cache_lock:
+        for k in [k for k, v in _cache.items() if now - v[0] > 120]:
+            _cache.pop(k, None)
+        hit = _cache.get(url)
     if hit:
         return hit[1]
     result = fetch(url)
     if len(result[2]) <= MAX_FETCH:
-        _cache[url] = (now, result)
+        with _cache_lock:
+            _cache[url] = (now, result)
     return result
 
 
@@ -600,7 +652,8 @@ class Handler(BaseHTTPRequestHandler):
         if is_page:
             if len(body) > MAX_FETCH:
                 body = body[:MAX_FETCH]
-            self.send_page(200, convert(decode(body, ctype), final, *self.client_wants()))
+            self.send_page(200, convert(decode(body, ctype), final, *self.client_wants(),
+                                        allow_lan=self.server.lan))
             return
         if len(body) > MAX_PASS:
             self.send_page(502, message("File too large", "The gateway passes files of up to 40 MB."))

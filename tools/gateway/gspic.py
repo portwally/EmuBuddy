@@ -26,6 +26,51 @@ PAL640 = [0x000, 0xF00, 0x0F0, 0xFFF, 0x000, 0x00F, 0xFF0, 0xFFF] * 2
 MAX_H = {"320": 200, "640": 180}
 
 
+# ---- how big a picture is, from the first bytes of its file ----
+
+def picture_size(data):
+    """(width, height) in pixels of a PNG, GIF, JPEG, BMP or WebP file, or None if it can't be told."""
+    d = data
+    try:
+        if d[:8] == b"\x89PNG\r\n\x1a\n" and d[12:16] == b"IHDR":
+            return struct.unpack(">II", d[16:24])
+        if d[:6] in (b"GIF87a", b"GIF89a"):
+            return struct.unpack("<HH", d[6:10])
+        if d[:2] == b"BM":
+            w, h = struct.unpack("<ii", d[18:26])
+            return abs(w), abs(h)
+        if d[:4] == b"RIFF" and d[8:12] == b"WEBP":
+            kind = d[12:16]
+            if kind == b"VP8 ":
+                w, h = struct.unpack("<HH", d[26:30])
+                return w & 0x3FFF, h & 0x3FFF
+            if kind == b"VP8L":
+                bits, = struct.unpack("<I", d[21:25])
+                return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+            if kind == b"VP8X":
+                return int.from_bytes(d[24:27], "little") + 1, int.from_bytes(d[27:30], "little") + 1
+            return None
+        if d[:2] == b"\xff\xd8":              # JPEG: from marker to marker, to the one that starts the picture
+            p = 2
+            while p + 9 <= len(d):
+                if d[p] != 0xFF:
+                    p += 1
+                    continue
+                m = d[p + 1]
+                if m == 0xFF:                   # fill bytes
+                    p += 1
+                elif m == 0x01 or 0xD0 <= m <= 0xD8:
+                    p += 2                      # markers without a length
+                elif 0xC0 <= m <= 0xCF and m not in (0xC4, 0xC8, 0xCC):
+                    h, w = struct.unpack(">HH", d[p + 5:p + 9])
+                    return w, h
+                else:
+                    p += 2 + struct.unpack(">H", d[p + 2:p + 4])[0]
+    except struct.error:
+        pass
+    return None
+
+
 # ---- decoding and scaling (the only part that needs help from outside) ----
 
 def target_size(w, h, kind, max_w):
