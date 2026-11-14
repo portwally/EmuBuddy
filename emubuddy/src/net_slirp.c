@@ -36,6 +36,8 @@ typedef struct pollfd Pfd;
  * "_socket" calls: its poll functions take plain int descriptors. */
 #if !SLIRP_CHECK_VERSION(4, 9, 0)
 #define NET_OLD_SLIRP	1
+#include <sys/types.h>
+typedef ssize_t slirp_ssize_t;		/* 4.7 says plain ssize_t */
 typedef int slirp_os_socket;
 #define slirp_pollfds_fill_socket	slirp_pollfds_fill
 #endif
