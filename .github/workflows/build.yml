@@ -8,8 +8,11 @@ name: build
 # the Windows toolchain). The macOS path mirrors the locally-verified build.
 
 # Builds run on version tags (they make the Release) and when started by hand
-# (Actions > build > Run workflow). Not on every push: this is a private
-# repository, so the build minutes count against the plan's free allowance.
+# (Actions > build > Run workflow), not on every push.
+#
+# A version tag makes a DRAFT release: the packages are attached, but nothing is
+# visible to the public until someone has looked at them and published the
+# draft (Releases > the draft > Publish, or `gh release edit <tag> --draft=false`).
 on:
   push:
     tags: [ 'v*' ]
@@ -188,4 +191,5 @@ jobs:
           # and is never marked Latest.
           prerelease: ${{ contains(github.ref_name, '-') }}
           make_latest: ${{ !contains(github.ref_name, '-') }}
+          draft: true
           generate_release_notes: true
