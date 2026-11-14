@@ -51,7 +51,11 @@ extern int	g_cfg_slotdrive;
 /* sdl_driver.c */
 void		sdl_request_screenshot(void);
 
-#define EMUBUDDY_VERSION	"0.1"
+/* the version of this build (the release tag, or the project version) */
+#ifndef GSPLUS_VERSION_STR
+# define GSPLUS_VERSION_STR	"dev"
+#endif
+#define EMUBUDDY_VERSION	GSPLUS_VERSION_STR
 
 enum {
 	CMD_OPEN_DISK = 1, CMD_QUIT, CMD_CHOOSE_ROM, CMD_DRIVES, CMD_EJECT_ALL,
@@ -498,8 +502,8 @@ about_draw(UiWindow *win, int cx, int cy)
 		"",
 		"2026, Walter Tengler",
 		"",
-		"Based on KEGS by Kent Dickey",
-		"and GSplus by Dagen Brock.",
+		"Based on KEGS 1.38 by Kent Dickey",
+		"and GSplus 1.38.0 by Dagen Brock.",
 		"GPL v3.",
 		"",
 		"UI font: Shaston 640 by",

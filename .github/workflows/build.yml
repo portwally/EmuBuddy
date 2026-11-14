@@ -186,8 +186,8 @@ jobs:
         with:
           files: artifacts/**/*
           # Derive the release flags from the tag name: a plain version tag
-          # (v1.38.0) is a full release and becomes "Latest"; a pre-release tag
-          # carrying a suffix (v1.38.0-beta1, -alpha0, -rc1) stays a pre-release
+          # (v1.0.0) is a full release and becomes "Latest"; a pre-release tag
+          # carrying a suffix (v1.0.0-beta1, -alpha0, -rc1) stays a pre-release
           # and is never marked Latest.
           prerelease: ${{ contains(github.ref_name, '-') }}
           make_latest: ${{ !contains(github.ref_name, '-') }}

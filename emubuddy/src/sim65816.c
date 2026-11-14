@@ -18,7 +18,7 @@
 /* GSplus version for the status line, set by the build from the git tag (see
  * CMakeLists.txt). Fallback for non-CMake (Makefile) builds. */
 #ifndef GSPLUS_VERSION_STR
-# define GSPLUS_VERSION_STR	"1.38.0"
+# define GSPLUS_VERSION_STR	"1.0.0"
 #endif
 
 double g_dtime_sleep = 0;

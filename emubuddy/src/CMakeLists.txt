@@ -42,14 +42,15 @@ endif()
 # Declare the project: a name, a version, and which languages are used.
 # (We'll add Swift here in the next milestone; C is all the core needs.)
 project(gsplus
-    VERSION 1.38.0
+    VERSION 1.0.0
     DESCRIPTION "GSplus - cross-platform Apple IIgs emulator (KEGS-based)"
     LANGUAGES C)
 
 # ----------------------------------------------------------------------------
-# Version. gsplus versions are MAJOR.MINOR.PATCH where MAJOR.MINOR mirrors the
-# upstream KEGS version (currently 1.38) and PATCH is the gsplus increment.
-# CI passes the exact git tag via -DGSPLUS_VERSION (e.g. -DGSPLUS_VERSION=1.38.0)
+# Version. EmuBuddy has its own version numbers, starting at 1.0.0. (It is built
+# on GSplus 1.38.0, which is KEGS 1.38; those numbers belong to them.) The
+# variable is still called GSPLUS_VERSION, as in the code it came from.
+# CI passes the exact git tag via -DGSPLUS_VERSION (e.g. -DGSPLUS_VERSION=1.0.0)
 # so the tag, the app, and the release artifacts all carry the same version.
 # Local builds without -DGSPLUS_VERSION fall back to the project() version above.
 # ----------------------------------------------------------------------------
