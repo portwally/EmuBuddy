@@ -351,6 +351,9 @@ if(APPLE)
     ")
     set(CPACK_GENERATOR "DragNDrop")          # -> a .dmg
     set(CPACK_DMG_VOLUME_NAME "EmuBuddy")
+    # Say in the file name which Macs it is for (EmuBuddy-x.y.z-macOS-arm64.dmg,
+    # not "-Darwin"): the app only runs on the processor it was built for.
+    set(CPACK_SYSTEM_NAME "macOS-${CMAKE_SYSTEM_PROCESSOR}")
 else()
     # Install to the package root (no bin/ subdir) so the .zip/.tar.gz has the
     # executable at the top level.
