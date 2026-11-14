@@ -555,7 +555,7 @@ facts(const Profile *p, char *out, int n)
 static int
 search_match(const char *name)
 {
-	return !g_search[0] || strcasestr(name, g_search) != NULL;
+	return !g_search[0] || eb_strcasestr(name, g_search) != NULL;
 }
 
 /* a five-point star (the favourite mark) */
