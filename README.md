@@ -55,9 +55,17 @@ It runs on **macOS (Apple Silicon)**, **Windows (x64)** and **Linux (x64 and arm
 
 ### 1. Get EmuBuddy
 
-Prebuilt apps are built automatically for every change; look under the repository's
-[Actions](../../actions) (for the latest build) and [Releases](../../releases) (for tagged versions). Or build it
-yourself, see [Building from source](#building-from-source).
+Download the latest version from the [Releases](../../releases/latest) page:
+
+| Your computer | File |
+|---|---|
+| Mac with Apple Silicon, macOS 15 or newer | `EmuBuddy-<version>-macOS-arm64.dmg` |
+| Windows 10 or newer, 64-bit | `EmuBuddy-<version>-win64.zip` |
+| Linux, 64-bit Intel or AMD | `EmuBuddy-<version>-Linux-x86_64.tar.gz` |
+| Linux, 64-bit ARM | `EmuBuddy-<version>-Linux-aarch64.tar.gz` |
+
+Each download holds EmuBuddy and EmuBuddy Launcher. Or build it yourself, see
+[Building from source](#building-from-source).
 
 EmuBuddy's downloads are **not code-signed or notarized**, so your system blocks or warns about them the first time.
 You have to allow them yourself:
@@ -66,9 +74,10 @@ You have to allow them yourself:
   mark once, after moving the app where you want it (for example into Applications):
   `xattr -dr com.apple.quarantine /Applications/EmuBuddy.app`. Right-clicking the app and choosing **Open** also works on
   some versions of macOS. Apps you build yourself are not quarantined.
-- **Windows:** SmartScreen blocks unsigned downloads. Click **More info**, then **Run anyway**. Keep `SDL3.dll` next
-  to the `.exe`.
-- **Linux:** unpack the `.tar.gz` and run `EmuBuddy`. It needs the SDL3 library (`libsdl3` from your package manager); the file `README-linux.txt` in the package tells how.
+- **Windows:** unpack the whole `.zip` into a folder and keep the files together: the programs need the `.dll` files
+  next to them. SmartScreen blocks unsigned downloads; click **More info**, then **Run anyway**.
+- **Linux:** unpack the `.tar.gz` and run `EmuBuddy`. SDL3 and the network library come with it; `README-linux.txt`
+  in the package has the details.
 
 ### 2. Give it a ROM
 
@@ -304,8 +313,8 @@ This produces `build/EmuBuddy.app` (macOS), `build/EmuBuddy` (Linux) or `build/E
 Wayland, audio and graphics development packages that SDL3 needs; the list is in
 [.github/workflows/build.yml](.github/workflows/build.yml).
 
-**Windows** ([MSYS2](https://www.msys2.org/), MINGW64 shell):
-`pacman -S git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja`
+**Windows** ([MSYS2](https://www.msys2.org/), UCRT64 shell):
+`pacman -S git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-libslirp`
 
 `libslirp` is what gives the Uthernet II card its network. Without it EmuBuddy still builds, but the card has no
 connection. Optional helper programs, which EmuBuddy only looks for when you use the feature: **Ghostscript**
@@ -321,7 +330,8 @@ cmake --build build --target test_bridge && build/test_bridge          # host br
 ## Status and plans
 
 EmuBuddy is in active development. The core and the user interface are in daily use on macOS; Windows and Linux are
-built and checked on every change but have had much less hands-on testing. Known gaps and plans, in
+built for every release, and the packages are checked to be complete, but they have had very little hands-on testing:
+reports are welcome. Known gaps and plans, in
 [PLAN.md](PLAN.md):
 
 - Disk sets (named groups of disks and a speed that open together).
