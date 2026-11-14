@@ -23,12 +23,21 @@
 #include <time.h>
 #ifdef _WIN32
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #define poll WSAPoll
 typedef WSAPOLLFD Pfd;
 #else
 #include <poll.h>
 #include <arpa/inet.h>
 typedef struct pollfd Pfd;
+#endif
+
+/* libslirp before 4.9 (Ubuntu 24.04 has 4.7) knows no slirp_os_socket and no
+ * "_socket" calls: its poll functions take plain int descriptors. */
+#if !SLIRP_CHECK_VERSION(4, 9, 0)
+#define NET_OLD_SLIRP	1
+typedef int slirp_os_socket;
+#define slirp_pollfds_fill_socket	slirp_pollfds_fill
 #endif
 
 static Slirp	*g_slirp;
@@ -115,12 +124,14 @@ cb_timer_mod(void *timer, int64_t expire_ms, void *opaque)
 	}
 }
 
+#ifndef NET_OLD_SLIRP
 static void
 cb_noop_socket(slirp_os_socket s, void *opaque)
 {
 	(void)s;
 	(void)opaque;
 }
+#endif
 
 /* Older callback form; slirp may still call it for some config versions. */
 static void
@@ -180,8 +191,10 @@ static const SlirpCb g_cb = {
 	.timer_mod = cb_timer_mod,
 	.notify = cb_notify,
 	.timer_new_opaque = cb_timer_new_opaque,
+#ifndef NET_OLD_SLIRP
 	.register_poll_socket = cb_noop_socket,
 	.unregister_poll_socket = cb_noop_socket,
+#endif
 	.register_poll_fd = cb_noop_fd,
 	.unregister_poll_fd = cb_noop_fd,
 };

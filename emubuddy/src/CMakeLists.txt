@@ -369,6 +369,11 @@ else()
         # vs -Linux-aarch64) so the two Linux release assets don't collide.
         set(CPACK_SYSTEM_NAME "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
     endif()
+    # Libraries the CI collects in build/bundle go into the download, next to the
+    # programs, so it runs without installing anything: on Windows the DLLs
+    # besides SDL3 (the MinGW runtime, libslirp and what it needs), on Linux
+    # SDL3 and libslirp. A local build has no such folder; then nothing is added.
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/bundle/" DESTINATION . OPTIONAL)
     # No top-level "<name>-<version>" wrapper dir -- put files at the archive root.
     set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 endif()

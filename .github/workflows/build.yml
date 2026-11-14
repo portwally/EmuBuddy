@@ -14,6 +14,11 @@ on:
   push:
     tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      macos:
+        description: 'Build the macOS package too (macOS minutes count ten times)'
+        type: boolean
+        default: true
 
 # A newer run of the same ref replaces an older one that is still waiting.
 concurrency:
@@ -22,11 +27,18 @@ concurrency:
 
 jobs:
   macos:
-    runs-on: macos-latest
+    # A manual run can leave the macOS package out (see the input above).
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.macos }}
+    # macos-15, not macos-latest: the libraries that go into the app come from
+    # Homebrew and need the macOS they were built for, or a newer one. Building
+    # on the oldest macOS Homebrew still supports keeps the app usable there.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
       - name: Install tools
-        run: brew install cmake ninja sdl3
+        # libslirp is the network of the Uthernet II card; without it the build
+        # falls back to a card with no network.
+        run: brew install cmake ninja sdl3 libslirp pkgconf
       - name: Configure
         run: |
           ARGS=""
@@ -77,7 +89,8 @@ jobs:
             libwayland-dev wayland-protocols libdecor-0-dev libxkbcommon-dev \
             libdrm-dev libgbm-dev libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev \
             libpulse-dev libasound2-dev libpipewire-0.3-dev libsndio-dev \
-            libdbus-1-dev libudev-dev libibus-1.0-dev
+            libdbus-1-dev libudev-dev libibus-1.0-dev \
+            pkg-config libslirp-dev
       - name: Configure (SDL3 built from source via FetchContent)
         run: |
           ARGS=""
@@ -87,6 +100,16 @@ jobs:
           cmake -G Ninja -B build -S emubuddy/src $ARGS
       - name: Build
         run: cmake --build build --target gsplus-sdl emubuddy-launcher
+      - name: Collect the libraries for the download
+        # SDL3 (built above) and libslirp go into the archive, next to the
+        # programs, which look for libraries in their own folder first.
+        run: |
+          mkdir -p build/bundle
+          ldd build/EmuBuddy
+          ldd build/EmuBuddy | awk '/libSDL3|libslirp/ {print $3}' | xargs -I{} cp -L {} build/bundle/
+          ls -la build/bundle
+          test -f build/bundle/libSDL3.so.0
+          ls build/bundle/libslirp.so.*
       - name: Package (.tar.gz)
         run: cd build && cpack
       - uses: actions/upload-artifact@v7
@@ -113,6 +136,8 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-libslirp
       - name: Configure (SDL3 built from source via FetchContent)
         run: |
           ARGS=""
@@ -122,6 +147,17 @@ jobs:
           cmake -G Ninja -B build -S emubuddy/src $ARGS
       - name: Build
         run: cmake --build build --target gsplus-sdl emubuddy-launcher
+      - name: Collect the DLLs for the download
+        # Everything the programs load from MSYS2 (the MinGW runtime, libslirp
+        # and what it needs) goes into the .zip, so it runs on a plain Windows.
+        run: |
+          mkdir -p build/bundle
+          for exe in build/EmuBuddy.exe build/launcher/EmuBuddy-Launcher.exe; do
+            ls -la "$exe"
+            ldd "$exe" | awk '$3 ~ /^\/mingw64\// {print $3}'
+          done | grep '^/mingw64/' | sort -u | xargs -I{} cp {} build/bundle/
+          ls -la build/bundle
+          ls build/bundle/libslirp*.dll
       - name: Package (.zip)
         run: cd build && cpack
       - uses: actions/upload-artifact@v7

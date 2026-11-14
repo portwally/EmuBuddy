@@ -1,44 +1,31 @@
 EmuBuddy on Linux
 =================
 
-This download holds two programs: EmuBuddy (the emulator) and EmuBuddy-Launcher
-(profiles for different set-ups, with skins). Both need the SDL3 library.
+This download holds two programs: EmuBuddy (the Apple IIgs emulator) and
+EmuBuddy-Launcher (a front end with profiles and skins). Unpack the archive
+anywhere and start ./EmuBuddy or ./EmuBuddy-Launcher.
 
-EmuBuddy needs the SDL3 library installed on your system. If launching
-fails with an error like:
+Libraries
+---------
 
-    error while loading shared libraries: libSDL3.so.0:
-    cannot open shared object file: No such file or directory
+The SDL3 and libslirp libraries are in the archive, next to the programs
+(libSDL3.so.0, libslirp.so.0), so nothing has to be installed for them.
+Everything else belongs to a normal desktop system. The programs were built
+on Ubuntu 24.04; a distribution much older than that may be too old for them.
 
-install SDL3 for your distribution:
+If a program does not start, run it from a terminal. A line such as
 
-  Debian 13 "trixie" or newer, Ubuntu 25.04 or newer:
-      sudo apt install libsdl3-0
+    error while loading shared libraries: libglib-2.0.so.0: cannot open ...
 
-  Fedora:
-      sudo dnf install SDL3
+names the library that is missing; install it with your package manager.
 
-  Arch:
-      sudo pacman -S sdl3
+What else you need
+------------------
 
-Older releases (Debian 12, Ubuntu 24.04 LTS, and earlier) do not package
-SDL3 at all -- build it from source:
+- An Apple IIgs ROM file. It is Apple's copyrighted firmware and is not
+  included. See README.md, which is next to this file.
+- For the web gateway (HTTPS sites in IIgs browsers): Python 3. For pictures
+  through the gateway also the Pillow library (Debian and Ubuntu:
+  sudo apt install python3-pil).
 
-    # Dev packages SDL needs for video/audio support; see
-    # https://wiki.libsdl.org/SDL3/README-linux for the full list.
-    sudo apt install build-essential cmake git \
-        libx11-dev libxext-dev libwayland-dev libxkbcommon-dev \
-        libegl1-mesa-dev libpulse-dev libasound2-dev
-
-    git clone https://github.com/libsdl-org/SDL
-    cmake -S SDL -B SDL/build -DCMAKE_BUILD_TYPE=Release
-    cmake --build SDL/build -j$(nproc)
-    sudo cmake --install SDL/build
-    sudo ldconfig
-
-Running
--------
-
-GSplus also needs an Apple IIgs ROM file and a config file to be useful.
-See README.md (included alongside this file) for setup instructions,
-hotkeys, and everything else.
+README.md has the set-up, the keys and everything else.
