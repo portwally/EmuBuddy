@@ -65,8 +65,9 @@ jobs:
         # The programs must start from the package alone: no library from
         # Homebrew, no screen, no ROM. EmuBuddy then shows its "ROM Required"
         # window; both programs save a picture of what they drew and quit.
+        # (perl: "exec { $ARGV[0] } @ARGV" runs the program as one word; a plain
+        # "exec @ARGV" splits "EmuBuddy Launcher" at the space and starts nothing.)
         run: |
-          set -x
           mkdir -p smoke/home smoke/cfg smoke/share smoke/profiles
           hdiutil attach build/*.dmg -nobrowse -readonly -mountpoint /tmp/emubuddy-dmg
           cp -R /tmp/emubuddy-dmg/EmuBuddy.app "/tmp/emubuddy-dmg/EmuBuddy Launcher.app" smoke/
@@ -79,12 +80,10 @@ jobs:
           export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HOME=$PWD/home
           export EMUBUDDY_NOGATEWAY=1 EMUBUDDY_NOHELPER=1 EMUBUDDY_AUTOSHARE_DIR=$PWD/share
           EMUBUDDY_SNAPSHOT=$PWD/emubuddy.bmp EMUBUDDY_SNAPFRAME=60 \
-            perl -e 'alarm 120; exec @ARGV' EmuBuddy.app/Contents/MacOS/EmuBuddy -cfg $PWD/cfg/emubuddy.config
-          ls -la
+            perl -e 'alarm 120; exec { $ARGV[0] } @ARGV' EmuBuddy.app/Contents/MacOS/EmuBuddy -cfg $PWD/cfg/emubuddy.config
           test -s emubuddy.bmp
           EMUBUDDY_PROFILES=$PWD/profiles LAUNCHER_SHOT=$PWD/launcher.bmp \
-            perl -e 'alarm 120; exec @ARGV' "EmuBuddy Launcher.app/Contents/MacOS/EmuBuddy Launcher"
-          ls -la
+            perl -e 'alarm 120; exec { $ARGV[0] } @ARGV' "EmuBuddy Launcher.app/Contents/MacOS/EmuBuddy Launcher"
           test -s launcher.bmp
       - uses: actions/upload-artifact@v7
         with:
