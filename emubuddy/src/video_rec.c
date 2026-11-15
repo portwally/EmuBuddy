@@ -9,6 +9,7 @@
  * Time is emulated time, so the video stays in sync with the sound even when
  * the emulator runs faster than a real IIgs. */
 #include "ui.h"
+#include "pathutil.h"
 #include "tool_find.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -337,9 +338,7 @@ rec_stop(void)
 	SDL_RemovePath(g_vpath);
 	SDL_RemovePath(g_apath);
 	if(ok) {
-		const char *base = strrchr(g_out, '/');
-
-		ui_message("Saved to Movies: %s", base ? base + 1 : g_out);
+		ui_message("Saved to Movies: %s", path_base(g_out));
 		printf("Recording saved: %s (%.1f s)\n", g_out, rec_seconds());
 	} else {
 		ui_message("Recording failed");

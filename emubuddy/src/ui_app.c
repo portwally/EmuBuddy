@@ -1,6 +1,7 @@
 /* EmuBuddy app layer: menus, commands, status bar, About window and the
  * in-skin file browser. Built on the toolkit in ui.c. */
 #include "defc.h"
+#include "pathutil.h"
 #include "ui.h"
 #include "uthernet2.h"
 #include <stdio.h>
@@ -448,10 +449,10 @@ ui_is_disk_image(const char *path)
 	static const char *exts[] = { "po", "hdv", "2mg", "2img", "dsk", "do",
 		"woz", "nib", "dc", "dc42", "image", "img", "raw", "sdk",
 		"gz", NULL };
-	const char	*dot = strrchr(path, '.'), *slash = strrchr(path, '/');
+	const char	*dot = strrchr(path_base(path), '.');	/* in the name, not in a folder's */
 	int		i;
 
-	if(!dot || (slash && dot < slash)) {
+	if(!dot) {
 		return 0;
 	}
 	for(i = 0; exts[i]; i++) {
@@ -836,6 +837,8 @@ app_hotkey(int sc, int mods)
 
 /* Disk activity lights: 3.5, 5.25 and hard disk, lit for a moment after
  * the drive is read or written. */
+#define STATUS_LIGHTS_W	(3 * 52)	/* the three drive lights in the status bar */
+
 static void
 app_status_draw(int x, int y, int w, int h)
 {
@@ -844,7 +847,7 @@ app_status_draw(int x, int y, int w, int h)
 	dword64	window = (dword64)300000 << 16;	/* ~0.3 s of IIgs time */
 
 	(void)x;
-	lx = w - 3 * 52;
+	lx = w - STATUS_LIGHTS_W;
 	for(k = 0; k < 3; k++) {
 		int slot = 5 + k;
 
@@ -874,7 +877,7 @@ app_cover_picture(void)
 
 static const UiApp g_app = {
 	g_menus, N(g_menus), app_item_state, app_command, app_status,
-	app_tick, app_cover_picture, app_hotkey, app_status_draw
+	app_tick, app_cover_picture, app_hotkey, app_status_draw, STATUS_LIGHTS_W
 };
 
 void

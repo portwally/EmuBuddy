@@ -25,6 +25,7 @@
 #include <time.h>
 
 #include "defc.h"
+#include "pathutil.h"
 #include "ui.h"
 #include "uthernet2.h"
 #include "webgate.h"
@@ -1857,9 +1858,7 @@ sdl_save_screenshot(Window_info *win, int whole)
 	if(rc) {
 		ui_message("Screenshot failed: could not write the file");
 	} else {
-		const char *base = strrchr(path, '/');
-
-		ui_message("Saved to Desktop: %s", base ? base + 1 : path);
+		ui_message("Saved to Desktop: %s", path_base(path));
 		printf("Screenshot saved: %s (%dx%d)\n", path, w, h);
 	}
 }

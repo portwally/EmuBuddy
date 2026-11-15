@@ -1232,11 +1232,35 @@ draw_dropdown(void)
 	}
 }
 
+/* Shorten text to at most max pixels, ending in "..." when something is cut. */
+static void
+fit_text(char *text, size_t size, int max)
+{
+	size_t	n = strlen(text);
+
+	if(ui_text_width(text) <= max) {
+		return;
+	}
+	while(n > 0) {
+		n--;
+		while(n > 0 && ((unsigned char)text[n] & 0xC0) == 0x80) {
+			n--;			/* don't cut a character in two */
+		}
+		if(n + 4 <= size) {
+			memcpy(text + n, "...", 4);
+			if(ui_text_width(text) <= max) {
+				return;
+			}
+		}
+	}
+	text[0] = 0;
+}
+
 static void
 draw_status_bar(void)
 {
 	char	l[96] = "", c[96] = "", r[96] = "";
-	int	y = g_lh - UI_BAR_H;
+	int	y = g_lh - UI_BAR_H, from, to, tw, x;
 
 	if(g_ui_hide_status) {
 		return;
@@ -1251,8 +1275,25 @@ draw_status_bar(void)
 		snprintf(c, sizeof(c), "%s", g_msg);
 	}
 	ui_draw_text(8, y + 3, l, CH_FG);
-	ui_draw_text((g_lw - ui_text_width(c)) / 2, y + 3, c, CH_FG);
 	ui_draw_text(g_lw - 8 - ui_text_width(r), y + 3, r, CH_FG);
+	/* The text in the middle stays between the left text and what is on the
+	 * right (the app's own drawing, such as drive lights, and the right
+	 * text): centred when there is room, shortened when there is not. */
+	from = 8 + ui_text_width(l) + (l[0] ? 14 : 0);
+	to = g_lw - 8 - ui_text_width(r) - 14;
+	if(g_app->status_draw) {
+		to = g_lw - 16 - ui_text_width(r) - g_app->status_draw_w - 14;
+	}
+	fit_text(c, sizeof(c), to - from);
+	tw = ui_text_width(c);
+	x = (g_lw - tw) / 2;
+	if(x + tw > to) {
+		x = to - tw;
+	}
+	if(x < from) {
+		x = from;
+	}
+	ui_draw_text(x, y + 3, c, CH_FG);
 	if(g_app->status_draw) {
 		g_app->status_draw(0, y, g_lw - 16 - ui_text_width(r), UI_BAR_H);
 	}

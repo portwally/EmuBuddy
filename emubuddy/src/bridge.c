@@ -5,6 +5,7 @@
  * refused, and the real path of every target must stay inside it. The
  * emulated software is not trusted. */
 #include "bridge.h"
+#include "pathutil.h"
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -492,8 +493,7 @@ cmd_info(unsigned long b)
 		return E_NODEV;
 	}
 	if(buf && size >= 3) {			/* the folder's name: u16 + chars */
-		name = strrchr(g_bridge_root, '/');
-		name = name ? name + 1 : g_bridge_root;
+		name = path_base(g_bridge_root);
 		n = (unsigned)strlen(name);
 		if(n > size - 2) {
 			n = size - 2;
@@ -919,8 +919,7 @@ bridge_stage_file(const char *src, const char *gsos_folder, char *msg, int msgsi
 		snprintf(msg, (size_t)msgsize, "could not create the Inbox folder");
 		return -1;
 	}
-	base = strrchr(src, '/');
-	base = base ? base + 1 : src;
+	base = path_base(src);
 	bridge_prodos_name(base, name, sizeof(name), &t, &a);
 	bridge_encode_name(name, t, a, host, sizeof(host));
 	snprintf(dst, sizeof(dst), "%s/%s", dir, host);

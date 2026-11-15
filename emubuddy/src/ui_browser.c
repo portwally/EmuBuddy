@@ -4,6 +4,7 @@
  * to the Finder. Files keep their ProDOS type in the name (",t$TT,a$AAAA" or
  * AppleSingle), the same naming shared folders use, so they round-trip. */
 #include "ui.h"
+#include "pathutil.h"
 #include "prodos_img.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,9 +31,7 @@ static int	g_n, g_sel = -1, g_top;
 static const char *
 base_name(const char *p)
 {
-	const char *s = strrchr(p, '/');
-
-	return s ? s + 1 : p;
+	return path_base(p);
 }
 
 static void

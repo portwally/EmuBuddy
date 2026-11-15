@@ -85,6 +85,9 @@ typedef struct {
 	int		(*hotkey)(int scancode, int mods);
 	/* Extra drawing in the status bar (x, y, w, h of the bar). */
 	void		(*status_draw)(int x, int y, int w, int h);
+	/* How wide that drawing is, at the right end of the bar before the right
+	 * text; the message in the middle keeps clear of it. */
+	int		status_draw_w;
 } UiApp;
 
 void	ui_init(SDL_Window *w, SDL_Renderer *r, const UiApp *app);

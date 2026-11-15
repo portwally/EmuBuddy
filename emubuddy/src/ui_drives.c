@@ -3,6 +3,7 @@
  * (the core's SmartPort/ProDOS block-device controller). Hard disk images
  * (.2mg, .hdv, .po, ...) are read by the core; this file is the UI for them. */
 #include "defc.h"
+#include "pathutil.h"
 #include "ui.h"
 #include "bridge.h"
 #include "receive_bin.h"
@@ -33,9 +34,7 @@ extern int	g_bridge_off;
 static const char *
 base_name(const char *path)
 {
-	const char *p = strrchr(path, '/');
-
-	return p ? p + 1 : path;
+	return path_base(path);
 }
 
 /* ------------------------------------------------------------------ */
@@ -715,8 +714,7 @@ dest_rebuild(void)
 				}
 			}
 			snprintf(g_dest_text[i], sizeof(g_dest_text[0]), "%*s%s/",
-				depth * 3, "", strrchr(g_dest_path[i], '/') ?
-				strrchr(g_dest_path[i], '/') + 1 : g_dest_path[i]);
+				depth * 3, "", path_base(g_dest_path[i]));
 		}
 		g_dest_rows[i] = g_dest_text[i];
 		if(!strcmp(g_dest_path[i], g_drop_sub)) {

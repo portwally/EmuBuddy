@@ -66,6 +66,7 @@ jobs:
         # Homebrew, no screen, no ROM. EmuBuddy then shows its "ROM Required"
         # window; both programs save a picture of what they drew and quit.
         run: |
+          set -x
           mkdir -p smoke/home smoke/cfg smoke/share smoke/profiles
           hdiutil attach build/*.dmg -nobrowse -readonly -mountpoint /tmp/emubuddy-dmg
           cp -R /tmp/emubuddy-dmg/EmuBuddy.app "/tmp/emubuddy-dmg/EmuBuddy Launcher.app" smoke/
@@ -79,9 +80,11 @@ jobs:
           export EMUBUDDY_NOGATEWAY=1 EMUBUDDY_NOHELPER=1 EMUBUDDY_AUTOSHARE_DIR=$PWD/share
           EMUBUDDY_SNAPSHOT=$PWD/emubuddy.bmp EMUBUDDY_SNAPFRAME=60 \
             perl -e 'alarm 120; exec @ARGV' EmuBuddy.app/Contents/MacOS/EmuBuddy -cfg $PWD/cfg/emubuddy.config
+          ls -la
           test -s emubuddy.bmp
           EMUBUDDY_PROFILES=$PWD/profiles LAUNCHER_SHOT=$PWD/launcher.bmp \
             perl -e 'alarm 120; exec @ARGV' "EmuBuddy Launcher.app/Contents/MacOS/EmuBuddy Launcher"
+          ls -la
           test -s launcher.bmp
       - uses: actions/upload-artifact@v7
         with:
@@ -151,8 +154,8 @@ jobs:
           mkdir -p home cfg share profiles
           ldd ./EmuBuddy | tee ldd.txt
           if grep -q "not found" ldd.txt; then echo "a library is missing"; exit 1; fi
-          grep -q "$PWD/libSDL3.so.0" ldd.txt
-          grep -q "$PWD/libslirp.so.0" ldd.txt
+          grep -q "libSDL3.so.0 => $PWD/" ldd.txt
+          grep -q "libslirp.so.0 => $PWD/" ldd.txt
           ./EmuBuddy -help | head -3
           export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HOME=$PWD/home XDG_DATA_HOME=$PWD/home/data
           export EMUBUDDY_NOGATEWAY=1 EMUBUDDY_NOHELPER=1 EMUBUDDY_AUTOSHARE_DIR=$PWD/share
