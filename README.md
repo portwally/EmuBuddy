@@ -18,6 +18,8 @@ network access, and several ways to move files between the IIgs and the computer
 
 It runs on **macOS (Apple Silicon)**, **Windows (x64)** and **Linux (x64 and arm64)**, and looks the same on all of them.
 
+**[EmuBuddy User's Guide (PDF)](docs/EmuBuddy-Manual.pdf)**: the manual, with pictures of every window.
+
 ## What you get
 
 - **A real user interface.** Menus, a status bar along the bottom, and windows for drives, slots, the printer and
@@ -91,12 +93,14 @@ be included. Without one, EmuBuddy shows a **ROM Required** window instead of a 
 - **Where to find one:** the cleanest way is to read the ROM out of an Apple IIgs you own. Otherwise it circulates
   widely as part of MAME's `apple2gs` set. EmuBuddy needs a plain ROM file, not a zip: if you only have the MAME
   files `341-0737` and `341-0748`, put them together into one file (`cat 341-0737 341-0748 > ROM03`).
-- **Did it work?** If you see "Check startup device!", the ROM loaded fine. It just needs a disk.
+- **Did it work?** If you see "Check startup device!", the ROM loaded fine. The IIgs is waiting for a disk to start
+  up from.
 
 ### 3. Start something
 
-Drop a disk image on the window, or open **Disks > Drives Window** (F2) and click a drive. The IIgs boots from the
-first bootable disk, as a real one would. GS/OS system disks, games and hard disk images all work the same way.
+Drop a disk image on the window, or open **Disks > Drives Window** (F2) and click a drive. While the IIgs is waiting
+for a startup disk ("Check startup device!" or "UNABLE TO LOAD PRODOS"), EmuBuddy puts the disk you drop into the first
+drive of its kind and starts up from it at once. GS/OS system disks, games and hard disk images all work the same way.
 
 ## Using EmuBuddy
 
@@ -115,7 +119,8 @@ of recently used disks.
 There are four ways, from the simplest to the most flexible:
 
 1. **The automatic shared folder.** On the first start EmuBuddy makes a folder **EmuBuddy Files** in your Documents folder
-   and mounts it as the disk `EmuBuddy.Files`, so file exchange works with no set-up. Switch this off with
+   and mounts it as the disk `EmuBuddy.Files`, so file exchange works with no set-up. (A shared folder takes the first
+   free hard disk from S7D2 on; S7D1 stays free for a startup disk.) Switch this off with
    **Disks > Mount Shared Folder at Start**. **Share a Folder...** (or dropping a folder on the window) shares another
    folder the same way: it appears as a ProDOS disk. It is live: what the IIgs saves is a normal file in the folder, and a file you put in the
    folder shows up in the IIgs. **Disks > Show Shared Folder** opens the folder in your file manager.
@@ -130,8 +135,8 @@ There are four ways, from the simplest to the most flexible:
    files and folders with type and size. Choose **Export to Desktop**, or on macOS drag a file out of the window to
    the Finder.
 4. **The host bridge.** A program inside the IIgs can read and write one folder of your computer directly. See
-   [docs/BRIDGE.md](docs/BRIDGE.md). It is for tools such as file managers and is off until you choose a folder
-   with **Disks > Bridge Folder...**.
+   [docs/BRIDGE.md](docs/BRIDGE.md). It is for tools such as file managers and is off until you name a folder:
+   with `-bridge <folder>` on the command line, or as the Bridge folder of a game in EmuBuddy Launcher.
 
 **File types.** ProDOS files have a type and an aux type that a normal file system does not. EmuBuddy keeps them in the
 file name: `GAME,t$B3,a$DB03` is a type $B3 file with aux type $DB03, `NOTES.txt` is a text file, and a name

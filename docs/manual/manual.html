@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EmuBuddy User's Guide</title>
+<!-- The template of the manual: make_manual.py adds the page rules, the
+     contents' and index's page numbers, and writes build/manual/manual.html.
+     make_manual.sh prints it to docs/EmuBuddy-Manual.pdf. -->
+<link rel="stylesheet" href="manual.css">
+<!--PAGES-->
+</head>
+<body>
+
+<!-- ====================== the cover ====================== -->
+<section class="cover">
+  <div class="cv-head">
+    <div class="stripes"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div>
+      <p class="cv-title">EmuBuddy</p>
+      <p class="cv-sub">User&rsquo;s Guide</p>
+    </div>
+  </div>
+  <div class="cv-screen"><img src="img/desktop.png" alt=""></div>
+  <p class="cv-foot">An Apple IIgs for macOS, Windows and Linux</p>
+</section>
+
+<!-- ====================== the copyright page ====================== -->
+<section class="front legal">
+  <p class="legal-title">EmuBuddy User&rsquo;s Guide</p>
+  <p>Version 1.0</p>
+  <p>&copy; 2026 Walter Tengler. EmuBuddy is free software under the GNU General Public License, version 3. You may copy this guide and give it away, whole and unchanged.</p>
+  <p>EmuBuddy is built on KEGS, the Apple IIgs emulator by Kent Dickey, through GSplus by Dagen Brock, which brought KEGS to SDL. The ImageWriter II emulation comes from the GSport and GSplus line of emulators. The font of EmuBuddy&rsquo;s menus and windows is Shaston 640 by Kreative Software. EmuBuddy uses SDL for its window, input and sound, and libslirp for its network. Ghostscript and FFmpeg are separate programs under their own licenses; EmuBuddy only calls them when you ask for PostScript printing or a video recording.</p>
+  <p>EmuBuddy is an independent program. It is not made, sold or endorsed by Apple Inc., and it does not contain the Apple IIgs ROM. Apple, Apple IIgs, GS/OS, ProDOS, ImageWriter, Macintosh and macOS are trademarks of Apple Inc. Windows is a trademark of Microsoft Corporation. Linux is a trademark of Linus Torvalds. Other names are trademarks of their owners.</p>
+  <p>This guide is set in Apple Garamond, as Apple&rsquo;s own guides of the time were. The screen pictures were taken from EmuBuddy 1.0 running Apple&rsquo;s System 6.0.4.</p>
+  <p>The homepage: portwally.github.io/EmuBuddy</p>
+</section>
+
+<!-- ====================== the contents ====================== -->
+<section class="front toc-page">
+  <h1 class="front-title">Contents</h1>
+  <div class="toc">
+    <!--TOC-->
+  </div>
+</section>
+
+<!-- ====================== the preface ====================== -->
+<section class="chapter preface" id="preface" data-label="Preface" data-title="About This Guide">
+  <div class="opener">
+    <p class="ch-label">Preface</p>
+    <h1>About This Guide</h1>
+  </div>
+  <div class="body">
+    <p>EmuBuddy is an Apple IIgs in a window on your computer. It runs the programs an Apple IIgs runs, from the disks an Apple IIgs uses, and you work it with the mouse: menus, windows, and dragging and dropping, with no commands to type and no settings file to edit.</p>
+    <p>Around the IIgs itself EmuBuddy adds what a IIgs on your desk would need: disk drives you fill by dropping a disk on them, a folder the IIgs shares with your computer, a printer whose pages become PDF files, and a network card that reaches the Internet.</p>
+    <p>This guide shows you how to use all of it. Chapter 1 gets EmuBuddy running; read it first. Chapters 2 to 8 each take one part of EmuBuddy, so you can read them as you need them. Chapter 9 covers EmuBuddy Launcher, the second program in the download, which keeps your games and set-ups on a shelf. Chapter 10 is for those who like to start programs from the command line. The appendixes list every key, tell you where EmuBuddy keeps its files, and help when something does not work.</p>
+
+    <h2>What you should know</h2>
+    <p>You should know how to use your own computer: how to download a file, open a folder and drag a file with the mouse. It helps to know the Apple IIgs and its system software, System 6, but you do not need to: if you can choose from a menu and double-click an icon, you can use it.</p>
+
+    <h2>Conventions in this guide</h2>
+    <p>Keys you press are shown like this: <kbd>F2</kbd>, <kbd>Return</kbd>, <kbd>Esc</kbd>. When two keys are joined by a hyphen, as in <span class="nb"><kbd>Shift</kbd>-<kbd>F10</kbd></span>, hold down the first while you press the second.</p>
+    <p>Menu commands are named with their menu: &ldquo;choose Slots from the Machine menu.&rdquo; Things you type exactly as they are shown, and the names of files, look like this: <code>emubuddy.config</code>.</p>
+    <div class="note"><span class="nt">By the way</span>Notes like this one, in the margin, tell you something useful that you can do without.</div>
+    <p>Two menu bars appear in this guide, and it matters which is which. <b>EmuBuddy&rsquo;s menus</b> are File, Edit, Disks, Machine, Speed, View and Help. The menus <i>inside</i> the IIgs screen, such as the Finder&rsquo;s File, Edit and Special, belong to the Apple IIgs.</p>
+    <div class="important"><span class="nt">Important</span>Text marked like this tells you something you should know to get the result you want.</div>
+    <div class="warning"><span class="nt">Warning</span>Text marked like this warns you of something that can lose your work.</div>
+
+    <h2>The pictures in this guide</h2>
+    <p>On Windows and Linux, EmuBuddy draws its menu bar at the top of its own window, dark, so that you cannot mistake it for the white menu bar of the IIgs below it. The pictures in this guide show it that way. On a Mac the same menus are where a Mac&rsquo;s menus always are, in the menu bar at the top of the screen, and About EmuBuddy and Quit EmuBuddy are in the EmuBuddy menu there. Everything else looks the same on all three.</p>
+  </div>
+</section>
+
+<!-- ====================== 1 ====================== -->
+<section class="chapter" id="ch1" data-label="Chapter 1" data-title="Getting Started">
+  <div class="opener">
+    <p class="ch-label">Chapter 1</p>
+    <h1>Getting Started</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <h2>What you need</h2>
+    <ul>
+      <li>One of these computers: a Mac with Apple silicon and macOS 15 or later; a PC with 64-bit Windows 10 or later; or a computer with 64-bit Linux, with an Intel, AMD or ARM processor</li>
+      <li>An Apple IIgs ROM file (see &ldquo;The ROM file&rdquo; in this chapter)</li>
+      <li>Disk images of the software you want to run, starting with the Apple IIgs system software, System 6</li>
+    </ul>
+    <p>Three things are needed only for one feature each, and EmuBuddy tells you when one is missing: Python 3 for the web gateway (Chapter 5), Ghostscript for the PostScript printer (Chapter 6) and FFmpeg for recording video (Chapter 7).</p>
+
+    <h2>Getting EmuBuddy</h2>
+    <p>Download EmuBuddy from its homepage, portwally.github.io/EmuBuddy. There is one file for each kind of computer:</p>
+    <table class="keys dl">
+      <tr><td>Mac</td><td><code>EmuBuddy-1.0.0-macOS-arm64.dmg</code></td></tr>
+      <tr><td>Windows</td><td><code>EmuBuddy-1.0.0-win64.zip</code></td></tr>
+      <tr><td>Linux, Intel or AMD</td><td><code>EmuBuddy-1.0.0-Linux-x86_64.tar.gz</code></td></tr>
+      <tr><td>Linux, ARM</td><td><code>EmuBuddy-1.0.0-Linux-aarch64.tar.gz</code></td></tr>
+    </table>
+    <p>The numbers in the names change with the version. Each download holds two programs: EmuBuddy, and EmuBuddy Launcher (Chapter 9).</p>
+
+    <h2>Installing EmuBuddy</h2>
+    <div class="important"><span class="nt">Important</span>EmuBuddy&rsquo;s downloads are not signed with a paid developer certificate. Your system warns you about that the first time, and you have to allow the programs yourself, as described here.</div>
+    <h3>On a Mac</h3>
+    <p>Open the <code>.dmg</code> file and drag EmuBuddy and EmuBuddy Launcher into your Applications folder. macOS marks programs you download and refuses to open these two until the mark is removed. Open Terminal, type this line and press <kbd>Return</kbd>:</p>
+    <pre>xattr -dr com.apple.quarantine /Applications/EmuBuddy*.app</pre>
+    <p>You do this once. On some versions of macOS, holding <kbd>Control</kbd> while you click the program and choosing Open does the same.</p>
+    <h3>On Windows</h3>
+    <p>Unpack the whole <code>.zip</code> file into a folder of its own and leave the files together: the programs need the <code>.dll</code> files beside them. The first time you start one, Windows SmartScreen may stop it. Click More info, then Run anyway.</p>
+    <h3>On Linux</h3>
+    <p>Unpack the <code>.tar.gz</code> file and start <code>EmuBuddy</code> in the folder it makes. The libraries EmuBuddy needs come with it. <code>README-linux.txt</code> in the same folder has the details.</p>
+
+    <h2>The ROM file</h2>
+    <p>The ROM is the program built into every Apple IIgs. It belongs to Apple, so EmuBuddy cannot bring it along, and without it EmuBuddy shows the ROM Required window where the IIgs screen should be.</p>
+    <figure>
+      <div class="shot"><img src="img/romreq.png" alt=""></div>
+      <figcaption>EmuBuddy without a ROM file</figcaption>
+    </figure>
+    <p>Two ROM files work. A <b>ROM 03</b> file is 256 KB in size and is the usual choice. A <b>ROM 01</b> file is 128 KB. The ROM of the very first Apple IIgs, ROM 0, does not work.</p>
+    <p>To give EmuBuddy the file, do one of these:</p>
+    <ul>
+      <li>Drop the file on the EmuBuddy window.</li>
+      <li>Click Choose ROM File in the ROM Required window, or choose Choose ROM File from the File menu, and pick the file.</li>
+    </ul>
+    <p>EmuBuddy remembers the file, so you do this once.</p>
+    <div class="note"><span class="nt">By the way</span>A ROM file named <code>ROM03</code> or <code>ROM01</code> in EmuBuddy&rsquo;s data folder (Appendix B) is found without being chosen.</div>
+    <p>The cleanest way to a ROM file is to read it out of an Apple IIgs you own. The ROM is also part of the <code>apple2gs</code> set for the MAME emulator. EmuBuddy needs it as one plain file, not a zip: if you have MAME&rsquo;s two files <code>341-0737</code> and <code>341-0748</code>, join them in that order into one file of 256 KB.</p>
+
+    <h2>Starting up from a disk</h2>
+    <p>With a ROM and no disk, the IIgs does what a real one does with empty drives: it says <i>Check startup device!</i> That message is good news. The ROM works, and the IIgs is waiting for a disk to start up from.</p>
+    <figure>
+      <div class="shot"><img src="img/startup.png" alt=""></div>
+      <figcaption>The ROM works; the IIgs is waiting for a startup disk</figcaption>
+    </figure>
+    <p>A <b>disk image</b> is a file that holds everything on one disk: a floppy disk or a whole hard disk. To start the IIgs:</p>
+    <ol>
+      <li>Find the disk image of a startup disk, for example a System 6 hard disk image, in a folder on your computer.</li>
+      <li>Drop it on the EmuBuddy window.</li>
+    </ol>
+    <p>EmuBuddy puts the disk in a drive that fits it, and the IIgs starts up from it. After a moment the Finder appears.</p>
+    <figure>
+      <div class="shot"><img src="img/desktop.png" alt=""></div>
+      <figcaption>System 6 in EmuBuddy</figcaption>
+    </figure>
+    <p>From now on EmuBuddy starts with the disks that were in its drives when you quit. Chapter 2 tells you everything else about disks and drives.</p>
+    <div class="note"><span class="nt">By the way</span>Disk images of System 6 and of thousands of Apple IIgs programs are kept in the Apple II archives on the Internet.</div>
+    <p>When EmuBuddy starts with a startup hard disk that it has not seen before, it asks whether it may install its <b>helper</b> on that disk. The helper lets you drop files from your computer on any Finder window in the IIgs. Chapter 3 describes it; if you are not sure, click Not Now, and EmuBuddy asks again the next time it starts.</p>
+
+    <h2>The EmuBuddy window</h2>
+    <p>The window has three parts.</p>
+    <ul>
+      <li>At the top are <b>EmuBuddy&rsquo;s menus</b>: File, Edit, Disks, Machine, Speed, View and Help. On a Mac they are in the menu bar at the top of the screen.</li>
+      <li>In the middle is the <b>screen of the IIgs</b>. Inside it the mouse and the keyboard belong to the IIgs.</li>
+      <li>Along the bottom is the <b>status bar</b>. At its left is the speed the IIgs is running at this moment, and beside it, when the network is in use, how many packets have gone out and come in. In the middle EmuBuddy tells you what it just did, such as <i>Inserted System6.hdv in S7D1</i>. At the right are three lights for the 3.5-inch drives, the 5.25-inch drives and the hard disks, which flash when the IIgs reads or writes, and the speed you chose.</li>
+    </ul>
+
+    <h2>Stopping, restarting and quitting</h2>
+    <figure>
+      <div class="shot"><img src="img/menu-machine.png" alt=""></div>
+      <figcaption>The Machine menu</figcaption>
+    </figure>
+    <p>The Machine menu has what the switches and the Reset key of a real IIgs do:</p>
+    <table class="keys">
+      <tr><td>Soft Reset</td><td>Restarts the IIgs but keeps its memory, like Control-Reset on a real one. <span class="nb"><kbd>Control</kbd>-<kbd>F12</kbd></span> does the same.</td></tr>
+      <tr><td>Hard Reset</td><td>Clears the memory, loads the ROM again and starts up from the startup disk, like switching the IIgs off and on.</td></tr>
+      <tr><td>Pause</td><td>Stops the IIgs where it is until you choose Pause again. The status bar says PAUSED. <kbd>F3</kbd> does the same.</td></tr>
+    </table>
+    <p>To leave EmuBuddy, choose Quit EmuBuddy from the File menu (on a Mac, from the EmuBuddy menu, or press <span class="nb"><kbd>Option</kbd>-<kbd>Command</kbd>-<kbd>Q</kbd></span>).</p>
+    <div class="warning"><span class="nt">Warning</span>Quitting EmuBuddy is like pulling the plug of a real IIgs. If a program in the IIgs has work it has not saved, save it first, and in the Finder choose Shut Down from the Special menu before you quit.</div>
+  </div>
+</section>
+
+<!-- ====================== 2 ====================== -->
+<section class="chapter" id="ch2" data-label="Chapter 2" data-title="Disks and Drives">
+  <div class="opener">
+    <p class="ch-label">Chapter 2</p>
+    <h1>Disks and Drives</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <h2>The drives</h2>
+    <p>EmuBuddy&rsquo;s IIgs has eleven drives. Each has a short name made of its slot and its number, which the Drives window and the status bar use:</p>
+    <table class="keys">
+      <tr><td>S5D1, S5D2</td><td>Two 3.5-inch drives, for 800K disks</td></tr>
+      <tr><td>S6D1, S6D2</td><td>Two 5.25-inch drives, for 140K disks</td></tr>
+      <tr><td>S7D1 to S7D7</td><td>Seven hard disks on a SCSI card</td></tr>
+    </table>
+    <p>The drives take disk images of the usual kinds, among them <code>.po</code>, <code>.hdv</code>, <code>.2mg</code>, <code>.dsk</code>, <code>.do</code> and <code>.woz</code> files.</p>
+
+    <h2>Putting a disk in a drive</h2>
+    <p>You can put a disk in a drive, and take it out, at any time while the IIgs is running. There are three ways:</p>
+    <ul>
+      <li><b>Drop the disk image on the EmuBuddy window.</b> EmuBuddy looks at the size and kind of the disk and puts it in the first free drive that fits.</li>
+      <li><b>Choose Open Disk Image from the Disks menu</b> and pick the file. EmuBuddy chooses the drive in the same way.</li>
+      <li><b>Use the Drives window</b> to pick the drive yourself.</li>
+    </ul>
+    <p>The status bar tells you where the disk went.</p>
+
+    <h2>The Drives window</h2>
+    <p>Choose Drives Window from the Disks menu, or press <kbd>F2</kbd>.</p>
+    <figure>
+      <div class="shot"><img src="img/drives.png" alt=""></div>
+      <figcaption>The Drives window: a hard disk in S7D1, the shared folder in S7D2</figcaption>
+    </figure>
+    <p>Each row is one drive, with the name of the disk in it.</p>
+    <table class="keys">
+      <tr><td>To put a disk in a drive</td><td>Click the row and pick the disk image, or drop the image on the row.</td></tr>
+      <tr><td>To take a disk out</td><td>Click Eject in its row. While the IIgs is reading or writing, EmuBuddy does not eject, so a disk is never pulled out in the middle of being written; the status bar says <i>Drive is busy</i>. Try again a moment later.</td></tr>
+      <tr><td>To protect a disk</td><td>Click its Lock box. The IIgs can then read the disk but not change it, like a floppy disk with its write-protect tab set.</td></tr>
+      <tr><td>To empty all drives</td><td>Click Eject All, or choose Eject All from the Disks menu.</td></tr>
+      <tr><td>To share a folder</td><td>Click Share Folder, or drop a folder on the window (Chapter 3).</td></tr>
+    </table>
+    <div class="warning"><span class="nt">Warning</span>As on a real IIgs, drag a disk to the Trash in the Finder before you eject it in EmuBuddy, so that the IIgs has finished with it.</div>
+
+    <h2>Hard disks with partitions</h2>
+    <p>Some hard disk images hold several partitions, each a disk of its own. When you put such an image in a drive, EmuBuddy lists the partitions and asks which one you want.</p>
+
+    <h2>Disks you used before</h2>
+    <p>The Disks menu keeps a list of the disks you used last, below its commands. Choose one to put it in a drive again.</p>
+    <figure>
+      <div class="shot"><img src="img/menu-disks.png" alt=""></div>
+      <figcaption>The Disks menu</figcaption>
+    </figure>
+
+    <h2>Which disk the IIgs starts up from</h2>
+    <p>The IIgs starts up the way a real one does. Unless you changed the Startup Slot in its Control Panel, it looks at slot 7 first, then slot 6, then slot 5, and at the first drive of each: hard disk 1 (S7D1), then 5.25-inch drive 1 (S6D1), then 3.5-inch drive 1 (S5D1). So the hard disk you want to start up from belongs in S7D1.</p>
+    <p>When the IIgs is waiting for a startup disk, with <i>Check startup device!</i> or <i>UNABLE TO LOAD PRODOS</i> on its screen, EmuBuddy helps: a disk image you drop on the window goes into the first drive of its kind and the IIgs starts up from it at once.</p>
+    <div class="note"><span class="nt">By the way</span>A shared folder (Chapter 3) takes the first free hard disk from S7D2 on. S7D1 stays free for your startup disk.</div>
+    <p>At any other time a new disk just appears on the IIgs desktop, and the IIgs keeps running. To start up from a different disk then, put it in the first drive of its kind and choose Hard Reset from the Machine menu.</p>
+  </div>
+</section>
+
+<!-- ====================== 3 ====================== -->
+<section class="chapter" id="ch3" data-label="Chapter 3" data-title="Sharing Files With Your Computer">
+  <div class="opener">
+    <p class="ch-label">Chapter 3</p>
+    <h1>Sharing Files With Your Computer</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <p>There are four ways to move files between the IIgs and the computer it runs on. The first two are all most people need.</p>
+
+    <h2>The shared folder</h2>
+    <p>The first time it starts, EmuBuddy makes a folder named <b>EmuBuddy Files</b> in your Documents folder and gives it to the IIgs as a disk. On the IIgs desktop it is the disk <i>EmuBuddy.Files</i>.</p>
+    <p>The folder and the disk are the same thing seen from two sides:</p>
+    <ul>
+      <li>A file you put into the folder on your computer shows up on the disk in the IIgs after a moment.</li>
+      <li>A file the IIgs saves on the disk is an ordinary file in the folder.</li>
+    </ul>
+    <table class="keys">
+      <tr><td>To open the folder on your computer</td><td>Choose Show Shared Folder from the Disks menu.</td></tr>
+      <tr><td>To share another folder</td><td>Choose Share a Folder from the Disks menu and pick it, or drop the folder on the EmuBuddy window. It becomes one more disk.</td></tr>
+      <tr><td>To stop sharing a folder</td><td>Eject it in the Drives window.</td></tr>
+      <tr><td>To start without the shared folder</td><td>Choose Mount Shared Folder at Start from the Disks menu, so that its check mark goes away.</td></tr>
+    </table>
+    <p>To the IIgs a shared folder is a ProDOS disk, and that sets two limits. It can hold up to 32 MB. And file names on a ProDOS disk are short: up to 15 letters, digits and periods, beginning with a letter. A file with another kind of name on your computer appears in the IIgs under a name changed to fit.</p>
+
+    <h2>Dropping files on the window</h2>
+    <p>Drop any file from your computer on the EmuBuddy window, and EmuBuddy copies it to the IIgs. Where it lands depends on what the Finder in the IIgs is showing:</p>
+    <ul>
+      <li>If the front Finder window shows the shared disk, or a folder on it, the file goes <b>into exactly that folder</b>.</li>
+      <li>If the front Finder window shows a folder on another disk, and the helper is installed, the file is copied <b>into that folder</b> too.</li>
+      <li>Otherwise the file goes to the folder of the shared disk that you chose as the Drop Destination.</li>
+    </ul>
+    <p>Disk images are the exception: a disk image you drop is put in a drive, not copied. ShrinkIt archives (<code>.shk</code> files) are files like any other, and are copied.</p>
+    <h3>The helper</h3>
+    <p>The <b>helper</b> is a small program that EmuBuddy can put on your startup disk. It runs in the background in the IIgs and copies dropped files into Finder windows that show other disks than the shared one. EmuBuddy asks before it installs the helper: Install puts it on the disk and restarts the IIgs, Not Now leaves the question for another time, and Never ends the asking.</p>
+    <p>The helper is one file, <code>EMUBUDDYHELPER</code>, in the <code>SYSTEM/SYSTEM.SETUP</code> folder of the startup disk. To be rid of it, drag it to the Trash in the IIgs.</p>
+
+    <h2>The Drop Destination</h2>
+    <p>Choose Drop Destination from the Disks menu to say where dropped files go when the Finder does not decide it.</p>
+    <figure>
+      <div class="shot"><img src="img/dropdest.png" alt=""></div>
+      <figcaption>The Drop Destination window</figcaption>
+    </figure>
+    <p>The list shows the folders in the shared folder; <i>(top level)</i> is the shared folder itself. Click the folder you want. Click Refresh after you have made new folders. To have every dropped file go to that folder, whatever the Finder shows, click the box Drop into the front Finder window so that it is empty. Click Done to put the window away.</p>
+
+    <h2>The Disk Browser</h2>
+    <p>The Disk Browser shows what is on a ProDOS disk image and copies files out of it, without the IIgs. Choose Disk Browser from the Disks menu. Then click Open Image and pick a disk image, or drop one on the window. It may be an image that is in a drive.</p>
+    <figure>
+      <div class="shot"><img src="img/browser.png" alt=""></div>
+      <figcaption>The Disk Browser with a System 6 disk</figcaption>
+    </figure>
+    <p>The list shows each file and folder with its type and size. Double-click a folder to open it; click Up to go back. To copy a file to your computer, click it, then click Export to Desktop. On a Mac you can also drag a file out of the list into a Finder window.</p>
+
+    <h2>File types in file names</h2>
+    <p>Every file on a ProDOS disk has a <b>file type</b> and an <b>aux type</b>, two numbers that tell the IIgs what the file is. The folders of your computer have no place for them, so EmuBuddy keeps them in the name of the file:</p>
+    <table class="keys wide">
+      <tr><td><code>GAME,t$B3,a$DB03</code></td><td>A file of type $B3 with aux type $DB03</td></tr>
+      <tr><td><code>NOTES.txt</code></td><td>A text file</td></tr>
+      <tr><td><code>DATA</code></td><td>A name with neither is a binary file</td></tr>
+    </table>
+    <p>The IIgs does not see the additions: the first file is GAME to it, a file of type $B3. Files that have a resource fork are kept as AppleSingle files (<code>.applesingle</code>). The same rule holds in the shared folder, for the Disk Browser and for the bridge folder, so a file can go to your computer and come back without losing what it is.</p>
+
+    <h2>The bridge folder</h2>
+    <p>The fourth way is for programs. A program in the IIgs that knows EmuBuddy&rsquo;s <b>host bridge</b>, a file manager for example, can read and write one folder of your computer directly. Nothing outside that folder can be reached, and the bridge is off until you name the folder: with <code>-bridge</code> on the command line (Chapter 10), or as the Bridge folder of a game in EmuBuddy Launcher (Chapter 9). Programmers find the details in the file <code>docs/BRIDGE.md</code> of EmuBuddy&rsquo;s source code.</p>
+  </div>
+</section>
+
+<!-- ====================== 4 ====================== -->
+<section class="chapter" id="ch4" data-label="Chapter 4" data-title="Slots and Cards">
+  <div class="opener">
+    <p class="ch-label">Chapter 4</p>
+    <h1>Slots and Cards</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <p>An Apple IIgs has two ports, for a printer and a modem, and seven slots for cards. In EmuBuddy you plug cards in with a click.</p>
+
+    <h2>The Slots window</h2>
+    <p>Choose Slots from the Machine menu, or press <kbd>F4</kbd>. The window has a row for each slot. Click what you want in each row. Nothing changes until you click Apply; Revert puts the window back to what is plugged in now.</p>
+    <table class="keys">
+      <tr><td>Slot 1, the printer port</td><td>Idle, a modem, an ImageWriter printer or a PostScript printer (Chapter 6)</td></tr>
+      <tr><td>Slot 2, the modem port</td><td>Idle, or a modem that dials Internet addresses in place of phone numbers, for terminal programs</td></tr>
+      <tr><td>Slot 3</td><td>Empty, a Video Overlay Card or an Uthernet II network card</td></tr>
+      <tr><td>Slot 4</td><td>Empty, a Mockingboard sound card or an Uthernet II network card (Chapter 5)</td></tr>
+      <tr><td>Slots 5 and 6</td><td>The built-in 3.5-inch and 5.25-inch drives</td></tr>
+      <tr><td>Slot 7</td><td>Empty, or the SCSI card with its seven hard disks</td></tr>
+    </table>
+    <figure>
+      <div class="shot"><img src="img/slots.png" alt=""></div>
+      <figcaption>The Slots window</figcaption>
+    </figure>
+    <p>EmuBuddy starts with a PostScript printer on the printer port, a modem on the modem port, the Uthernet II in slot 4 and the SCSI card in slot 7: what printing, the Internet and hard disks need.</p>
+    <div class="important"><span class="nt">Important</span>Changing slot 7 restarts the IIgs. Save your work in the IIgs before you click Apply.</div>
+
+    <h2>Telling the IIgs about a card</h2>
+    <p>On a real Apple IIgs, plugging a card in is half of the job. Each slot has a setting in the Control Panel of the IIgs: either the port built into the IIgs for that slot, or <i>Your Card</i>. A program that looks for a card by its slot finds it only when the slot says Your Card.</p>
+    <p>EmuBuddy&rsquo;s IIgs comes with slot 7 set to Your Card, so hard disks work at once, and the network card in slot 4 works with Marinetti as it comes. If a program does not find a card, this setting is the first thing to check:</p>
+    <ol>
+      <li>In System 6, choose Control Panels from the Apple menu of the IIgs and open Slots.</li>
+      <li>Set the slot of your card to Your Card.</li>
+      <li>Restart the IIgs: choose Hard Reset from EmuBuddy&rsquo;s Machine menu.</li>
+    </ol>
+    <div class="note"><span class="nt">By the way</span>The IIgs keeps its Control Panel settings, as a real one does with its battery, so you set a slot once.</div>
+    <p>The printer and the modem are on the built-in ports of the IIgs and never need this.</p>
+
+    <h2>Memory</h2>
+    <p>EmuBuddy&rsquo;s IIgs has a memory expansion card of 8 MB, the largest a real IIgs takes. To try a program with less, set the memory on the command line (Chapter 10) or in a game of EmuBuddy Launcher (Chapter 9).</p>
+  </div>
+</section>
+
+<!-- ====================== 5 ====================== -->
+<section class="chapter" id="ch5" data-label="Chapter 5" data-title="The Internet">
+  <div class="opener">
+    <p class="ch-label">Chapter 5</p>
+    <h1>The Internet</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <h2>How the IIgs is connected</h2>
+    <p>The <b>Uthernet II</b> is a network card for the Apple II. EmuBuddy has one in slot 4, and it supplies the other end of the cable as well: a small network of its own that connects the IIgs to the Internet through your computer. You do not install or set up anything on your computer for it.</p>
+    <p>On the IIgs you need <b>Marinetti</b>, the TCP/IP software that Apple IIgs network programs use, with its Uthernet II link layer. Both are free and belong on your startup disk.</p>
+    <ol>
+      <li>In Marinetti&rsquo;s TCP/IP control panel, choose the Uthernet II link layer and the slot of the card, slot 4 unless you moved it.</li>
+      <li>Let it get its address by itself, with DHCP, and connect.</li>
+    </ol>
+    <p>The status bar counts the packets: <i>Net out</i> for those the IIgs sent, <i>in</i> for those it received. When the numbers move, the network works.</p>
+    <p>If a program wants the numbers typed in, these are they:</p>
+    <table class="keys">
+      <tr><td>Address of the IIgs</td><td>192.168.64.2 (DHCP gives out addresses from this one on)</td></tr>
+      <tr><td>Subnet mask</td><td>255.255.255.0</td></tr>
+      <tr><td>Gateway (router)</td><td>192.168.64.1</td></tr>
+      <tr><td>Name server (DNS)</td><td>192.168.64.1</td></tr>
+      <tr><td>Your own computer</td><td>192.168.64.254</td></tr>
+    </table>
+
+    <h2>Reaching your own computer</h2>
+    <p>From the IIgs, your own computer always has the address <b>192.168.64.254</b>, whatever address it has in your home network. A web server you run on your computer, for example, is <code>http://192.168.64.254/</code> in a browser on the IIgs. Other computers in your home network are reached by their usual addresses.</p>
+
+    <h2>The web gateway</h2>
+    <p>Browsers for the Apple IIgs, such as Webber, were written for the web of their time. They cannot open the secure (HTTPS) sites that nearly every site is today, and the pages are too big and too full of scripts for them. EmuBuddy&rsquo;s <b>web gateway</b> stands between the browser and the web. It fetches the page for the IIgs, from secure sites too, takes out the scripts, the styles and everything else an old browser cannot use, and hands over a small, plain page.</p>
+    <p>The gateway starts by itself when the IIgs goes online. To use it, tell the browser to use it as its <b>proxy</b>:</p>
+    <table class="keys">
+      <tr><td>Proxy address</td><td>192.168.64.254</td></tr>
+      <tr><td>Proxy port</td><td>6502</td></tr>
+    </table>
+    <p>In Webber, choose Settings from the File menu, click Enable Proxy so that it is checked, click Proxy Settings and type the address and the port.</p>
+    <figure>
+      <div class="shot"><img src="img/slots-gateway.png" alt=""></div>
+      <figcaption>The Slots window shows the gateway; the status bar counts the packets</figcaption>
+    </figure>
+    <p>The last line of the Slots window tells you how the gateway is doing. <i>Web gateway: starts when the IIgs goes online</i> means it is waiting for the IIgs to connect. <i>Web gateway: proxy 192.168.64.254, port 6502</i> means it is running. If it could not start, the line says why.</p>
+    <h3>What you should know about it</h3>
+    <ul>
+      <li>The gateway needs <b>Python 3</b> on your computer. Without it the gateway stays off, and everything else works as before.</li>
+      <li>The gateway listens only inside your own computer. It opens nothing to your network, and it stops when you quit EmuBuddy.</li>
+      <li>Not every site survives. A page that is put together by scripts in the browser comes out nearly empty.</li>
+      <li>To switch the gateway off, or to give it another port, see <code>-webgate</code> in Chapter 10.</li>
+    </ul>
+    <div class="note"><span class="nt">By the way</span>Webber does not take port numbers in addresses, so a server on your own computer has to answer on port 80, the usual one.</div>
+  </div>
+</section>
+
+<!-- ====================== 6 ====================== -->
+<section class="chapter" id="ch6" data-label="Chapter 6" data-title="Printing">
+  <div class="opener">
+    <p class="ch-label">Chapter 6</p>
+    <h1>Printing</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <p>EmuBuddy has two printers for the IIgs. Neither uses paper until you say so: every page the IIgs prints appears in the Printer window, and from there you save it as a PDF file or send it to a real printer.</p>
+
+    <h2>Choosing a printer</h2>
+    <p>Open the Slots window (Chapter 4) and choose ImageWriter or PostScript for slot 1, the printer port. Then tell the IIgs which printer it has:</p>
+    <h3>ImageWriter II</h3>
+    <p>The ImageWriter II is the dot matrix printer that nearly all Apple II software can print on. In System 6, choose the ImageWriter driver and the printer port in the DC Printer control panel. Programs that print without GS/OS, Applesoft BASIC with <code>PR#1</code> for example, print on it as well.</p>
+    <h3>PostScript</h3>
+    <p>The PostScript printer gives the sharpest pages. In the DC Printer control panel of System 6, choose the printer port and the printer type DC.PostScript.</p>
+    <p>PostScript pages are drawn by <b>Ghostscript</b>, a free program that EmuBuddy looks for on your computer. If it is missing, the window Ghostscript Needed tells you so. Your print job waits: install Ghostscript, then click Try Again.</p>
+    <table class="keys">
+      <tr><td>Mac</td><td>With Homebrew: <code>brew install ghostscript</code></td></tr>
+      <tr><td>Windows</td><td>The installer from ghostscript.com</td></tr>
+      <tr><td>Linux</td><td><code>sudo apt install ghostscript</code>, or your system&rsquo;s own package manager</td></tr>
+    </table>
+
+    <h2>The Printer window</h2>
+    <p>Print from a program in the IIgs as you would on a real one. The status bar says <i>Printed page 1</i>. To see the page, choose Printer from the Machine menu.</p>
+    <figure>
+      <div class="shot"><img src="img/printer.png" alt=""></div>
+      <figcaption>The Printer window, with a page printed from Applesoft BASIC</figcaption>
+    </figure>
+    <p>The arrows below the page go to the page before and the page after. The buttons along the bottom do this:</p>
+    <table class="keys">
+      <tr><td>Save PDF</td><td>Saves all the pages as one PDF file on your Desktop, named EmuBuddy Print with the date and time.</td></tr>
+      <tr><td>Print</td><td>Sends the pages to the default printer of your computer. On Windows it opens the PDF file, and you print from there.</td></tr>
+      <tr><td>Open</td><td>Opens the pages as a PDF file in your computer&rsquo;s PDF viewer.</td></tr>
+      <tr><td>Clear</td><td>Throws the pages away.</td></tr>
+      <tr><td>Eject</td><td>Finishes the page that is being printed. An ImageWriter page stays in the printer until it is full or the program ejects it; click Eject to have it now.</td></tr>
+    </table>
+    <p>When all the pages came from the PostScript printer, Save PDF writes a small PDF with sharp text at any size. ImageWriter pages are saved as pictures of the pages.</p>
+  </div>
+</section>
+
+<!-- ====================== 7 ====================== -->
+<section class="chapter" id="ch7" data-label="Chapter 7" data-title="Speed, Display and Recording">
+  <div class="opener">
+    <p class="ch-label">Chapter 7</p>
+    <h1>Speed, Display and Recording</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <h2>Speed</h2>
+    <p>A real Apple IIgs runs at 2.8 MHz, or at 1 MHz for old Apple II programs that count on it. Many had a ZipGS accelerator card to make them faster. EmuBuddy&rsquo;s Speed menu has them all, and you can change the speed at any moment.</p>
+    <figure>
+      <div class="shot"><img src="img/menu-speed.png" alt=""></div>
+      <figcaption>The Speed menu</figcaption>
+    </figure>
+    <table class="keys">
+      <tr><td>1.0 MHz</td><td>The speed of an Apple IIe, for old games that run too fast otherwise</td></tr>
+      <tr><td>2.8 MHz</td><td>The speed of a IIgs without an accelerator</td></tr>
+      <tr><td>ZipGS 8 to 128 MHz</td><td>A IIgs with a ZipGS accelerator. 16 MHz makes the Finder pleasant.</td></tr>
+      <tr><td>Unlimited</td><td>As fast as your computer can go</td></tr>
+    </table>
+    <p>The right end of the status bar shows the speed you chose, the left end the speed the IIgs really reaches.</p>
+    <div class="note"><span class="nt">By the way</span>Games time themselves by the speed of the IIgs. If one runs too fast, choose 2.8 MHz.</div>
+
+    <h2>The size of the window</h2>
+    <p>The View menu has four window sizes, from 1x, where one dot of the IIgs is one dot of your screen, to 4x. Sizes that do not fit on your screen are gray. Your choice is remembered. The picture is always enlarged evenly, so it is never stretched.</p>
+    <table class="keys">
+      <tr><td>Full Screen</td><td>Fills the screen with the IIgs. <kbd>F11</kbd> switches it on and off.</td></tr>
+      <tr><td>CRT Effect</td><td>Curves the picture like the glass of a monitor. <span class="nb"><kbd>Control</kbd>-<kbd>F11</kbd></span></td></tr>
+      <tr><td>Scanlines</td><td>Draws the dark lines between the rows of a monitor&rsquo;s picture. <span class="nb"><kbd>Shift</kbd>-<kbd>F11</kbd></span></td></tr>
+    </table>
+    <div class="note"><span class="nt">By the way</span>Core Debug Lines, at the bottom of the View menu, shows figures from inside the emulator. You will not need them.</div>
+
+    <h2>Screenshots</h2>
+    <p>The File menu takes pictures of what you see:</p>
+    <table class="keys">
+      <tr><td>Save Screenshot</td><td>Saves the IIgs screen as a picture on your Desktop. <kbd>F10</kbd></td></tr>
+      <tr><td>Save Window Screenshot</td><td>Saves the whole EmuBuddy window, with its menu bar, status bar and windows. <span class="nb"><kbd>Shift</kbd>-<kbd>F10</kbd></span></td></tr>
+    </table>
+    <p>The pictures are PNG files named EmuBuddy, with the date and the time.</p>
+
+    <h2>Recording video</h2>
+    <p>Choose Record Video from the File menu, or press <span class="nb"><kbd>Control</kbd>-<kbd>F10</kbd></span>, to record what the IIgs shows and plays. The status bar says REC and counts the time. Choose Record Video again to stop. The recording is an MP4 file with sound, named EmuBuddy Recording with the date and time, in the Movies folder of your computer (Videos on Windows and Linux). If you quit while recording, the file is saved first.</p>
+    <p>Recording needs <b>FFmpeg</b>, a free program. If EmuBuddy does not find it, a window tells you how to get it:</p>
+    <table class="keys">
+      <tr><td>Mac</td><td>With Homebrew: <code>brew install ffmpeg</code></td></tr>
+      <tr><td>Windows</td><td><code>winget install ffmpeg</code></td></tr>
+      <tr><td>Linux</td><td><code>sudo apt install ffmpeg</code>, or your system&rsquo;s own package manager</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ====================== 8 ====================== -->
+<section class="chapter" id="ch8" data-label="Chapter 8" data-title="The Keyboard">
+  <div class="opener">
+    <p class="ch-label">Chapter 8</p>
+    <h1>The Keyboard</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <h2>The keys of the IIgs</h2>
+    <p>Your keyboard is the keyboard of the IIgs. A few keys of an Apple IIgs keyboard are not on every keyboard of today, so EmuBuddy gives them a place:</p>
+    <table class="keys">
+      <tr><td>Open-Apple</td><td><kbd>F1</kbd> on every keyboard. Also the <kbd>Command</kbd> key of a Mac keyboard and the Windows key of a PC keyboard.</td></tr>
+      <tr><td>Option</td><td><kbd>Option</kbd> on a Mac keyboard, <kbd>Alt</kbd> on a PC keyboard</td></tr>
+      <tr><td>Reset</td><td><kbd>F12</kbd>. With <kbd>Control</kbd> it is Control-Reset, the soft reset.</td></tr>
+    </table>
+    <p>Hold <kbd>F1</kbd> the way you would hold the Open-Apple key: <span class="nb"><kbd>F1</kbd>-<kbd>Q</kbd></span> is Open-Apple-Q, which quits most IIgs programs.</p>
+    <div class="note"><span class="nt">By the way</span>If your system keeps a key combination for itself, as Windows does with the Windows key, use <kbd>F1</kbd>.</div>
+    <p>On a Mac, the Command key shortcuts you know belong to the IIgs while EmuBuddy is in front: <span class="nb"><kbd>Command</kbd>-<kbd>Q</kbd></span> quits the program in the IIgs, not EmuBuddy. EmuBuddy itself quits with <span class="nb"><kbd>Option</kbd>-<kbd>Command</kbd>-<kbd>Q</kbd></span>.</p>
+
+    <h2>The function keys</h2>
+    <p>The function keys work EmuBuddy:</p>
+    <table class="keys">
+      <tr><td><kbd>F1</kbd></td><td>The Open-Apple key</td></tr>
+      <tr><td><kbd>F2</kbd></td><td>The Drives window</td></tr>
+      <tr><td><kbd>F3</kbd></td><td>Pause</td></tr>
+      <tr><td><kbd>F4</kbd></td><td>The Slots window</td></tr>
+      <tr><td><kbd>F10</kbd></td><td>Save Screenshot</td></tr>
+      <tr><td><span class="nb"><kbd>Shift</kbd>-<kbd>F10</kbd></span></td><td>Save Window Screenshot</td></tr>
+      <tr><td><span class="nb"><kbd>Control</kbd>-<kbd>F10</kbd></span></td><td>Record Video, start and stop</td></tr>
+      <tr><td><kbd>F11</kbd></td><td>Full Screen</td></tr>
+      <tr><td><span class="nb"><kbd>Shift</kbd>-<kbd>F11</kbd></span></td><td>Scanlines</td></tr>
+      <tr><td><span class="nb"><kbd>Control</kbd>-<kbd>F11</kbd></span></td><td>CRT Effect</td></tr>
+      <tr><td><span class="nb"><kbd>Control</kbd>-<kbd>F12</kbd></span></td><td>Soft Reset</td></tr>
+    </table>
+
+    <h2>Keyboards of other countries</h2>
+    <p>EmuBuddy gives the IIgs the character your key makes, not the place of the key. A German, French or Spanish keyboard therefore types what is printed on its keys, whatever keyboard layout is set in the Control Panel of the IIgs.</p>
+    <p>Letters with umlauts and accents work as well. In the desktop programs of GS/OS, EmuBuddy types them the way a Mac does, and the IIgs shows the real letter. On the text screens they become the national characters of the IIgs, which show as umlauts and accents when the Control Panel is set to that country&rsquo;s character set.</p>
+
+    <h2>Copying text in and out</h2>
+    <p>The Edit menu connects the clipboard of your computer with the IIgs:</p>
+    <table class="keys">
+      <tr><td>Paste Text</td><td>Types the text on your computer&rsquo;s clipboard into the IIgs, as if you typed it. Use it for a long web address, or for a BASIC program you copied from a web page.</td></tr>
+      <tr><td>Copy Screen Text</td><td>Copies what is on a text screen of the IIgs to your computer&rsquo;s clipboard.</td></tr>
+    </table>
+
+    <h2>Joysticks</h2>
+    <p>A game controller connected to your computer is the joystick of the IIgs. Without one, the keys of the numeric keypad move the joystick.</p>
+  </div>
+</section>
+
+<!-- ====================== 9 ====================== -->
+<section class="chapter" id="ch9" data-label="Chapter 9" data-title="EmuBuddy Launcher">
+  <div class="opener">
+    <p class="ch-label">Chapter 9</p>
+    <h1>EmuBuddy Launcher</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <p>EmuBuddy Launcher is the second program in the download. It keeps your games on a shelf, each with its picture, and starts EmuBuddy with the one you pick. You can work it from the sofa with a game controller.</p>
+
+    <h2>Games</h2>
+    <p>The Launcher calls each thing on its shelf a <b>game</b>, but a game can be anything you run: a word processor, your System 6 hard disk, a demo. A game is a whole set-up of the IIgs: the ROM, the memory, the speed, the card in each slot, the disks in the drives, the shared folder and the size of the window. When you start a game, EmuBuddy opens with exactly that set-up, and your everyday set-up in EmuBuddy stays as it was.</p>
+    <figure class="photo">
+      <div class="shot"><img src="img/launcher.jpg" alt=""></div>
+      <figcaption>EmuBuddy Launcher</figcaption>
+    </figure>
+    <p>The games stand in a row as big covers, over a soft picture of the one that is selected. Its name, a line about it and its set-up are below it.</p>
+
+    <h2>Moving around</h2>
+    <table class="keys">
+      <tr><td><kbd>&larr;</kbd> <kbd>&rarr;</kbd></td><td>Move along the row</td></tr>
+      <tr><td><kbd>Return</kbd></td><td>Start the game</td></tr>
+      <tr><td><kbd>Tab</kbd></td><td>Show the details of the game</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Open the menu</td></tr>
+      <tr><td>Letters</td><td>Type to search for a game by its name</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Go back</td></tr>
+    </table>
+    <p>The mouse works too: click a cover to select it, double-click it to start it, and turn the wheel to move along the row.</p>
+    <h3>With a game controller</h3>
+    <table class="keys">
+      <tr><td>D-pad or left stick</td><td>Move along the row</td></tr>
+      <tr><td>A</td><td>Start the game</td></tr>
+      <tr><td>B</td><td>Go back</td></tr>
+      <tr><td>X</td><td>Show the details</td></tr>
+      <tr><td>Y or Start</td><td>Open the menu</td></tr>
+      <tr><td>Shoulder buttons</td><td>Jump five games</td></tr>
+    </table>
+    <p>The hints at the bottom of the screen change to the buttons of the controller as soon as you use it. In the Launcher&rsquo;s windows the D-pad moves a frame from one item to the next, A presses what is in the frame, and B closes the window. Typing a name needs a keyboard.</p>
+
+    <h2>The menu</h2>
+    <p>Press <kbd>Space</kbd> for the menu. Everything the Launcher can do is in it.</p>
+    <figure class="photo">
+      <div class="shot"><img src="img/launcher-menu.jpg" alt=""></div>
+      <figcaption>The Launcher&rsquo;s menu</figcaption>
+    </figure>
+
+    <h2>Adding and changing games</h2>
+    <p>Choose New Game from the menu, or Edit to change the selected game. A small window asks for what most games need.</p>
+    <figure class="photo">
+      <div class="shot"><img src="img/launcher-edit.jpg" alt=""></div>
+      <figcaption>Editing a game</figcaption>
+    </figure>
+    <table class="keys">
+      <tr><td>Name</td><td>What the game is called on the shelf</td></tr>
+      <tr><td>Picture</td><td>Click Choose Picture, or drop a picture on the window.</td></tr>
+      <tr><td>Main disk</td><td>The hard disk image the game starts from. Click Choose to pick a file, or Library to pick from your disks (see &ldquo;Disks and ROMs&rdquo;). You can also drop the disk on the window.</td></tr>
+      <tr><td>Floppy disk</td><td>A floppy disk image, if the game comes on one</td></tr>
+      <tr><td>The boxes</td><td>Sound card, Internet and Printer plug in the Mockingboard, the Uthernet II and a printer. Fast runs the game at 16 MHz. Full screen and Curved screen set the display.</td></tr>
+    </table>
+    <p>Click Save. For everything else, click More settings: the ROM file, the memory, any speed, the card in each slot, all eleven drives, the shared folder, the bridge folder and the size of the window.</p>
+    <p>Duplicate in the menu makes a copy of the selected game, which is the quickest way to a second set-up that differs in one thing. Delete removes a game from the shelf; its disks stay where they are.</p>
+
+    <h2>Pictures</h2>
+    <p>Each game shows a cover. The Launcher takes it from the first of these that it finds:</p>
+    <ul>
+      <li>The picture you set with Set Picture in the menu. Pictures can be PNG, JPG or BMP files. Remove Picture takes it away again.</li>
+      <li>A picture with the name of the game in an artwork folder. Artwork Folder in the menu sets the folder; inside it the Launcher looks in folders named <code>boxart</code>, <code>flyer</code>, <code>snap</code>, <code>video</code> and, for the logo, <code>wheel</code>, the names Attract-Mode uses.</li>
+      <li>A picture EmuBuddy took by itself. When you quit a game that has no cover, EmuBuddy saves the last screen of the IIgs, and the Launcher shows that.</li>
+    </ul>
+
+    <h2>Favourites and sorting</h2>
+    <p>Add to Favourites in the menu puts a star on the selected game; <span class="nb"><kbd>Command</kbd>-<kbd>D</kbd></span> on a Mac, <span class="nb"><kbd>Control</kbd>-<kbd>D</kbd></span> elsewhere, does the same. The Sort command in the menu steps through the orders of the shelf: by name, favourites first, last played and most played. The Launcher counts for itself how often and when you played each game.</p>
+
+    <h2>Disks and ROMs</h2>
+    <p>Disks and ROMs in the menu is a library of your disk images and ROM files. Name the folders where you keep them, and the Launcher lists what it finds there, each disk with its kind and the name of its ProDOS volume, and tells you which games use it. It can also look for copies of the same disk and for damaged images.</p>
+    <p>A game can use a <b>private copy</b> of a disk. The game then changes its own copy, and the original stays as it is: useful for games that write their high scores or saved positions to the disk.</p>
+
+    <h2>Coming from Attract-Mode</h2>
+    <p>If you have used the Attract-Mode front end with an Apple IIgs emulator, choose Import from Attract-Mode in the menu. The Launcher reads your Attract-Mode folder, makes a game of every entry in a system&rsquo;s list, and takes over the options of its start script and its artwork folders. Your Attract-Mode folder is not changed.</p>
+
+    <h2>Other ways to look at it</h2>
+    <table class="keys">
+      <tr><td>Classic View</td><td>Shows the games in windows with menus, like a desktop, in a choice of skins from Retro and Modern to Apple II, Commodore 64 and Cover Flow. In the Classic view, the View menu has the window sizes and the skins.</td></tr>
+      <tr><td>Full Screen</td><td>Fills the screen. <kbd>F11</kbd> does the same.</td></tr>
+      <tr><td>Portrait Window</td><td>Opens an upright window: a big picture on top, the row of covers below. On a screen that is turned upright, the Launcher does this by itself.</td></tr>
+      <tr><td>Sounds on/off</td><td>Switches the soft sounds of the Launcher off and on.</td></tr>
+      <tr><td>Deutsch</td><td>Switches between English and German. On a German system the Launcher starts in German.</td></tr>
+    </table>
+    <figure class="photo tall">
+      <div class="shot"><img src="img/launcher-portrait.jpg" alt=""></div>
+      <figcaption>The Launcher in an upright window</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ====================== 10 ====================== -->
+<section class="chapter" id="ch10" data-label="Chapter 10" data-title="The Command Line">
+  <div class="opener">
+    <p class="ch-label">Chapter 10</p>
+    <h1>The Command Line</h1>
+    <!--INCH-->
+  </div>
+  <div class="body">
+    <p>Everything in EmuBuddy&rsquo;s menus can also be set when you start it from a terminal or a script. You never need this to use EmuBuddy. It is there for shortcuts, scripts and other front ends, and its options follow the ones of the MAME emulator&rsquo;s <code>apple2gs</code>, so start scripts written for MAME need little change.</p>
+    <pre>EmuBuddy [apple2gs] [options] [disk image or folder ...]</pre>
+    <p>On a Mac the program is inside the application: <code>/Applications/EmuBuddy.app/Contents/MacOS/EmuBuddy</code>.</p>
+    <p>The options hold for that one start. Nothing of them is saved, so your everyday set-up stays as it was, unless you add <code>-save</code>. An example:</p>
+    <pre>EmuBuddy apple2gs -rom ROM03 -hard1 System6.hdv -flop3 Game.2mg -sl1 imagewriter -sl4 uthernet2 -mhz 16 -scale 2 -share ~/IIgsFiles</pre>
+
+    <h2>Disks</h2>
+    <table class="keys opts">
+      <tr><td><code>-flop1</code>, <code>-flop2</code> <i>image</i></td><td>The 5.25-inch drives, S6D1 and S6D2</td></tr>
+      <tr><td><code>-flop3</code>, <code>-flop4</code> <i>image</i></td><td>The 3.5-inch drives, S5D1 and S5D2</td></tr>
+      <tr><td><code>-hard1</code> to <code>-hard7</code> <i>image</i></td><td>The hard disks, S7D1 to S7D7</td></tr>
+      <tr><td><code>-share</code> <i>folder</i></td><td>A folder of your computer as a shared disk</td></tr>
+      <tr><td><i>image or folder</i></td><td>Without an option before it, a disk goes into the first free drive that fits.</td></tr>
+    </table>
+
+    <h2>Slots</h2>
+    <table class="keys opts">
+      <tr><td><code>-sl1</code> <i>card</i></td><td><code>imagewriter</code>, <code>postscript</code>, <code>modem</code> or <code>none</code></td></tr>
+      <tr><td><code>-sl2</code> <i>card</i></td><td><code>modem</code>, <code>imagewriter</code>, <code>postscript</code> or <code>none</code></td></tr>
+      <tr><td><code>-sl3</code> <i>card</i></td><td><code>uthernet2</code>, <code>voc</code> (the Video Overlay Card) or <code>none</code></td></tr>
+      <tr><td><code>-sl4</code> <i>card</i></td><td><code>mockingboard</code>, <code>uthernet2</code> or <code>none</code></td></tr>
+      <tr><td><code>-sl7</code> <i>card</i></td><td><code>scsi</code> or <code>none</code></td></tr>
+    </table>
+
+    <h2>The machine</h2>
+    <table class="keys opts">
+      <tr><td><code>-rom</code> <i>file</i></td><td>The ROM file</td></tr>
+      <tr><td><code>-rompath</code> <i>folder</i></td><td>A folder to look for the ROM file in</td></tr>
+      <tr><td><code>-ramsize</code> <i>n</i><code>M</code></td><td>The memory expansion, from <code>0M</code> to <code>8M</code></td></tr>
+      <tr><td><code>-mhz</code> <i>n</i></td><td>The speed: <code>1</code>, <code>2.8</code>, <code>8</code>, <code>16</code>, <code>32</code>, <code>64</code>, <code>128</code> or <code>max</code></td></tr>
+      <tr><td><code>-nothrottle</code></td><td>As fast as possible, the same as <code>-mhz max</code></td></tr>
+    </table>
+
+    <h2>The display</h2>
+    <table class="keys opts">
+      <tr><td><code>-window</code>, <code>-nowindow</code></td><td>In a window, or full screen</td></tr>
+      <tr><td><code>-scale</code> <i>n</i></td><td>The window size, 1 to 4 times the IIgs screen. It is made smaller if it does not fit your screen.</td></tr>
+      <tr><td><code>-resolution</code> <i>w</i><code>x</code><i>h</i></td><td>The window size in dots, for example <code>1408x1136</code></td></tr>
+      <tr><td><code>-crt</code></td><td>The CRT effect</td></tr>
+      <tr><td><code>-scanlines</code> <i>n</i></td><td>Scanlines, from 0 (none) to 100 (strongest)</td></tr>
+    </table>
+
+    <h2>Other options</h2>
+    <table class="keys opts">
+      <tr><td><code>-title</code> <i>text</i></td><td>The title of the window</td></tr>
+      <tr><td><code>-bridge</code> <i>folder</i></td><td>The bridge folder (Chapter 3)</td></tr>
+      <tr><td><code>-webgate</code> <i>port</i></td><td>Another port for the web gateway than 6502; <code>-webgate off</code> switches the gateway off.</td></tr>
+      <tr><td><code>-quitshot</code> <i>file.png</i></td><td>Saves a picture of the IIgs screen in this file when EmuBuddy quits.</td></tr>
+      <tr><td><code>-validate</code></td><td>Checks that the ROM, disks and folders you named exist, says so, and stops.</td></tr>
+      <tr><td><code>-showconfig</code></td><td>Shows the set-up your options stand for, and stops.</td></tr>
+      <tr><td><code>-save</code></td><td>Saves these options as your everyday set-up.</td></tr>
+      <tr><td><code>-cfg</code> <i>file</i></td><td>Uses another settings file.</td></tr>
+      <tr><td><code>-help</code></td><td>Lists the options.</td></tr>
+    </table>
+    <p>EmuBuddy ends with the code 0 when all went well, 1 when something went wrong while it ran or <code>-validate</code> found something missing, and 2 when it did not understand the command line.</p>
+  </div>
+</section>
+
+<!-- ====================== A ====================== -->
+<section class="chapter appendix" id="appa" data-label="Appendix A" data-title="If Something Goes Wrong">
+  <div class="opener">
+    <p class="ch-label">Appendix A</p>
+    <h1>If Something Goes Wrong</h1>
+  </div>
+  <div class="body">
+    <h2>Starting</h2>
+    <table class="keys wide">
+      <tr><td>macOS says EmuBuddy is damaged or cannot be opened</td><td>The download is still marked by macOS. Type the <code>xattr</code> line in &ldquo;Installing EmuBuddy&rdquo; in Chapter 1.</td></tr>
+      <tr><td>Windows says a <code>.dll</code> file is missing</td><td>The program was moved away from its files. Unpack the whole <code>.zip</code> file again and leave everything together.</td></tr>
+      <tr><td>The ROM Required window stays</td><td>The file you chose is not a ROM 01 (128 KB) or ROM 03 (256 KB) file. A zip file must be unpacked first.</td></tr>
+      <tr><td><i>Check startup device!</i></td><td>The ROM works, but no drive holds a startup disk. Drop a startup disk image on the window.</td></tr>
+      <tr><td><i>UNABLE TO LOAD PRODOS</i></td><td>The disk in hard disk 1 is not a startup disk. Drop a startup disk image on the window; EmuBuddy puts it in S7D1 and starts up from it.</td></tr>
+      <tr><td>The IIgs starts up from the wrong disk</td><td>Put the disk you want in S7D1 in the Drives window, then choose Hard Reset from the Machine menu.</td></tr>
+    </table>
+    <h2>Disks and files</h2>
+    <table class="keys wide">
+      <tr><td>A disk does not eject</td><td>The IIgs is reading or writing. Wait until the drive lights in the status bar are dark, then click Eject again.</td></tr>
+      <tr><td>The IIgs cannot change a disk</td><td>Its Lock box is checked in the Drives window, or the image file is protected on your computer.</td></tr>
+      <tr><td>A folder cannot be shared</td><td>It holds more than 32 MB. Share a smaller folder.</td></tr>
+      <tr><td>A dropped file does not show up</td><td>Give the IIgs a moment, then look in the EmuBuddy.Files disk, in the folder set as the Drop Destination. A name the IIgs cannot use is changed to one it can.</td></tr>
+    </table>
+    <h2>Cards, network and printing</h2>
+    <table class="keys wide">
+      <tr><td>The IIgs does not see a card</td><td>Set its slot to Your Card in the Control Panel of the IIgs and restart the IIgs (Chapter 4).</td></tr>
+      <tr><td>The network does not connect</td><td>Check that the Uthernet II is plugged in, in the Slots window, and that Marinetti uses the Uthernet II link layer with the same slot. If it still does not connect, set that slot to Your Card (Chapter 4).</td></tr>
+      <tr><td>The browser cannot open a site</td><td>Set the web gateway as its proxy (Chapter 5). The last line of the Slots window tells you whether the gateway is running; it needs Python 3.</td></tr>
+      <tr><td>A web page comes out empty</td><td>The page is put together by scripts, which the gateway removes. Try the site&rsquo;s plain or mobile version, if it has one.</td></tr>
+      <tr><td>Nothing is printed</td><td>Check that the printer in slot 1 of the Slots window matches the printer chosen in the IIgs. For the PostScript printer, Ghostscript must be installed (Chapter 6).</td></tr>
+      <tr><td>Half a page is missing</td><td>The page is still in the ImageWriter. Click Eject in the Printer window.</td></tr>
+    </table>
+    <h2>Keys and display</h2>
+    <table class="keys wide">
+      <tr><td>An Open-Apple key combination does something on your computer instead</td><td>Your system keeps that combination for itself. Use <kbd>F1</kbd> as the Open-Apple key.</td></tr>
+      <tr><td>A game runs much too fast</td><td>Choose 2.8 MHz from the Speed menu, or 1.0 MHz for an old Apple II game.</td></tr>
+      <tr><td>A window size is gray</td><td>The window would not fit on your screen at that size.</td></tr>
+      <tr><td>Record Video does nothing</td><td>FFmpeg is not installed (Chapter 7).</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ====================== B ====================== -->
+<section class="chapter appendix" id="appb" data-label="Appendix B" data-title="Where EmuBuddy Keeps Its Files">
+  <div class="opener">
+    <p class="ch-label">Appendix B</p>
+    <h1>Where EmuBuddy Keeps Its Files</h1>
+  </div>
+  <div class="body">
+    <h2>What EmuBuddy saves for you</h2>
+    <table class="keys wide">
+      <tr><td>The shared folder</td><td>EmuBuddy Files, in your Documents folder</td></tr>
+      <tr><td>Screenshots</td><td>On your Desktop: EmuBuddy, with the date and time</td></tr>
+      <tr><td>Printed pages</td><td>On your Desktop: EmuBuddy Print, with the date and time</td></tr>
+      <tr><td>Video recordings</td><td>In your Movies or Videos folder: EmuBuddy Recording, with the date and time</td></tr>
+    </table>
+
+    <h2>The data folder</h2>
+    <p>EmuBuddy and EmuBuddy Launcher keep their own files in one folder, named EmuBuddy:</p>
+    <table class="keys dl">
+      <tr><td>Mac</td><td><code>~/Library/Application Support/EmuBuddy</code></td></tr>
+      <tr><td>Windows</td><td><code>%APPDATA%\EmuBuddy</code></td></tr>
+      <tr><td>Linux</td><td><code>~/.local/share/EmuBuddy</code></td></tr>
+    </table>
+    <p>In it are:</p>
+    <table class="keys wide">
+      <tr><td><code>ROM03</code> or <code>ROM01</code></td><td>A ROM file you put here under one of these names is found by EmuBuddy and by every game of the Launcher, without being chosen.</td></tr>
+      <tr><td><code>Profiles</code></td><td>The games of EmuBuddy Launcher, one small text file for each, and what belongs to them</td></tr>
+      <tr><td><code>Gateway</code></td><td>The web gateway and its log, <code>gsgate-6502.log</code></td></tr>
+      <tr><td><code>EmuBuddy</code></td><td>The list of the disks you used last, and files EmuBuddy needs for a moment while it prints or records</td></tr>
+    </table>
+
+    <h2>The settings file</h2>
+    <p>EmuBuddy keeps your everyday set-up, the disks in the drives, the cards in the slots, the speed and the window, in a text file named <code>emubuddy.config</code>. It looks for the file in the folder it was started from, then in your home folder, then beside the program, and makes a new one in the first of these places where it may write. You do not need to open the file: everything in it is set from the menus. To start EmuBuddy as new, quit it and move the file away.</p>
+    <div class="note"><span class="nt">By the way</span>Each game of the Launcher has a settings file of its own, so games never change your everyday set-up.</div>
+  </div>
+</section>
+
+<section class="chapter index-sec" id="index" data-label="Index" data-title="Index">
+  <div class="opener">
+    <p class="ch-label">&nbsp;</p>
+    <h1>Index</h1>
+  </div>
+  <div class="index">
+    <!--INDEX-->
+  </div>
+</section>
+
+</body>
+</html>
