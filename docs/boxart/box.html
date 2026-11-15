@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EmuBuddy Box</title>
+<style>
+/* EmuBuddy box art, in the manner of mid-1980s Apple software boxes:
+   warm white card, a studio photograph, the name in Apple Garamond (the box
+   of the GS Commander guide, with EmuBuddy's pictures). render.sh shoots each
+   face flat with headless Chrome: ?front, ?back, ?spine, ?top. Apple Garamond
+   is used from the fonts installed on this Mac (it is not ours to put on the
+   web; the pictures carry it). */
+@font-face { font-family: "AG"; src: local("Apple Garamond"), local("AppleGaramond"); font-weight: 400; }
+@font-face { font-family: "AG"; src: local("Apple Garamond Light"), local("AppleGaramond-Light"); font-weight: 300; }
+@font-face { font-family: "AG"; src: local("Apple Garamond Bold"), local("AppleGaramond-Bold"); font-weight: 700; }
+:root {
+  --card: #f4f0e6; --ink: #1b1a17; --soft: #55504a; --rule: #2b2925;
+  --g1: #5ebd3e; --g2: #ffb900; --g3: #f78200; --g4: #e23838; --g5: #973999; --g6: #009cdf;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--card); }
+body { font-family: "AG", Garamond, serif; color: var(--ink); overflow: hidden; }
+.face { display: none; position: relative; background: var(--card); overflow: hidden; }
+body.f-front .front, body.f-back .back, body.f-spine .spine, body.f-top .top { display: block; }
+/* a little paper in the card */
+.face::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(rgba(90,70,40,.035) 1px, transparent 1px) 0 0 / 5px 5px; }
+
+.stripes { display: flex; flex-direction: column; }
+.stripes i { flex: 1; }
+.stripes i:nth-child(1) { background: var(--g1); } .stripes i:nth-child(2) { background: var(--g2); }
+.stripes i:nth-child(3) { background: var(--g3); } .stripes i:nth-child(4) { background: var(--g4); }
+.stripes i:nth-child(5) { background: var(--g5); } .stripes i:nth-child(6) { background: var(--g6); }
+.cond { display: inline-block; transform: scaleX(.86); transform-origin: left center; letter-spacing: -.012em; }
+
+/* ---------- the front ---------- */
+.front { width: 900px; height: 1180px; padding: 66px 70px 0; }
+.front .head { display: flex; align-items: flex-start; gap: 26px; }
+.front .head .stripes { width: 60px; height: 64px; margin-top: 30px; flex: none; }
+.front h1 { font-weight: 400; font-size: 150px; line-height: .9; white-space: nowrap; }
+.front .sub { margin: 14px 0 0 86px; font-weight: 300; font-size: 42px; color: var(--soft); white-space: nowrap; }
+.photo {
+  position: absolute; left: 70px; top: 330px; width: 760px; height: 560px; overflow: hidden;
+  background: radial-gradient(ellipse 90% 80% at 50% 38%, #f3f1ec 0%, #d9d5cc 55%, #b9b3a8 100%);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
+}
+.photo .floor { position: absolute; left: 0; right: 0; bottom: 0; height: 120px;
+  background: linear-gradient(rgba(0,0,0,0), rgba(60,50,40,.18)); }
+/* the monitor (its glass has the shape of EmuBuddy's window, 704 by 502) */
+.mon { position: absolute; left: 130px; top: 46px; width: 470px; height: 400px; }
+.mon .case { position: absolute; inset: 0 0 34px; border-radius: 18px 18px 10px 10px;
+  background: linear-gradient(160deg, #ece6d8 0%, #d8d0bf 55%, #bdb4a2 100%);
+  box-shadow: 0 30px 40px -12px rgba(40,30,20,.55), inset -6px -8px 0 rgba(0,0,0,.08), inset 4px 4px 0 rgba(255,255,255,.5); }
+.mon .bezel { position: absolute; left: 30px; top: 26px; right: 30px; bottom: 70px; border-radius: 12px;
+  background: #24221f; box-shadow: inset 0 3px 6px rgba(0,0,0,.6); padding: 16px; }
+.mon .glass { position: relative; width: 100%; height: 100%; border-radius: 10px / 14px; overflow: hidden; background: #000; }
+.mon .glass img { display: block; width: 100%; height: 100%; image-rendering: pixelated; filter: saturate(1.1); }
+.mon .glass::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(125deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 30%),
+              radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 60%, rgba(0,0,0,.35) 100%); }
+.mon .badge { position: absolute; left: 34px; bottom: 46px; width: 26px; height: 18px; }
+.mon .led { position: absolute; right: 40px; bottom: 52px; width: 8px; height: 8px; border-radius: 50%; background: #6ad04a; box-shadow: 0 0 6px #6ad04a; }
+.mon .stand { position: absolute; left: 140px; right: 140px; bottom: 0; height: 40px; border-radius: 4px 4px 10px 10px;
+  background: linear-gradient(#c9c1b0, #a99f8c); box-shadow: 0 14px 18px -6px rgba(40,30,20,.5); }
+/* the User's Guide lying in front */
+.guide { position: absolute; left: 500px; top: 286px; width: 186px; height: 240px; transform: rotate(-8deg);
+  background: #f7f4ec; border-radius: 2px 5px 5px 2px; padding: 20px 18px 0;
+  box-shadow: 0 18px 22px -8px rgba(20,20,30,.6), inset 5px 0 0 rgba(0,0,0,.07), inset 0 0 0 1px rgba(0,0,0,.12); }
+.guide .gs { width: 22px; height: 24px; }
+.guide b { display: block; font-weight: 400; font-size: 34px; line-height: 1; margin-top: 8px; white-space: nowrap; }
+.guide span { display: block; font-weight: 300; font-size: 18px; color: var(--soft); margin-top: 4px; }
+.guide .pic { margin-top: 16px; background: #000; padding: 4px; }
+.guide .pic img { display: block; width: 100%; image-rendering: pixelated; }
+.front .tag { position: absolute; left: 70px; right: 70px; top: 922px; font-size: 56px; line-height: 1.05; white-space: nowrap; }
+.front .bottom { position: absolute; left: 70px; right: 70px; bottom: 54px; border-top: 2px solid var(--rule); padding-top: 16px;
+  display: flex; justify-content: space-between; font-size: 30px; color: var(--soft); }
+
+/* ---------- the back ---------- */
+.back { width: 900px; height: 1180px; padding: 58px 70px 0; }
+.back .stripes.bar { position: absolute; left: 0; top: 0; width: 100%; height: 18px; flex-direction: column; }
+.back h2 { font-weight: 400; font-size: 84px; line-height: .95; white-space: nowrap; }
+.back .lead { margin-top: 16px; font-size: 27px; line-height: 1.22; }
+.back .shots { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 30px; }
+.back .shots .pic { background: #24221f; padding: 8px; border-radius: 6px; box-shadow: 0 10px 16px -8px rgba(40,30,20,.6); }
+.back .shots img { display: block; width: 100%; aspect-ratio: 704 / 502; object-fit: cover; image-rendering: pixelated; border-radius: 4px / 6px; }
+.back .shots img.photo-pic { image-rendering: auto; }
+.back figcaption { margin-top: 6px; font-size: 23px; line-height: 1.1; color: var(--soft); white-space: nowrap; }
+.back ul { margin-top: 18px; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 30px; }
+.back li { font-size: 25px; line-height: 1.2; padding-left: 26px; position: relative; white-space: nowrap; }
+.back li::before { content: ""; position: absolute; left: 0; top: 11px; width: 12px; height: 12px; background: var(--g6); }
+.back li:nth-child(6n+1)::before { background: var(--g1); } .back li:nth-child(6n+2)::before { background: var(--g2); }
+.back li:nth-child(6n+3)::before { background: var(--g3); } .back li:nth-child(6n+4)::before { background: var(--g4); }
+.back li:nth-child(6n+5)::before { background: var(--g5); }
+.back .req { position: absolute; left: 70px; right: 70px; bottom: 40px; border-top: 2px solid var(--rule); padding-top: 12px;
+  display: flex; justify-content: space-between; gap: 30px; font-size: 21px; line-height: 1.22; color: var(--soft); }
+.back .req b { font-weight: 700; color: var(--ink); }
+.back .req .r { text-align: right; white-space: nowrap; flex: none; }
+.back .req > div:first-child { flex: 1; }
+
+/* ---------- the spine and the top ---------- */
+.spine { width: 170px; height: 1180px; }
+.spine .stripes { position: absolute; left: 50%; top: 48px; width: 64px; height: 68px; transform: translateX(-50%); }
+.spine .title { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(90deg); white-space: nowrap;
+  font-size: 110px; line-height: 1; }
+.spine .foot { position: absolute; left: 0; right: 0; bottom: 46px; text-align: center; font-weight: 300; font-size: 30px; color: var(--soft); }
+.top { width: 900px; height: 170px; }
+.top .stripes { position: absolute; left: 70px; top: 50%; width: 64px; height: 68px; transform: translateY(-50%); }
+.top .title { position: absolute; right: 70px; top: 50%; transform: translateY(-52%); font-size: 92px; line-height: 1; white-space: nowrap; }
+
+body.f-front, body.f-back { width: 900px; height: 1180px; }
+body.f-spine { width: 170px; height: 1180px; } body.f-top { width: 900px; height: 170px; }
+</style>
+</head>
+<body>
+<section class="face front">
+  <div class="head">
+    <div class="stripes"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <h1><span class="cond">EmuBuddy</span></h1>
+  </div>
+  <p class="sub">An Apple IIgs you run with the mouse</p>
+  <div class="photo">
+    <div class="floor"></div>
+    <div class="mon">
+      <div class="case"></div>
+      <div class="bezel"><div class="glass"><img src="../manual/img/desktop.png" alt=""></div></div>
+      <div class="badge stripes"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="led"></div>
+      <div class="stand"></div>
+    </div>
+    <div class="guide">
+      <div class="gs stripes"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <b><span class="cond">EmuBuddy</span></b><span>User&rsquo;s Guide</span>
+      <div class="pic"><img src="../manual/img/desktop.png" alt=""></div>
+    </div>
+  </div>
+  <p class="tag"><span class="cond">Menus. Windows. Drag and drop.</span><br><span class="cond">No commands to type.</span></p>
+  <div class="bottom"><span>macOS &middot; Windows &middot; Linux</span><span>Free software</span><span>Walter Tengler</span></div>
+</section>
+
+<section class="face back">
+  <div class="stripes bar"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <h2><span class="cond">Your IIgs, in a window.</span></h2>
+  <p class="lead">Drop a disk on it and it starts. Share a folder with your computer, print to PDF and go online, all from menus and windows.</p>
+  <div class="shots">
+    <figure><div class="pic"><img src="../manual/img/drives.png" alt=""></div><figcaption>Eleven drives, filled by dropping</figcaption></figure>
+    <figure><div class="pic"><img src="../manual/img/printer.png" alt=""></div><figcaption>Every printed page becomes a PDF</figcaption></figure>
+    <figure><div class="pic"><img src="../manual/img/slots-gateway.png" alt=""></div><figcaption>A card for every slot</figcaption></figure>
+    <figure><div class="pic"><img class="photo-pic" src="../manual/img/launcher.jpg" alt=""></div><figcaption>The Launcher: games on a shelf</figcaption></figure>
+  </div>
+  <ul>
+    <li>Disks by drag and drop</li>
+    <li>A folder shared with the IIgs</li>
+    <li>Internet for Marinetti</li>
+    <li>ImageWriter II and PostScript</li>
+    <li>1 MHz to full speed</li>
+    <li>54-page User&rsquo;s Guide</li>
+  </ul>
+  <div class="req">
+    <div><b>Requires</b> a Mac with Apple silicon, or 64-bit Windows or Linux, and an Apple IIgs ROM file, which is not included.</div>
+    <div class="r">&copy; 2026 Walter Tengler<br>Built on KEGS and GSplus<br>Apple IIgs is a trademark of Apple Inc.</div>
+  </div>
+</section>
+
+<section class="face spine">
+  <div class="stripes"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="title">EmuBuddy</div>
+  <div class="foot">Apple IIgs</div>
+</section>
+
+<section class="face top">
+  <div class="stripes"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="title">EmuBuddy</div>
+</section>
+
+<script>
+document.body.className = "f-" + (location.search.slice(1) || "front");
+</script>
+</body>
+</html>
