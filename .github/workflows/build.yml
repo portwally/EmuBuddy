@@ -61,6 +61,32 @@ jobs:
           ./build/launcher/test_lang
       - name: Package (.dmg)
         run: cd build && cpack
+      - name: Start test (the apps from the .dmg)
+        # The programs must start from the package alone: no library from
+        # Homebrew, no screen, no ROM. EmuBuddy then shows its "ROM Required"
+        # window; both programs save a picture of what they drew and quit.
+        run: |
+          mkdir -p smoke/home smoke/cfg smoke/share smoke/profiles
+          hdiutil attach build/*.dmg -nobrowse -readonly -mountpoint /tmp/emubuddy-dmg
+          cp -R /tmp/emubuddy-dmg/EmuBuddy.app "/tmp/emubuddy-dmg/EmuBuddy Launcher.app" smoke/
+          hdiutil detach /tmp/emubuddy-dmg
+          cd smoke
+          if otool -L EmuBuddy.app/Contents/MacOS/EmuBuddy EmuBuddy.app/Contents/Frameworks/*.dylib \
+              "EmuBuddy Launcher.app/Contents/MacOS/EmuBuddy Launcher" | grep -E "/opt/homebrew|/usr/local"; then
+            echo "the app still uses a library from outside its own folder"; exit 1
+          fi
+          export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HOME=$PWD/home
+          export EMUBUDDY_NOGATEWAY=1 EMUBUDDY_NOHELPER=1 EMUBUDDY_AUTOSHARE_DIR=$PWD/share
+          EMUBUDDY_SNAPSHOT=$PWD/emubuddy.bmp EMUBUDDY_SNAPFRAME=60 \
+            perl -e 'alarm 120; exec @ARGV' EmuBuddy.app/Contents/MacOS/EmuBuddy -cfg $PWD/cfg/emubuddy.config
+          test -s emubuddy.bmp
+          EMUBUDDY_PROFILES=$PWD/profiles LAUNCHER_SHOT=$PWD/launcher.bmp \
+            perl -e 'alarm 120; exec @ARGV' "EmuBuddy Launcher.app/Contents/MacOS/EmuBuddy Launcher"
+          test -s launcher.bmp
+      - uses: actions/upload-artifact@v7
+        with:
+          name: start-test-macos
+          path: smoke/*.bmp
       - uses: actions/upload-artifact@v7
         with:
           name: emubuddy-macos
@@ -116,6 +142,29 @@ jobs:
           ls build/bundle/libslirp.so.*
       - name: Package (.tar.gz)
         run: cd build && cpack
+      - name: Start test (the programs from the archive)
+        # Unpack the archive somewhere else and start both programs without a
+        # screen and without a ROM. SDL3 and libslirp must come from the archive.
+        run: |
+          mkdir -p smoke && tar xzf build/*.tar.gz -C smoke
+          cd smoke
+          mkdir -p home cfg share profiles
+          ldd ./EmuBuddy | tee ldd.txt
+          if grep -q "not found" ldd.txt; then echo "a library is missing"; exit 1; fi
+          grep -q "$PWD/libSDL3.so.0" ldd.txt
+          grep -q "$PWD/libslirp.so.0" ldd.txt
+          ./EmuBuddy -help | head -3
+          export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HOME=$PWD/home XDG_DATA_HOME=$PWD/home/data
+          export EMUBUDDY_NOGATEWAY=1 EMUBUDDY_NOHELPER=1 EMUBUDDY_AUTOSHARE_DIR=$PWD/share
+          EMUBUDDY_SNAPSHOT=$PWD/emubuddy.bmp EMUBUDDY_SNAPFRAME=60 \
+            timeout 120 ./EmuBuddy -cfg $PWD/cfg/emubuddy.config
+          test -s emubuddy.bmp
+          EMUBUDDY_PROFILES=$PWD/profiles LAUNCHER_SHOT=$PWD/launcher.bmp timeout 120 ./EmuBuddy-Launcher
+          test -s launcher.bmp
+      - uses: actions/upload-artifact@v7
+        with:
+          name: start-test-linux-${{ matrix.arch }}
+          path: smoke/*.bmp
       - uses: actions/upload-artifact@v7
         with:
           name: emubuddy-linux-${{ matrix.arch }}
@@ -166,6 +215,44 @@ jobs:
           ls build/bundle/libslirp*.dll
       - name: Package (.zip)
         run: cd build && cpack
+      - name: Start test (the programs from the .zip, as on a plain Windows)
+        # PowerShell, not the MSYS2 shell, and nothing but the Windows folders in
+        # the search path: every DLL has to come from the unpacked .zip. Both
+        # programs start without a screen and without a ROM, save a picture of
+        # what they drew and quit.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = (Get-ChildItem build\*.zip | Select-Object -First 1).FullName
+          Expand-Archive -Path $zip -DestinationPath smoke
+          Set-Location smoke
+          New-Item -ItemType Directory -Force appdata, cfg, share, profiles | Out-Null
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $env:SDL_VIDEODRIVER = 'dummy'
+          $env:SDL_AUDIODRIVER = 'dummy'
+          $env:APPDATA = "$PWD\appdata"
+          $env:EMUBUDDY_NOGATEWAY = '1'
+          $env:EMUBUDDY_NOHELPER = '1'
+          $env:EMUBUDDY_AUTOSHARE_DIR = "$PWD\share"
+          function Start-AndWait($exe, $arguments, $picture) {
+            if ($arguments) { $p = Start-Process -FilePath $exe -ArgumentList $arguments -PassThru -NoNewWindow }
+            else { $p = Start-Process -FilePath $exe -PassThru -NoNewWindow }
+            $null = $p.Handle                     # keeps the exit code readable
+            if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "$exe did not finish" }
+            if ($p.ExitCode -ne 0) { throw "$exe ended with code $($p.ExitCode)" }
+            if (-not (Test-Path $picture)) { throw "$exe drew no picture" }
+            Write-Host "$exe started, drew a picture and quit"
+          }
+          $env:EMUBUDDY_SNAPSHOT = "$PWD\emubuddy.bmp"
+          $env:EMUBUDDY_SNAPFRAME = '60'
+          Start-AndWait "$PWD\EmuBuddy.exe" @('-cfg', "$PWD\cfg\emubuddy.config") 'emubuddy.bmp'
+          $env:EMUBUDDY_PROFILES = "$PWD\profiles"
+          $env:LAUNCHER_SHOT = "$PWD\launcher.bmp"
+          Start-AndWait "$PWD\EmuBuddy-Launcher.exe" $null 'launcher.bmp'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: start-test-windows
+          path: smoke/*.bmp
       - uses: actions/upload-artifact@v7
         with:
           name: emubuddy-windows
@@ -181,6 +268,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
+          pattern: emubuddy-*      # the packages only, not the pictures of the start tests
       - name: Attach artifacts to the release
         uses: softprops/action-gh-release@v3
         with:
