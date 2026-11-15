@@ -26,6 +26,7 @@ int		cfg_ui_partition_choose(int pos, int slot, int drive,
 extern int	g_cfg_select_partition;
 extern int	g_cfg_slotdrive;
 extern int	g_slot7_scsi;
+extern int	g_cur_a2_stat;
 extern int	g_bridge_off;
 
 #define N_RECENT	10
@@ -257,12 +258,67 @@ folder_mount(int slot, int drive, const char *path)
 	}
 }
 
+/* Is the IIgs waiting for a startup disk? With no disk at all the ROM says
+ * "Check startup device!"; a disk it cannot start from (a shared folder in
+ * hard disk 1, say) says "UNABLE TO LOAD PRODOS". Both are on the text screen. */
+static int
+waiting_for_startup_disk(void)
+{
+	const char	*t;
+
+	if(g_cur_a2_stat & ALL_STAT_SUPER_HIRES) {
+		return 0;
+	}
+	t = cfg_text_screen_str();
+	return strstr(t, "Check startup device") != NULL ||
+				strstr(t, "UNABLE TO LOAD PRODOS") != NULL;
+}
+
+/* The first free hard disk for a shared folder. Hard disk 1 is left for a
+ * startup disk (the IIgs starts up from it, and a folder there only gives
+ * "UNABLE TO LOAD PRODOS"); it is used when all the others are taken. */
+static int
+folder_drive(void)
+{
+	int	d;
+
+	for(d = 1; d < SCSI_DRIVES; d++) {
+		if(iwm_get_dsk_from_slot_drive(7, d)->fd < 0) {
+			return d;
+		}
+	}
+	return (iwm_get_dsk_from_slot_drive(7, 0)->fd < 0) ? 0 : -1;
+}
+
+/* A shared folder in hard disk 1 moves to a later drive, so that a startup
+ * disk can go there (only while the IIgs is waiting for one: nothing uses
+ * the folder then). */
+static void
+share_leaves_drive1(void)
+{
+	Disk	*dsk = iwm_get_dsk_from_slot_drive(7, 0);
+	char	path[1100];
+	int	d;
+
+	if(!g_slot7_scsi || dsk->fd < 0 || !dsk->dynapro_info_ptr || !dsk->name_ptr) {
+		return;
+	}
+	d = folder_drive();
+	if(d < 1) {
+		return;
+	}
+	snprintf(path, sizeof(path), "%s", dsk->name_ptr);
+	iwm_eject_disk_by_num(7, 0);
+	folder_mount(7, d, path);
+}
+
 /* Put a disk image into a specific drive. Returns 1 (handled). */
 static int
 drive_insert(int slot, int drive, const char *path)
 {
 	Disk		*dsk = iwm_get_dsk_from_slot_drive(slot, drive);
 	struct stat	sb;
+	int		waiting = waiting_for_startup_disk();
 
 	if(stat(path, &sb) < 0) {
 		ui_message("Cannot open %s", base_name(path));
@@ -292,6 +348,13 @@ drive_insert(int slot, int drive, const char *path)
 		recent_add(path);
 		ui_message("Inserted %s in S%dD%d", base_name(path), slot,
 								drive + 1);
+		if(waiting && drive == 0) {
+			/* the IIgs was waiting for a startup disk: start from this one */
+			share_leaves_drive1();		/* (a floppy: slot 7 is tried first) */
+			ui_message("Starting up from %s", base_name(path));
+			load_roms_init_memory();
+			do_reset();
+		}
 	} else {
 		part_open(slot, drive, path);
 	}
@@ -310,12 +373,8 @@ ui_insert_auto(const char *path)
 			ui_message("No SCSI card - plug it in under Machine > Slots");
 			return;
 		}
-		for(d = 0; d < SCSI_DRIVES; d++) {
-			if(iwm_get_dsk_from_slot_drive(7, d)->fd < 0) {
-				break;
-			}
-		}
-		if(d == SCSI_DRIVES) {
+		d = folder_drive();
+		if(d < 0) {
 			ui_message("All 7 SCSI drives are in use");
 			return;
 		}
@@ -335,6 +394,9 @@ ui_insert_auto(const char *path)
 	if(slot == 7 && !g_slot7_scsi) {
 		ui_message("No SCSI card - plug it in under Machine > Slots");
 		return;
+	}
+	if(slot == 7 && waiting_for_startup_disk()) {
+		share_leaves_drive1();		/* hard disk 1 is where it starts up from */
 	}
 	nd = (slot == 7) ? SCSI_DRIVES : 2;
 	for(d = 0; d < nd; d++) {
@@ -873,7 +935,7 @@ finder_path_to_host(const char *root, const char *gsos, char *out, size_t n)
 	return 1;
 }
 
-/* ---- Host bridge folder (bridge.c): Disks > Bridge Folder ---- */
+/* ---- Host bridge folder (bridge.c): -bridge <folder> ---- */
 
 #ifndef _WIN32
 # include <limits.h>

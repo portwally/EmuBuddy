@@ -1494,21 +1494,29 @@ sdl_dev_keys(Window_info *win, int frames)
 		if(down || f + 3 == frames) {
 			mod = SDL_SCANCODE_UNKNOWN;
 			plus = strchr(combo, '+');
+			SDL_Keymod	km = SDL_KMOD_NONE;
+			const char	*name = combo;
+
 			if(plus) {
 				*plus = 0;
 				if(!strcmp(combo, "cmd")) mod = SDL_SCANCODE_LGUI;
-				else if(!strcmp(combo, "ctrl")) mod = SDL_SCANCODE_LCTRL;
-				else if(!strcmp(combo, "shift")) mod = SDL_SCANCODE_LSHIFT;
+				else if(!strcmp(combo, "ctrl")) { mod = SDL_SCANCODE_LCTRL; km = SDL_KMOD_LCTRL; }
+				else if(!strcmp(combo, "shift")) { mod = SDL_SCANCODE_LSHIFT; km = SDL_KMOD_LSHIFT; }
 				else if(!strcmp(combo, "opt")) mod = SDL_SCANCODE_LALT;
-				key = SDL_GetScancodeFromName(plus + 1);
-			} else {
-				key = SDL_GetScancodeFromName(combo);
+				name = plus + 1;
 			}
+			/* "semi" is the ; key (a ; in the list ends an entry) */
+			key = !strcmp(name, "semi") ? SDL_SCANCODE_SEMICOLON :
+						SDL_GetScancodeFromName(name);
+			/* Shift and Control reach the IIgs through SDL's modifier
+			 * state (sdl_update_modifiers), so set it while the key is down */
 			if(down) {
+				if(km) SDL_SetModState(SDL_GetModState() | km);
 				if(mod) sdl_handle_key(win, mod, 0, 0, 0);
 				sdl_handle_key(win, key, 0, 0, 0);
 			} else {
 				sdl_handle_key(win, key, 1, 0, 0);
+				if(km) SDL_SetModState(SDL_GetModState() & ~km);
 				if(mod) sdl_handle_key(win, mod, 1, 0, 0);
 			}
 		}

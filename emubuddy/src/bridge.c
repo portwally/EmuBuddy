@@ -904,7 +904,7 @@ bridge_stage_file(const char *src, const char *gsos_folder, char *msg, int msgsi
 	if((rc = ctx_open(&cx)) != 0) {
 		snprintf(msg, (size_t)msgsize, rc == E_ACCESS ?
 			"the bridge folder is also shared as a disk" :
-			"no bridge folder is set (Disks > Bridge Folder)");
+			"no bridge folder is set (-bridge <folder>)");
 		return -1;
 	}
 	if(strstr(src, ".applesingle") || strstr(src, ".AppleSingle")) {

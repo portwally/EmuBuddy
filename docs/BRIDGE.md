@@ -1,7 +1,8 @@
 # EmuBuddy host bridge
 
 The bridge lets a program running inside the emulated IIgs read and write files in **one folder of the host computer**
-(the *bridge folder*). It is off until the user chooses a folder (Disks > Bridge Folder..., or `-bridge <folder>`), and
+(the *bridge folder*). It is off until the user names a folder (`-bridge <folder>`, or the Bridge folder of a game in
+EmuBuddy Launcher), and
 the program can reach nothing outside that folder.
 
 A program such as a file manager can use it to copy files and folders between any GS/OS volume and the host.
