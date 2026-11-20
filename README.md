@@ -34,6 +34,8 @@ It runs on **macOS (Apple Silicon)**, **Windows (x64)** and **Linux (x64 and arm
 - **Internet.** An Uthernet II card with a built-in network, so Marinetti and TCP/IP programs get DHCP, DNS and a
   connection to the internet without any set-up on your side. A built-in web gateway lets IIgs browsers open
   today's HTTPS sites.
+- **AppleTalk.** Set a slot of the IIgs to AppleTalk and it is on a LocalTalk network, carried through your local
+  network, together with Mini vMac, TashRouter and other programs that speak LocalTalk over UDP.
 - **Printing.** Print from GS/OS to a virtual ImageWriter II or a PostScript printer. Pages appear in a preview
   window and can be saved as PDF or sent to a real printer.
 - **Configurable slots.** Choose what sits in each slot in a window, not in a text file.
@@ -189,6 +191,28 @@ To use it, set it as the proxy in the browser. In Webber: **File > Settings**, t
 - `-webgate off` switches it off, `-webgate <port>` uses another port; the setting is "Web gateway port" in the
   configuration (0 = off).
 
+#### AppleTalk
+
+A real IIgs does AppleTalk through a LocalTalk cable on its printer or modem port. EmuBuddy gives the port that cable
+(from version 1.1). You switch it on in the IIgs, as on a real one: set **Slot 1** or **Slot 2** to **AppleTalk** in the
+IIgs Control Panel and restart. The startup disk needs System 6's AppleTalk software (the Installer's AppleShare
+script). EmuBuddy needs no setting: when the IIgs puts a port into LocalTalk mode, the status bar says so, and the last
+line of the Slots window shows the port, the node number and how many other nodes were heard.
+
+- The LocalTalk frames travel as **LocalTalk over UDP** (LToUDP: multicast group 239.192.76.84, port 1954), which
+  [Mini vMac](https://www.gryphel.com/c/minivmac/), [TashRouter](https://github.com/lampmerchant/tashrouter),
+  [MultiTalk](https://github.com/sfiera/multitalk) and others speak. All of them in your local network share one LocalTalk network
+  with the IIgs. No administrator rights and no packet capture library are needed.
+- To reach **EtherTalk** (netatalk or A2SERVER file servers, real Macs on Ethernet) an AppleTalk router that speaks
+  both, such as TashRouter, has to run on a computer in your network.
+- macOS asks once whether EmuBuddy may find devices on your local network; without that, AppleTalk stays silent.
+- Starting up from the network: set **StartUp** to **AppleTalk** too; the IIgs then looks for a startup server.
+- `-appletalk off` leaves AppleTalk alone; the setting is "AppleTalk network" in the configuration.
+- **Tested** with a ROM 03 and System 6.0.4 against a stand-in router: the IIgs takes a node number, answers echo
+  requests and learns its network number, and with StartUp = AppleTalk it looks for a startup server. **Not tested
+  yet:** a real router, an AppleShare server, starting up from one, a ROM 01. `test_localtalk` checks the LocalTalk
+  layer.
+
 ### Printing
 
 EmuBuddy has two virtual printers. Pick one for slot 1 in the Slots window. Every page lands in the **Printer** window
@@ -330,6 +354,7 @@ Tests (not built by default):
 ```sh
 cmake --build build --target test_uthernet2 && build/test_uthernet2   # network card
 cmake --build build --target test_bridge && build/test_bridge          # host bridge
+cmake --build build --target test_localtalk && build/test_localtalk    # AppleTalk (LocalTalk over UDP)
 ```
 
 ## Status and plans
@@ -353,6 +378,8 @@ License, version 3** (see [LICENSE](LICENSE)).
 - **KEGS**, the Apple IIgs emulator at the heart of this program, is by Kent Dickey.
 - **GSplus** by Dagen Brock (digarok) brought KEGS to SDL3 and to macOS, Windows and Linux; EmuBuddy starts from it.
 - The **ImageWriter II** emulation comes from the GSport and GSplus line of emulators (originally from DOSBox).
+- **AppleTalk** follows the LocalTalk support of GSport by Peter Neubauer (how the serial chip serves the IIgs
+  firmware, and the LLAP dialogs); LocalTalk over UDP is the transport of Mini vMac and TashRouter.
 - The **Shaston** font used for the menus and windows is the IIgs system font.
 - **SDL3** for windows, input and sound, and **libslirp** for the virtual network.
 - **Ghostscript** and **FFmpeg** are separate programs that EmuBuddy calls when you print PostScript or record

@@ -66,6 +66,7 @@ used when its slot is set to "Your Card" in the IIgs Control Panel.
 | `-validate` | check that the ROM, disks and folders named here exist, print the result and exit (0 = fine, 1 = something is missing) |
 | `-showconfig` | print the settings this command line stands for and exit |
 | `-bridge <folder>` | folder IIgs programs may read and write (host bridge) |
+| `-appletalk on\|off` | AppleTalk for a IIgs whose slot 1 or 2 is set to AppleTalk (LocalTalk over UDP, see README, AppleTalk); on unless switched off |
 | `-webgate <port>\|off` | the web gateway for IIgs browsers: another port than 6502, or off (see README, Internet) |
 | `-skin iigs\|system` | accepted, no effect (macOS always uses its menu bar, other systems the drawn one) |
 | `-save` | also save these settings to the config file |

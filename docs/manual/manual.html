@@ -27,11 +27,11 @@
 <!-- ====================== the copyright page ====================== -->
 <section class="front legal">
   <p class="legal-title">EmuBuddy User&rsquo;s Guide</p>
-  <p>For EmuBuddy 1.0.1</p>
+  <p>For EmuBuddy 1.1</p>
   <p>&copy; 2026 Walter Tengler. EmuBuddy is free software under the GNU General Public License, version 3. You may copy this guide and give it away, whole and unchanged.</p>
-  <p>EmuBuddy is built on KEGS, the Apple IIgs emulator by Kent Dickey, through GSplus by Dagen Brock, which brought KEGS to SDL. The ImageWriter II emulation comes from the GSport and GSplus line of emulators. The font of EmuBuddy&rsquo;s menus and windows is Shaston 640 by Kreative Software. EmuBuddy uses SDL for its window, input and sound, and libslirp for its network. Ghostscript and FFmpeg are separate programs under their own licenses; EmuBuddy only calls them when you ask for PostScript printing or a video recording.</p>
+  <p>EmuBuddy is built on KEGS, the Apple IIgs emulator by Kent Dickey, through GSplus by Dagen Brock, which brought KEGS to SDL. The ImageWriter II emulation comes from the GSport and GSplus line of emulators, and AppleTalk follows the LocalTalk support Peter Neubauer wrote for GSport. The font of EmuBuddy&rsquo;s menus and windows is Shaston 640 by Kreative Software. EmuBuddy uses SDL for its window, input and sound, and libslirp for its network. Ghostscript and FFmpeg are separate programs under their own licenses; EmuBuddy only calls them when you ask for PostScript printing or a video recording.</p>
   <p>EmuBuddy is an independent program. It is not made, sold or endorsed by Apple Inc., and it does not contain the Apple IIgs ROM. Apple, Apple IIgs, GS/OS, ProDOS, ImageWriter, Macintosh and macOS are trademarks of Apple Inc. Windows is a trademark of Microsoft Corporation. Linux is a trademark of Linus Torvalds. Other names are trademarks of their owners.</p>
-  <p>This guide is set in Apple Garamond, as Apple&rsquo;s own guides of the time were. The screen pictures were taken from EmuBuddy 1.0 running Apple&rsquo;s System 6.0.4.</p>
+  <p>This guide is set in Apple Garamond, as Apple&rsquo;s own guides of the time were. The screen pictures were taken from EmuBuddy running Apple&rsquo;s System 6.0.4.</p>
   <p>The homepage: portwally.github.io/EmuBuddy</p>
 </section>
 
@@ -309,6 +309,7 @@
     <table class="keys">
       <tr><td>Slot 1, the printer port</td><td>Idle, a modem, an ImageWriter printer or a PostScript printer (Chapter 6)</td></tr>
       <tr><td>Slot 2, the modem port</td><td>Idle, or a modem that dials Internet addresses in place of phone numbers, for terminal programs</td></tr>
+      <tr><td>Either port</td><td>AppleTalk, when the IIgs itself is set to use the port for it. You do not choose that here (Chapter 5).</td></tr>
       <tr><td>Slot 3</td><td>Empty, a Video Overlay Card or an Uthernet II network card</td></tr>
       <tr><td>Slot 4</td><td>Empty, a Mockingboard sound card or an Uthernet II network card (Chapter 5)</td></tr>
       <tr><td>Slots 5 and 6</td><td>The built-in 3.5-inch and 5.25-inch drives</td></tr>
@@ -377,7 +378,7 @@
       <div class="shot"><img src="img/slots-gateway.png" alt=""></div>
       <figcaption>The Slots window shows the gateway; the status bar counts the packets</figcaption>
     </figure>
-    <p>The last line of the Slots window tells you how the gateway is doing. <i>Web gateway: starts when the IIgs goes online</i> means it is waiting for the IIgs to connect. <i>Web gateway: proxy 192.168.64.254, port 6502</i> means it is running. If it could not start, the line says why.</p>
+    <p>The line <i>Web gateway</i> in the Slots window tells you how the gateway is doing. <i>Web gateway: starts when the IIgs goes online</i> means it is waiting for the IIgs to connect. <i>Web gateway: proxy 192.168.64.254, port 6502</i> means it is running. If it could not start, the line says why.</p>
     <h3>What you should know about it</h3>
     <ul>
       <li>The gateway needs <b>Python 3</b> on your computer. Without it the gateway stays off, and everything else works as before.</li>
@@ -386,6 +387,29 @@
       <li>To switch the gateway off, or to give it another port, see <code>-webgate</code> in Chapter 10.</li>
     </ul>
     <div class="note"><span class="nt">By the way</span>Webber does not take port numbers in addresses, so a server on your own computer has to answer on port 80, the usual one.</div>
+
+    <h2>AppleTalk</h2>
+    <p>The Internet is not the only network an Apple IIgs knows. Its own, older one is <b>AppleTalk</b>: the network of AppleShare file servers and LaserWriters, and of starting up from a server with no disk in the drive. A real IIgs does AppleTalk through a LocalTalk cable on its printer port or its modem port. From version 1.1, EmuBuddy gives the port that cable.</p>
+    <h3>Switching it on</h3>
+    <p>You switch AppleTalk on in the IIgs, as on a real one. EmuBuddy needs no setting.</p>
+    <ol>
+      <li>Open the Control Panel of the IIgs and its Slots page. Set Slot 1 or Slot 2 to AppleTalk. The port of that slot now belongs to AppleTalk, so pick the one you do not print or dial with.</li>
+      <li>Restart the IIgs: choose Hard Reset from EmuBuddy&rsquo;s Machine menu.</li>
+    </ol>
+    <p>The startup disk needs the AppleTalk software of System 6, which Apple&rsquo;s Installer adds with its AppleShare script. With it, the IIgs asks for your user name each time it starts up.</p>
+    <p>When the IIgs starts AppleTalk, the status bar says <i>AppleTalk on the modem port</i>, and the last line of the Slots window shows how it is doing: the port, the node number the IIgs took, and how many other nodes it has heard.</p>
+    <figure>
+      <div class="shot"><img src="img/slots-appletalk.png" alt=""></div>
+      <figcaption>AppleTalk on the modem port: the IIgs is node 127 and hears one other node</figcaption>
+    </figure>
+    <h3>What is at the other end</h3>
+    <p>EmuBuddy carries the LocalTalk cable through your local network, in a form called <b>LocalTalk over UDP</b>. Several programs speak it, among them the Macintosh emulator Mini vMac and the AppleTalk routers TashRouter and MultiTalk. A IIgs in EmuBuddy and every such program in your home network are on one LocalTalk network together, on the same computer or on different ones.</p>
+    <p>File servers and real Macintosh computers are usually on Ethernet, on the kind of AppleTalk called EtherTalk. To reach them, the two networks must be joined by an <b>AppleTalk router</b> that speaks both, such as TashRouter, running on any computer in your network.</p>
+    <div class="important"><span class="nt">Important</span>The first time the IIgs uses AppleTalk, macOS asks whether EmuBuddy may find devices on your local network. Click Allow, or AppleTalk stays silent. You can change the answer in System Settings, under Privacy &amp; Security, Local Network.</div>
+    <h3>Starting up from the network</h3>
+    <p>A IIgs can start up from an AppleShare server that offers it. On the Slots page of the Control Panel of the IIgs, set StartUp to AppleTalk as well. With no disk, the IIgs then looks for a startup server on the network until it finds one.</p>
+    <div class="note"><span class="nt">By the way</span>AppleTalk is new in version 1.1. It was tested with a ROM 03 and System 6.0.4, against a stand-in for a router: the IIgs takes its node number, answers other nodes and looks for a startup server. File servers and starting up from one have not been tried yet. Reports are welcome.</div>
+    <p>To have EmuBuddy leave AppleTalk alone, see <code>-appletalk</code> in Chapter 10.</p>
   </div>
 </section>
 
@@ -682,6 +706,7 @@
       <tr><td><code>-title</code> <i>text</i></td><td>The title of the window</td></tr>
       <tr><td><code>-bridge</code> <i>folder</i></td><td>The bridge folder (Chapter 3)</td></tr>
       <tr><td><code>-webgate</code> <i>port</i></td><td>Another port for the web gateway than 6502; <code>-webgate off</code> switches the gateway off.</td></tr>
+      <tr><td><code>-appletalk</code> <code>on</code> or <code>off</code></td><td>AppleTalk for a IIgs that is set to use it (Chapter 5). It is on unless you switch it off.</td></tr>
       <tr><td><code>-quitshot</code> <i>file.png</i></td><td>Saves a picture of the IIgs screen in this file when EmuBuddy quits.</td></tr>
       <tr><td><code>-validate</code></td><td>Checks that the ROM, disks and folders you named exist, says so, and stops.</td></tr>
       <tr><td><code>-showconfig</code></td><td>Shows the set-up your options stand for, and stops.</td></tr>
@@ -720,8 +745,10 @@
     <table class="keys wide">
       <tr><td>The IIgs does not see a card</td><td>Set its slot to Your Card in the Control Panel of the IIgs and restart the IIgs (Chapter 4).</td></tr>
       <tr><td>The network does not connect</td><td>Check that the Uthernet II is plugged in, in the Slots window, and that Marinetti uses the Uthernet II link layer with the same slot. If it still does not connect, set that slot to Your Card (Chapter 4).</td></tr>
-      <tr><td>The browser cannot open a site</td><td>Set the web gateway as its proxy (Chapter 5). The last line of the Slots window tells you whether the gateway is running; it needs Python 3.</td></tr>
+      <tr><td>The browser cannot open a site</td><td>Set the web gateway as its proxy (Chapter 5). The Web gateway line of the Slots window tells you whether the gateway is running; it needs Python 3.</td></tr>
       <tr><td>A web page comes out empty</td><td>The page is put together by scripts, which the gateway removes. Try the site&rsquo;s plain or mobile version, if it has one.</td></tr>
+      <tr><td>AppleTalk finds nothing</td><td>Check the last line of the Slots window. If it still says <i>starts when the IIgs uses it</i>, set Slot 1 or Slot 2 to AppleTalk in the Control Panel of the IIgs, and make sure its startup disk has the AppleTalk software. On a Mac, allow EmuBuddy under Privacy &amp; Security, Local Network. To reach servers on Ethernet you need an AppleTalk router (Chapter 5).</td></tr>
+      <tr><td>The printer or the modem stopped working</td><td>The IIgs is using that port for AppleTalk. Set its slot back to the printer or modem port in the Control Panel of the IIgs and restart the IIgs.</td></tr>
       <tr><td>Nothing is printed</td><td>Check that the printer in slot 1 of the Slots window matches the printer chosen in the IIgs. For the PostScript printer, Ghostscript must be installed (Chapter 6).</td></tr>
       <tr><td>Half a page is missing</td><td>The page is still in the ImageWriter. Click Eject in the Printer window.</td></tr>
     </table>
