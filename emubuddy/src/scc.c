@@ -28,6 +28,9 @@ extern int g_irq_pending;
 /*	port 1 == channel B = slot 2 = c038/c03a */
 
 #include "scc.h"
+#include "localtalk.h"
+
+extern word32 g_c041_val;
 
 /* EmuBuddy virtual ImageWriter (printer_scc.c) */
 void scc_printer_open(int port);
@@ -136,6 +139,12 @@ scc_reset()
 		scc_ptr->wantint_zerocnt = 0;
 		scc_ptr->read_called_this_vbl = 0;
 		scc_ptr->write_called_this_vbl = 0;
+		if(scc_ptr->cur_state == SCC_STATE_LOCALTALK) {
+			// EmuBuddy: a reset ends AppleTalk on this port; the
+			//  firmware starts it again if the IIgs still uses it
+			localtalk_port_off(i);
+			scc_ptr->cur_state = -1;
+		}
 		scc_evaluate_ints(i);
 		scc_hard_reset_port(i);
 	}
@@ -192,6 +201,8 @@ scc_reset_port(int port)
 	scc_ptr->wantint_zerocnt = 0;
 
 	scc_ptr->rx_queue_depth = 0;
+	scc_ptr->sdlc_eof = 0;
+	scc_ptr->did_int_rx_first = 0;
 
 	scc_evaluate_ints(port);
 
@@ -346,6 +357,12 @@ scc_regen_clocks(int port)
 #else
 		scc_serial_unix_change_params(port);
 #endif
+	} else if(cur_state == SCC_STATE_LOCALTALK) {
+		// EmuBuddy: LocalTalk is 230400 bits per second, clocked from
+		//  the RTxC pin and the DPLL, which are not emulated: a byte
+		//  takes 8 bit times
+		scc_ptr->tx_dcycs = 8.0 * DCYCS_1_MHZ / 230400.0;
+		scc_ptr->rx_dcycs = scc_ptr->tx_dcycs;
 	}
 }
 
@@ -356,6 +373,9 @@ scc_port_close(int port)
 
 	scc_ptr = &(g_scc[port]);
 
+	if(scc_ptr->cur_state == SCC_STATE_LOCALTALK) {
+		localtalk_port_off(port);
+	}
 #ifdef _WIN32
 	scc_serial_win_close(port);
 #else
@@ -445,6 +465,9 @@ scc_get_serial_status(int get_status, int port)
 	case 5:
 		str = "PostScript printer";
 		break;
+	case SCC_STATE_LOCALTALK:
+		str = "AppleTalk (LocalTalk)";
+		break;
 	case 3:
 		snprintf(buf, 80, "Opened %d, sockfd:%d", 6501 + port,
 					(int)g_scc[port].sockfd);
@@ -514,6 +537,9 @@ scc_try_to_empty_writebuf(dword64 dfcyc, int port)
 
 	scc_ptr = &(g_scc[port]);
 	cur_state = scc_ptr->cur_state;
+	if(cur_state == SCC_STATE_LOCALTALK) {
+		return;		// LocalTalk frames go out whole, at their end
+	}
 	if(scc_ptr->write_called_this_vbl) {
 		return;
 	}
@@ -549,6 +575,10 @@ scc_try_fill_readbuf(dword64 dfcyc, int port)
 	space_used = scc_ptr->in_wrptr - scc_ptr->in_rdptr;
 	if(space_used < 0) {
 		space_used += SCC_INBUF_SIZE;
+	}
+	if(scc_ptr->cur_state == SCC_STATE_LOCALTALK) {
+		scc_localtalk_fill_readbuf(dfcyc, port, space_used);
+		return;
 	}
 	space_left = (7*SCC_INBUF_SIZE/8) - space_used;
 	if(space_left < 1) {
@@ -683,7 +713,7 @@ scc_read_reg(dword64 dfcyc, int port)
 	case 0:
 	case 4:
 		ret = 0x60;	/* 0x44 = no dcd, no cts,0x6c = dcd ok, cts ok*/
-		if(scc_ptr->dcd) {
+		if(scc_ptr->dcd || scc_ptr->cur_state == SCC_STATE_LOCALTALK) {
 			ret |= 0x08;
 		}
 		//ret |= 0x8;	/* HACK HACK */
@@ -703,6 +733,9 @@ scc_read_reg(dword64 dfcyc, int port)
 	case 5:
 		/* HACK: residue codes not right */
 		ret = 0x07;	/* all sent */
+		if(scc_ptr->cur_state == SCC_STATE_LOCALTALK && scc_ptr->sdlc_eof) {
+			ret |= 0x80;		// end of frame
+		}
 		break;
 	case 2:
 	case 6:
@@ -723,6 +756,12 @@ scc_read_reg(dword64 dfcyc, int port)
 	case 7:
 		if(port == 0) {
 			ret = (g_irq_pending & 0x3f);
+			if(localtalk_port() >= 0) {
+				// The pending bits are there with MIE off too, and
+				//  AppleTalk polls them to see a frame begin
+				ret = (g_scc[0].irq_pending << 3) |
+							g_scc[1].irq_pending;
+			}
 		} else {
 			ret = 0;
 		}
@@ -770,10 +809,17 @@ scc_write_reg(dword64 dfcyc, int port, word32 val)
 	mode = scc_ptr->mode;
 
 	if(mode == 0) {
-		if((val & 0xf0) == 0) {
-			/* Set reg_ptr */
-			scc_ptr->reg_ptr = val & 0xf;
-			regnum = 0;
+		// A write to WR0: bits 2-0 point at the register of the next
+		//  access (with the "point high" command, registers 8-15), and
+		//  the same write may carry a command and a CRC reset code
+		//  (EmuBuddy: decoded as the chip does it, after GSport;
+		//  AppleTalk's firmware uses such combined writes)
+		scc_ptr->reg_ptr = val & 0x07;
+		if(((val >> 3) & 0x07) == 0x01) {
+			scc_ptr->reg_ptr |= 0x08;
+		}
+		regnum = 0;
+		if(scc_ptr->reg_ptr) {
 			scc_ptr->mode = 1;
 		}
 	} else {
@@ -799,10 +845,32 @@ scc_write_reg(dword64 dfcyc, int port, word32 val)
 			/* should clear other ext ints */
 			scc_clr_zerocnt_int(port);
 			break;
+		case 0x3:	/* send abort (sdlc) */
+			break;
+		case 0x4:	/* enable int on next rx char */
+			scc_ptr->did_int_rx_first = 0;
+			break;
 		case 0x5:	/* reset tx int pending */
 			scc_clr_tx_int(port);
 			break;
 		case 0x6:	/* reset rr1 bits */
+			// An error reset while the end of a frame is at the top of
+			//  the FIFO takes that byte (the last checksum byte) out
+			//  of it; the IIgs counts on this (after GSport)
+			if(scc_ptr->sdlc_eof) {
+				int	depth = scc_ptr->rx_queue_depth, i;
+
+				if(depth > 0) {
+					for(i = 1; i < depth; i++) {
+						scc_ptr->rx_queue[i - 1] =
+							scc_ptr->rx_queue[i];
+					}
+					scc_ptr->rx_queue_depth = depth - 1;
+					scc_maybe_rx_event(dfcyc, port);
+					scc_maybe_rx_int(port);
+				}
+			}
+			scc_ptr->sdlc_eof = 0;
 			break;
 		case 0x7:	/* reset highest pri int pending */
 			irq_mask = g_irq_pending;
@@ -818,7 +886,6 @@ scc_write_reg(dword64 dfcyc, int port, word32 val)
 				scc_clr_zerocnt_int(port);
 			}
 			break;
-		case 0x4:	/* enable int on next rx char */
 		default:
 			halt_printf("Wr c03%x to wr0 of %02x, bad cmd cd:%x!\n",
 				9-port, val, tmp1);
@@ -829,7 +896,7 @@ scc_write_reg(dword64 dfcyc, int port, word32 val)
 			break;
 		case 0x1:	/* reset rx crc */
 		case 0x2:	/* reset tx crc */
-			printf("Wr c03%x to wr0 of %02x!\n", 9-port, val);
+			// checksums are not emulated: a frame is always good
 			break;
 		case 0x3:	/* reset tx underrun/eom latch */
 			/* if no extern status pending, or being reset now */
@@ -847,14 +914,24 @@ scc_write_reg(dword64 dfcyc, int port, word32 val)
 		scc_ptr->reg[regnum] = val;
 		return;
 	case 3: /* wr3 */
-		if((val & 0x1e) != 0x0) {
-			halt_printf("Wr c03%x to wr3 of %02x!\n", 8+port, val);
-		}
+		// EmuBuddy: the sync bits (address search, hunt, rx CRC) are
+		//  what AppleTalk sets; they need no emulation of their own
 		scc_ptr->reg[regnum] = val;
+		if(!(old_val & 0x01) && (val & 0x01) &&
+				scc_ptr->cur_state == SCC_STATE_LOCALTALK) {
+			// the receiver is switched on: a frame may come in
+			scc_try_fill_readbuf(dfcyc, port);
+			scc_maybe_rx_event(dfcyc, port);
+		}
 		return;
 	case 4: /* wr4 */
-		if((val & 0x30) != 0x00 || (val & 0x0c) == 0) {
-			halt_printf("Wr c03%x to wr4 of %02x!\n", 8+port, val);
+		// EmuBuddy: SDLC mode (sync modes enabled, SDLC selected) is
+		//  LocalTalk: the IIgs wants to do AppleTalk on this port
+		if(((val >> 4) & 3) == 2 && ((val >> 2) & 3) == 0) {
+			scc_localtalk_on(dfcyc, port);
+		} else if(scc_ptr->cur_state == SCC_STATE_LOCALTALK &&
+						((val >> 2) & 3) != 0) {
+			scc_port_close(port);	// back to what the port is set to
 		}
 		scc_ptr->reg[regnum] = val;
 		if(changed_bits) {
@@ -862,8 +939,11 @@ scc_write_reg(dword64 dfcyc, int port, word32 val)
 		}
 		return;
 	case 5: /* wr5 */
-		if((val & 0x15) != 0x0) {
-			halt_printf("Wr c03%x to wr5 of %02x!\n", 8+port, val);
+		// EmuBuddy: the CRC bits and "send break" are set by AppleTalk
+		if(scc_ptr->cur_state == SCC_STATE_LOCALTALK &&
+					(old_val & 0x08) && !(val & 0x08)) {
+			// The transmitter is switched off: the frame is done
+			scc_localtalk_frame_out(dfcyc, port);
 		}
 		scc_ptr->reg[regnum] = val;
 		if(changed_bits & 0x60) {
@@ -874,15 +954,14 @@ scc_write_reg(dword64 dfcyc, int port, word32 val)
 		}
 		return;
 	case 6: /* wr6 */
-		if(val != 0) {
-			halt_printf("Wr c03%x to wr6 of %02x!\n", 8+port, val);
+		// In SDLC mode this is the node number the receiver looks for
+		if(scc_ptr->cur_state == SCC_STATE_LOCALTALK) {
+			localtalk_set_node(val);
 		}
 		scc_ptr->reg[regnum] = val;
 		return;
 	case 7: /* wr7 */
-		if(val != 0) {
-			halt_printf("Wr c03%x to wr7 of %02x!\n", 8+port, val);
-		}
+		// In SDLC mode the flag, $7E
 		scc_ptr->reg[regnum] = val;
 		return;
 	case 8: /* wr8 */
@@ -909,7 +988,8 @@ scc_write_reg(dword64 dfcyc, int port, word32 val)
 		scc_evaluate_ints(1);
 		return;
 	case 10: /* wr10 */
-		if((val & 0xff) != 0x00) {
+		if((val & 0xff) != 0x00 &&
+				scc_ptr->cur_state != SCC_STATE_LOCALTALK) {
 			printf("Wr c03%x to wr10 of %02x!\n", 8+port, val);
 		}
 		scc_ptr->reg[regnum] = val;
@@ -1008,6 +1088,17 @@ scc_read_data(dword64 dfcyc, int port)
 		scc_ptr->rx_queue_depth = depth - 1;
 		scc_maybe_rx_event(dfcyc, port);
 		scc_maybe_rx_int(port);
+		if(scc_ptr->cur_state == SCC_STATE_LOCALTALK) {
+			// When one byte of the frame is left (its last checksum
+			//  byte), the end of the frame shows in RR1
+			i = scc_ptr->in_wrptr - scc_ptr->in_rdptr;
+			if(i < 0) {
+				i += SCC_INBUF_SIZE;
+			}
+			if((i + scc_ptr->rx_queue_depth) == 1) {
+				scc_ptr->sdlc_eof = 1;
+			}
+		}
 	}
 
 	scc_printf("SCC read %04x: ret %02x, depth:%d\n", 0xc03b-port, ret,
@@ -1117,6 +1208,11 @@ scc_evaluate_ints(int port)
 	scc_ptr = &(g_scc[port]);
 	mie = g_scc[0].reg[9] & 0x8;			/* Master int en */
 
+	// What would interrupt is kept for RR3 with the interrupts off, too
+	scc_ptr->irq_pending = (scc_ptr->wantint_rx ? IRQ_PENDING_SCC1_RX : 0) |
+			(scc_ptr->wantint_tx ? IRQ_PENDING_SCC1_TX : 0) |
+			(scc_ptr->wantint_zerocnt ? IRQ_PENDING_SCC1_ZEROCNT : 0);
+
 	if(!mie) {
 		/* There can be no interrupts if MIE=0 */
 		remove_irq(IRQ_PENDING_SCC1_RX | IRQ_PENDING_SCC1_TX |
@@ -1169,6 +1265,9 @@ scc_maybe_rx_event(dword64 dfcyc, int port)
 		/* one pending already, wait for the event to arrive */
 		return;
 	}
+	if(scc_ptr->cur_state == SCC_STATE_LOCALTALK && !(scc_ptr->reg[3] & 1)) {
+		return;		// the receiver is off: nothing gets into the FIFO
+	}
 
 	in_rdptr = scc_ptr->in_rdptr;
 	in_wrptr = scc_ptr->in_wrptr;
@@ -1209,7 +1308,18 @@ scc_maybe_rx_int(int port)
 		return;
 	}
 	rx_int_mode = (scc_ptr->reg[1] >> 3) & 0x3;
-	if((rx_int_mode == 1) || (rx_int_mode == 2)) {
+	if(scc_ptr->cur_state == SCC_STATE_LOCALTALK) {
+		// "Int on first character": once per frame, and in SDLC mode
+		//  not before the address has come in (after GSport)
+		if(rx_int_mode == 1) {
+			if(!scc_ptr->did_int_rx_first && depth == 2) {
+				scc_ptr->did_int_rx_first = 1;
+				scc_ptr->wantint_rx = 1;
+			}
+		} else if(rx_int_mode == 2) {
+			scc_ptr->wantint_rx = 1;
+		}
+	} else if((rx_int_mode == 1) || (rx_int_mode == 2)) {
 		scc_ptr->wantint_rx = 1;
 	}
 	scc_evaluate_ints(port);
@@ -1295,8 +1405,9 @@ scc_add_to_readbuf(dword64 dfcyc, int port, word32 val)
 
 	scc_ptr = &(g_scc[port]);
 
-	if((scc_ptr->reg[5] & 0x60) != 0x60) {	// HACK: this is tx char size!
-		val = val & 0x7f;
+	if((scc_ptr->reg[5] & 0x60) != 0x60 &&
+				scc_ptr->cur_state != SCC_STATE_LOCALTALK) {
+		val = val & 0x7f;		// HACK: this is tx char size!
 	}
 	in_wrptr = scc_ptr->in_wrptr;
 	in_rdptr = scc_ptr->in_rdptr;
@@ -1376,7 +1487,9 @@ scc_transmit(dword64 dfcyc, int port, word32 val)
 			return;
 		}
 	}
-	if(g_serial_mask[port] || (scc_ptr->reg[5] & 0x60) != 0x60) {
+	if(scc_ptr->cur_state == SCC_STATE_LOCALTALK) {
+		// a LocalTalk frame is always whole bytes
+	} else if(g_serial_mask[port] || (scc_ptr->reg[5] & 0x60) != 0x60) {
 		val = val & 0x7f;
 	}
 
@@ -1414,3 +1527,91 @@ scc_add_to_writebuf(dword64 dfcyc, int port, word32 val)
 	}
 }
 
+
+/* ---- EmuBuddy: LocalTalk (AppleTalk) on a serial port ----
+ * The firmware of the IIgs does AppleTalk by putting a port of the SCC into
+ * SDLC mode. That is the sign: the port leaves what it was set to (printer,
+ * modem) and its frames go to localtalk.c. The way the SCC has to behave for
+ * the firmware follows GSport's LocalTalk support by Peter Neubauer. */
+
+void
+scc_localtalk_on(dword64 dfcyc, int port)
+{
+	Scc	*scc_ptr;
+
+	scc_ptr = &(g_scc[port]);
+	if(scc_ptr->cur_state == SCC_STATE_LOCALTALK || !g_appletalk) {
+		return;
+	}
+	(void)dfcyc;
+	scc_port_close(port);		// what the port was doing ends
+	scc_ptr->cur_state = SCC_STATE_LOCALTALK;
+	scc_ptr->in_rdptr = 0;
+	scc_ptr->in_wrptr = 0;
+	scc_ptr->out_rdptr = 0;
+	scc_ptr->out_wrptr = 0;
+	scc_ptr->rx_queue_depth = 0;
+	scc_ptr->sdlc_eof = 0;
+	scc_ptr->did_int_rx_first = 0;
+	scc_ptr->lad = 0;
+	localtalk_port_on(port);
+	scc_regen_clocks(port);
+}
+
+/* The IIgs has finished sending a frame: everything in the write buffer is
+ * that frame (destination, source, type, data; the SCC adds the checksum). */
+void
+scc_localtalk_frame_out(dword64 dfcyc, int port)
+{
+	Scc	*scc_ptr;
+	int	len;
+
+	scc_ptr = &(g_scc[port]);
+	len = scc_ptr->out_wrptr - scc_ptr->out_rdptr;
+	if(len > 0) {
+		localtalk_from_gs(dfcyc, &scc_ptr->out_buf[scc_ptr->out_rdptr], len);
+	}
+	scc_ptr->out_rdptr = 0;
+	scc_ptr->out_wrptr = 0;
+	// its answer may be there at once
+	scc_try_fill_readbuf(dfcyc, port);
+}
+
+/* One frame at a time goes into the read buffer, when the last one is gone. */
+void
+scc_localtalk_fill_readbuf(dword64 dfcyc, int port, int space_used)
+{
+	byte	buf[1024];
+	Scc	*scc_ptr;
+	int	len, i;
+
+	scc_ptr = &(g_scc[port]);
+	if(space_used != 0 || scc_ptr->rx_queue_depth != 0 || scc_ptr->sdlc_eof) {
+		return;
+	}
+	len = localtalk_to_gs(dfcyc, buf, (int)sizeof(buf));
+	for(i = 0; i < len; i++) {
+		scc_add_to_readbuf(dfcyc, port, buf[i]);
+	}
+	// The link activity detector counts what arrives; the firmware only
+	//  asks whether it is zero (carrier sense)
+	scc_ptr->lad += (word32)len;
+}
+
+/* $C044 / $C045: the IIgs watches the receive lines of the SCC through the
+ * Mega II's mouse counters to see whether the LocalTalk cable is busy. */
+word32
+scc_read_lad(int port)
+{
+	Scc	*scc_ptr;
+	word32	val;
+
+	scc_ptr = &(g_scc[port]);
+	if(scc_ptr->cur_state != SCC_STATE_LOCALTALK ||
+					!(g_c041_val & C041_EN_MOUSE)) {
+		return 0;
+	}
+	val = scc_ptr->lad;
+	scc_ptr->lad = 0;
+	return val & 0xff;
+}

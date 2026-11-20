@@ -80,6 +80,7 @@ set(GSPLUS_CORE_SOURCES
     config.c
     debugger.c
     scc.c
+    localtalk.c
     scc_socket_driver.c
     scc_windriver.c
     scc_unixdriver.c
@@ -202,6 +203,10 @@ if(SLIRP_FOUND)
     target_link_libraries(test_uthernet2 PRIVATE PkgConfig::SLIRP)
 endif()
 
+# Host test for AppleTalk (localtalk.c), not built by default:
+#   cmake --build build --target test_localtalk && build/test_localtalk
+add_executable(test_localtalk EXCLUDE_FROM_ALL tests/test_localtalk.c localtalk.c)
+
 # Host test for the bridge (bridge.c), not built by default:
 #   cmake --build build --target test_bridge && build/test_bridge
 add_executable(test_bridge EXCLUDE_FROM_ALL tests/test_bridge.c bridge.c)
@@ -296,7 +301,13 @@ if(APPLE)
     # ad-hoc after the build so the bundle is valid and shows its icon. First
     # delete the Ninja depfile (EmuBuddy.d) that lands next to the executable --
     # codesign chokes on that stray file in Contents/MacOS.
+    # AppleTalk (localtalk.c) talks to other programs and computers in the local
+    # network by UDP multicast. macOS asks the user before it lets an app do
+    # that; this is the text of the question. (plutil -replace adds or replaces.)
     add_custom_command(TARGET gsplus-sdl POST_BUILD
+        COMMAND plutil -replace NSLocalNetworkUsageDescription -string
+            "EmuBuddy's Apple IIgs uses the local network for AppleTalk: to find file servers, printers and other computers."
+            "$<TARGET_BUNDLE_DIR:gsplus-sdl>/Contents/Info.plist"
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:gsplus-sdl>/EmuBuddy.d"
         COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:gsplus-sdl>"
         COMMENT "Re-signing EmuBuddy.app (ad-hoc)"

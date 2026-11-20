@@ -337,6 +337,10 @@ void scc_add_to_readbuf(dword64 dfcyc, int port, word32 val);
 void scc_add_to_readbufv(dword64 dfcyc, int port, const char *fmt, ...);
 void scc_transmit(dword64 dfcyc, int port, word32 val);
 void scc_add_to_writebuf(dword64 dfcyc, int port, word32 val);
+void scc_localtalk_on(dword64 dfcyc, int port);
+void scc_localtalk_frame_out(dword64 dfcyc, int port);
+void scc_localtalk_fill_readbuf(dword64 dfcyc, int port, int space_used);
+word32 scc_read_lad(int port);
 
 
 

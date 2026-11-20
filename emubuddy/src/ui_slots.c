@@ -4,6 +4,7 @@
 #include "defc.h"
 #include "ui.h"
 #include "webgate.h"
+#include "localtalk.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -149,7 +150,9 @@ slots_draw(UiWindow *win, int cx, int cy)
 	if(g_uthernet2_slot) {		/* where an IIgs browser finds the web gateway */
 		ui_draw_text(cx + 10, cy + by + 34, webgate_status(), UI_GREY);
 	}
-	by += 17 + 17 + 17 + 8;
+	/* AppleTalk: the IIgs chooses the port itself (its Control Panel) */
+	ui_draw_text(cx + 10, cy + by + 51, localtalk_status(), UI_GREY);
+	by += 17 + 17 + 17 + 17 + 8;
 	if(ui_button(win, cx, cy, cw - 10 - 80, by, 80, 24, "Apply", dirty)) {
 		apply();
 	}
@@ -175,7 +178,7 @@ ui_slots_toggle(void)
 	load_pending();
 	snprintf(g_slots_win.title, sizeof(g_slots_win.title), "Slots");
 	g_slots_win.w = 580;
-	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 51 + 8 + 24 + 12;
+	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 68 + 8 + 24 + 12;
 	g_slots_win.closable = 1;
 	g_slots_win.modal = 0;
 	g_slots_win.draw = slots_draw;

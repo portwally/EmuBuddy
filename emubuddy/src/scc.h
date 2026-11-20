@@ -31,8 +31,13 @@
 
 /* my scc port 0 == channel A, port 1 = channel B */
 
-#define	SCC_INBUF_SIZE		512		/* must be a power of 2 */
-#define	SCC_OUTBUF_SIZE		512		/* must be a power of 2 */
+/* EmuBuddy: 2048 holds a whole LocalTalk frame (up to 603 bytes) */
+#define	SCC_INBUF_SIZE		2048		/* must be a power of 2 */
+#define	SCC_OUTBUF_SIZE		2048		/* must be a power of 2 */
+
+/* cur_state of a port the IIgs has put into SDLC mode for AppleTalk
+ * (the other states are the values of g_serial_cfg[]) */
+#define SCC_STATE_LOCALTALK	6
 
 #define SCC_MODEM_MAX_CMD_STR	128
 
@@ -75,6 +80,10 @@ STRUCT(Scc) {
 	int	wantint_rx;
 	int	wantint_tx;
 	int	wantint_zerocnt;
+	word32	irq_pending;		// what would interrupt, also with MIE off
+	int	did_int_rx_first;	// "int on first rx char" has fired
+	int	sdlc_eof;		// LocalTalk: the end of a frame is in the FIFO
+	word32	lad;			// LocalTalk: link activity (carrier sense)
 
 	double	br_dcycs;
 	double	tx_dcycs;

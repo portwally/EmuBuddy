@@ -170,6 +170,7 @@ int	g_slot4_mockingboard = 0;	/* slot 4: 1 Mockingboard, 0 empty */
 extern char *g_bridge_root;		/* bridge.c: the bridge folder */
 int	g_helper_ask = 1;			/* offer to install the IIgs drop helper */
 int	g_bridge_off = 0;			/* the user switched the bridge off */
+extern int g_appletalk;		/* localtalk.c: AppleTalk for the serial ports, 0 = off */
 int	g_webgate_port = 6502;		/* web gateway for IIgs browsers: its port, 0 = off */
 int	g_auto_share = 1;			/* make and mount a shared folder when none is */
 int	g_skin = 0;				/* 0 = IIgs look, 1 = System (macOS menu bar, native choosers) */
@@ -451,6 +452,7 @@ Cfg_menu g_cfg_main_menu[] = {
 { "Ask to install the IIgs helper,0,Never,1,Ask", KNMP(g_helper_ask), CFGTYPE_INT },
 { "Bridge switched off,0,No,1,Yes", KNMP(g_bridge_off), CFGTYPE_INT },
 { "Web gateway port (0 = off)", KNMP(g_webgate_port), CFGTYPE_INT },
+{ "AppleTalk network,0,Off,1,LocalTalk over UDP", KNMP(g_appletalk), CFGTYPE_INT },
 { "Uthernet II slot,0,None,3,Slot 3,4,Slot 4", KNMP(g_uthernet2_slot),
 		CFGTYPE_INT },
 { "Speed,0,Unlimited,1,1.0MHz,2,2.8MHz,3,8.0MHz (Zip)",

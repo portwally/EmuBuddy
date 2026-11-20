@@ -1155,7 +1155,7 @@ io_read(word32 loc, dword64 *cyc_ptr)
 			return g_c041_val;
 		case 0x45: /* 0xc045 */
 			//halt_printf("Mega II mouse read: c045\n");
-			return 0;
+			return scc_read_lad(1);	// EmuBuddy: LocalTalk carrier sense
 		case 0x46: /* 0xc046 */
 			tmp = g_c046_val;
 			g_c046_val = (tmp & 0xbf) + ((tmp & 0x80) >> 1);
@@ -1188,6 +1188,7 @@ io_read(word32 loc, dword64 *cyc_ptr)
 				return 0;
 			}
 		case 0x44: /* 0xc044 */
+			return scc_read_lad(0);	// EmuBuddy: LocalTalk carrier sense
 		case 0x48: /* 0xc048 */
 		case 0x49: /* 0xc049 */
 		case 0x4a: /* 0xc04a */

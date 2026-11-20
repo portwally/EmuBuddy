@@ -29,6 +29,7 @@
 #include "ui.h"
 #include "uthernet2.h"
 #include "webgate.h"
+#include "localtalk.h"
 #include "cli.h"
 extern int g_uthernet2_slot;
 void printer_vbl(void);
@@ -1479,45 +1480,55 @@ sdl_dev_mouse(Window_info *win, int frames)
 }
 
 /* EMUBUDDY_KEYS="frame:combo;..." presses a key, e.g. "cmd+o", "return",
- * "down", "cmd+p" (SDL key names; "cmd" is the Open-Apple key). The key goes
- * down at frame and up 3 frames later. */
+ * "down", "shift+3", "ctrl+cmd+escape" (SDL key names; "cmd" is the Open-Apple
+ * key, "opt" Option; "semi" is the ; key, because a ; ends an entry). The key
+ * goes down at frame and up 3 frames later. */
 static void
 sdl_dev_keys(Window_info *win, int frames)
 {
 	const char	*p = getenv("EMUBUDDY_KEYS");
-	int		f, n, down;
-	char		combo[64], *plus;
-	SDL_Scancode	mod, key;
+	int		f, n, down, nmods, i;
+	char		combo[64], *name, *plus;
+	SDL_Scancode	mods[4], key;
+	SDL_Keymod	km;
 
 	while(p && sscanf(p, "%d:%63[^;]%n", &f, combo, &n) == 2) {
 		down = (f == frames);
 		if(down || f + 3 == frames) {
-			mod = SDL_SCANCODE_UNKNOWN;
-			plus = strchr(combo, '+');
-			SDL_Keymod	km = SDL_KMOD_NONE;
-			const char	*name = combo;
-
-			if(plus) {
+			nmods = 0;
+			km = SDL_KMOD_NONE;
+			name = combo;
+			while((plus = strchr(name, '+')) != NULL && nmods < 4) {
 				*plus = 0;
-				if(!strcmp(combo, "cmd")) mod = SDL_SCANCODE_LGUI;
-				else if(!strcmp(combo, "ctrl")) { mod = SDL_SCANCODE_LCTRL; km = SDL_KMOD_LCTRL; }
-				else if(!strcmp(combo, "shift")) { mod = SDL_SCANCODE_LSHIFT; km = SDL_KMOD_LSHIFT; }
-				else if(!strcmp(combo, "opt")) mod = SDL_SCANCODE_LALT;
+				if(!strcmp(name, "cmd")) {
+					mods[nmods++] = SDL_SCANCODE_LGUI;
+				} else if(!strcmp(name, "ctrl")) {
+					mods[nmods++] = SDL_SCANCODE_LCTRL;
+					km |= SDL_KMOD_LCTRL;
+				} else if(!strcmp(name, "shift")) {
+					mods[nmods++] = SDL_SCANCODE_LSHIFT;
+					km |= SDL_KMOD_LSHIFT;
+				} else if(!strcmp(name, "opt")) {
+					mods[nmods++] = SDL_SCANCODE_LALT;
+				}
 				name = plus + 1;
 			}
-			/* "semi" is the ; key (a ; in the list ends an entry) */
 			key = !strcmp(name, "semi") ? SDL_SCANCODE_SEMICOLON :
 						SDL_GetScancodeFromName(name);
 			/* Shift and Control reach the IIgs through SDL's modifier
 			 * state (sdl_update_modifiers), so set it while the key is down */
 			if(down) {
 				if(km) SDL_SetModState(SDL_GetModState() | km);
-				if(mod) sdl_handle_key(win, mod, 0, 0, 0);
+				for(i = 0; i < nmods; i++) {
+					sdl_handle_key(win, mods[i], 0, 0, 0);
+				}
 				sdl_handle_key(win, key, 0, 0, 0);
 			} else {
 				sdl_handle_key(win, key, 1, 0, 0);
 				if(km) SDL_SetModState(SDL_GetModState() & ~km);
-				if(mod) sdl_handle_key(win, mod, 1, 0, 0);
+				for(i = nmods - 1; i >= 0; i--) {
+					sdl_handle_key(win, mods[i], 1, 0, 0);
+				}
 			}
 		}
 		p += n;
@@ -2423,6 +2434,13 @@ main(int argc, char **argv)
 			webgate_poll(uthernet2_active());
 		}
 		printer_vbl();		/* eject an unfinished printed page */
+		{	/* AppleTalk says when it starts and which node the IIgs is */
+			const char *lt_msg = localtalk_take_message();
+
+			if(lt_msg) {
+				ui_message("%s", lt_msg);
+			}
+		}
 		if(ret != 0) {
 			printf("run_16ms returned: %d\n", ret);
 			break;

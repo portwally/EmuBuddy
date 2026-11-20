@@ -87,6 +87,8 @@ usage(void)
 "  -bridge <folder>               folder IIgs programs may read/write (host bridge)\n"
 "  -webgate <port> | off          web gateway for IIgs browsers (proxy 192.168.64.254,\n"
 "                                 port 6502 unless changed here)\n"
+"  -appletalk on | off            AppleTalk for a IIgs whose slot 1 or 2 is set to\n"
+"                                 AppleTalk (LocalTalk over UDP; on unless changed)\n"
 "  -title <text>                  window title\n"
 "  -profile <name>                 name of the Launcher profile (shown in the window title)\n"
 "  -quitshot <file.png>           save a picture of the IIgs screen there when EmuBuddy quits\n"
@@ -387,7 +389,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 		/* options with a value from here on */
 		if(!v && (is(o, "-flop1") || is(o, "-flop2") || is(o, "-flop3") ||
 				is(o, "-flop4") || !strncasecmp(o, "-hard", 5) ||
-				!strncasecmp(o, "-sl", 3) || is(o, "-share") || is(o, "-bridge") || is(o, "-skin") || is(o, "-webgate") ||
+				!strncasecmp(o, "-sl", 3) || is(o, "-share") || is(o, "-bridge") || is(o, "-skin") || is(o, "-webgate") || is(o, "-appletalk") ||
 				is(o, "-mhz") || is(o, "-ramsize") ||
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines") ||
@@ -434,6 +436,13 @@ emubuddy_cli(int *pargc, char ***pargv)
 				emit2("-g_webgate_port", v);
 			} else {
 				fprintf(stderr, "EmuBuddy: -webgate off, or a port from 1024 to 65535\n");
+				return -1;
+			}
+		} else if(is(o, "-appletalk")) {
+			if(is(v, "off") || is(v, "on")) {
+				emit2("-g_appletalk", is(v, "on") ? "1" : "0");
+			} else {
+				fprintf(stderr, "EmuBuddy: -appletalk on or off\n");
 				return -1;
 			}
 		} else if(is(o, "-skin")) {
