@@ -208,10 +208,10 @@ line of the Slots window shows the port, the node number and how many other node
 - macOS asks once whether EmuBuddy may find devices on your local network; without that, AppleTalk stays silent.
 - Starting up from the network: set **StartUp** to **AppleTalk** too; the IIgs then looks for a startup server.
 - `-appletalk off` leaves AppleTalk alone; the setting is "AppleTalk network" in the configuration.
-- **Tested** with a ROM 03 and System 6.0.4 against a stand-in router: the IIgs takes a node number, answers echo
-  requests and learns its network number, and with StartUp = AppleTalk it looks for a startup server. **Not tested
-  yet:** a real router, an AppleShare server, starting up from one, a ROM 01. `test_localtalk` checks the LocalTalk
-  layer.
+- **Tested** with a ROM 03 and System 6.0.4 against TashRouter and a stand-in router: the IIgs takes a node number,
+  gets its network number from the router, sends its name lookups through it and answers echo requests, and with
+  StartUp = AppleTalk it looks for a startup server. **Not tested yet:** EtherTalk behind the router, an AppleShare
+  server, starting up from one, a ROM 01. `test_localtalk` checks the LocalTalk layer.
 
 ### Printing
 
