@@ -312,6 +312,44 @@ share_leaves_drive1(void)
 	folder_mount(7, d, path);
 }
 
+static int drive_insert(int slot, int drive, const char *path);
+
+/* The IIgs starts up from hard disk 1 only. If it says "Check startup device!"
+ * with hard disk 1 and the first floppy drives empty while a hard disk image
+ * sits in a later drive (a saved set-up, or a disk put into another row of the
+ * Drives window), that image moves to hard disk 1 and the IIgs starts up from
+ * it. If it cannot start from it either, it then says "UNABLE TO LOAD PRODOS"
+ * with hard disk 1 taken, and nothing more is moved. */
+static void
+startup_disk_moves_up(void)
+{
+	Disk	*dsk;
+	char	path[1100];
+	int	d;
+
+	if(!g_slot7_scsi || (g_cur_a2_stat & ALL_STAT_SUPER_HIRES) ||
+			!strstr(cfg_text_screen_str(), "Check startup device") ||
+			iwm_motor_busy()) {
+		return;
+	}
+	if(iwm_get_dsk_from_slot_drive(7, 0)->fd >= 0 ||
+			iwm_get_dsk_from_slot_drive(6, 0)->fd >= 0 ||
+			iwm_get_dsk_from_slot_drive(5, 0)->fd >= 0) {
+		return;
+	}
+	for(d = 1; d < SCSI_DRIVES; d++) {
+		dsk = iwm_get_dsk_from_slot_drive(7, d);
+		if(dsk->fd >= 0 && !dsk->dynapro_info_ptr && dsk->name_ptr) {
+			snprintf(path, sizeof(path), "%s", dsk->name_ptr);
+			iwm_eject_disk_by_num(7, d);
+			drive_insert(7, 0, path);	/* restarts the waiting IIgs */
+			ui_message("%s moved to hard disk 1 to start up from it",
+							base_name(path));
+			return;
+		}
+	}
+}
+
 /* Put a disk image into a specific drive. Returns 1 (handled). */
 static int
 drive_insert(int slot, int drive, const char *path)
@@ -661,6 +699,7 @@ ui_drives_tick(void)
 		char	note[300];
 
 		poll = 0;
+		startup_disk_moves_up();
 		if(ui_bridge_is_on() && bridge_next_result(note, sizeof(note))) {
 			printf("Receive note: %s\n", note);
 			ui_message("Receive: %s", note);
