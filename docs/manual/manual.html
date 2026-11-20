@@ -288,7 +288,7 @@
       <tr><td><code>NOTES.txt</code></td><td>A text file</td></tr>
       <tr><td><code>DATA</code></td><td>A name with neither is a binary file</td></tr>
     </table>
-    <p>The IIgs does not see the additions: the first file is GAME to it, a file of type $B3. Files that have a resource fork are kept as AppleSingle files (<code>.applesingle</code>). The same rule holds in the shared folder, for the Disk Browser and for the bridge folder, so a file can go to your computer and come back without losing what it is.</p>
+    <p>The IIgs does not see the additions: the first file is GAME to it, a file of type $B3, and the second is NOTES, a text file. Files that have a resource fork are kept as AppleSingle files (<code>.applesingle</code>). The same rule holds in the shared folder, for the Disk Browser and for the bridge folder, so a file can go to your computer and come back without losing what it is.</p>
 
     <h2>The bridge folder</h2>
     <p>The fourth way is for programs. A program in the IIgs that knows EmuBuddy&rsquo;s <b>host bridge</b>, a file manager for example, can read and write one folder of your computer directly. Nothing outside that folder can be reached, and the bridge is off until you name the folder: with <code>-bridge</code> on the command line (Chapter 10), or as the Bridge folder of a game in EmuBuddy Launcher (Chapter 9). Programmers find the details in the file <code>docs/BRIDGE.md</code> of EmuBuddy&rsquo;s source code.</p>

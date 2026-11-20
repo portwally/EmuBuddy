@@ -787,6 +787,7 @@ const char *dynatype_find_file_type(word32 file_type);
 word32 dynatype_detect_file_type(Dynapro_file *fileptr, const char *path_ptr, word32 storage_type);
 int dynatype_get_extension(const char *str, char *out_ptr, int buf_len);
 int dynatype_comma_arg(const char *str, word32 *type_or_aux_ptr);
+int dynatype_name_end(const char *str, int pos, int end, word32 file_type);
 void dynatype_fix_unix_name(Dynapro_file *fileptr, char *outbuf_ptr, int path_max);
 
 

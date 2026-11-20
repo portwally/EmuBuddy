@@ -215,6 +215,10 @@ target_link_libraries(test_bridge PRIVATE SDL3::SDL3)
 # Test tool for the ProDOS image writer (not built by default):
 add_executable(test_prodos_write EXCLUDE_FROM_ALL tests/test_prodos_write.c prodos_img.c)
 
+# Shared folder name test (text files are NAME.txt on the host):
+#   cmake --build build --target test_dyna_names && build/test_dyna_names
+add_executable(test_dyna_names EXCLUDE_FROM_ALL tests/test_dyna_names.c)
+
 # Virtual ImageWriter II (C++, ported from GSport/GSplus legacy, GPL v2+)
 enable_language(CXX)
 set(EMUBUDDY_PRINTER_SOURCES imagewriter.cpp iw_font.c printer_scc.c printer_ps.c tool_find.c video_rec.c finder_probe.c ui_printer.c)

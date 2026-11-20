@@ -142,7 +142,7 @@ There are four ways, from the simplest to the most flexible:
    with `-bridge <folder>` on the command line, or as the Bridge folder of a game in EmuBuddy Launcher.
 
 **File types.** ProDOS files have a type and an aux type that a normal file system does not. EmuBuddy keeps them in the
-file name: `GAME,t$B3,a$DB03` is a type $B3 file with aux type $DB03, `NOTES.txt` is a text file, and a name
+file name: `GAME,t$B3,a$DB03` is a type $B3 file with aux type $DB03, `NOTES.txt` is a text file (`NOTES` on the IIgs), and a name
 with neither is a binary file. Files that have a resource fork are saved as AppleSingle (`.applesingle`).
 The same convention is used everywhere, so a file can travel in both directions without losing its type.
 

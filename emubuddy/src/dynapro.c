@@ -1329,6 +1329,11 @@ dynapro_create_prodos_name(Dynapro_file *newfileptr, Dynapro_file *matchptr,
 		// Remove .applesingle extension
 		max_inpos -= 13;
 	}
+	// EmuBuddy: NAME.txt on the host is NAME on the IIgs (a text file)
+	i = dynatype_name_end(str, inpos, max_inpos - 1, newfileptr->file_type);
+	if(i < max_inpos - 1) {
+		max_inpos = i;			// stop before the ".txt"
+	}
 	//printf(" inpos:%d max_inpos:%d str:%s\n", inpos, max_inpos,
 	//						&(str[inpos]));
 	outpos = 0;

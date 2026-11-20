@@ -265,6 +265,33 @@ dynatype_comma_arg(const char *str, word32 *type_or_aux_ptr)
 	return len;
 }
 
+/* EmuBuddy: where the IIgs name ends in the host name str (from pos to end):
+ * a ".txt" right before the end or before ",a$.." is left out for a text
+ * file, so "Read Me.txt" is READ.ME on the IIgs and comes back as
+ * "Read Me.txt" when the IIgs writes it. */
+int
+dynatype_name_end(const char *str, int pos, int end, word32 file_type)
+{
+	int	i;
+
+	if(file_type != 0x04) {
+		return end;
+	}
+	for(i = pos; i < end; i++) {
+		if((str[i] == ',') || (str[i] == '#')) {
+			end = i;
+			break;
+		}
+	}
+	if((end - pos > 4) && (str[end - 4] == '.') &&
+				(tolower(str[end - 3]) == 't') &&
+				(tolower(str[end - 2]) == 'x') &&
+				(tolower(str[end - 1]) == 't')) {
+		return end - 4;
+	}
+	return end;
+}
+
 void
 dynatype_fix_unix_name(Dynapro_file *fileptr, char *outbuf_ptr, int path_max)
 {
@@ -285,6 +312,13 @@ dynatype_fix_unix_name(Dynapro_file *fileptr, char *outbuf_ptr, int path_max)
 		// Forked file, add .applesingle
 		cfg_strlcat(outbuf_ptr, ".applesingle", path_max);
 		return;
+	}
+
+	// EmuBuddy: a text file is NAME.txt on the host, not NAME,ttxt. The
+	//  ".txt" is not part of the IIgs name (dynatype_name_end leaves it
+	//  out), so it is added even when the IIgs name ends in .txt itself.
+	if(fileptr->file_type == 0x04) {
+		cfg_strlcat(outbuf_ptr, ".txt", path_max);
 	}
 
 	memset(&tmpfile, 0, sizeof(Dynapro_file));
