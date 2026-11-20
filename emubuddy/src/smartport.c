@@ -201,7 +201,11 @@ do_c70d(word32 arg0)
 			/* status for unit x */
 			if((unit > MAX_C7_DISKS) ||
 					(g_iwm.smartport[unit-1].fd < 0)) {
-				stat_val = 0x80;
+				// EmuBuddy: an empty drive is a removable drive
+				//  with no disk in it (readable, writable,
+				//  formattable, not online). With a plain $80
+				//  GS/OS never mounts a disk put in later.
+				stat_val = 0xe8;
 				dsize = 0;
 				ret = 0;	// Not DISK_SWITCHed error
 			} else {
@@ -231,7 +235,11 @@ do_c70d(word32 arg0)
 		} else if(ctl_code == 3) {
 			if((unit > MAX_C7_DISKS) ||
 					(g_iwm.smartport[unit-1].fd < 0)) {
-				stat_val = 0x80;
+				// EmuBuddy: an empty drive is a removable drive
+				//  with no disk in it (readable, writable,
+				//  formattable, not online). With a plain $80
+				//  GS/OS never mounts a disk put in later.
+				stat_val = 0xe8;
 				dsize = 0;
 				ret = 0;	// Not a disk-switched error
 			} else {

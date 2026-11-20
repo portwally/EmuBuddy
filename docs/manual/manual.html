@@ -224,7 +224,7 @@
     <p>When the IIgs is waiting for a startup disk, with <i>Check startup device!</i> or <i>UNABLE TO LOAD PRODOS</i> on its screen, EmuBuddy helps: a disk image you drop on the window goes into the first drive of its kind and the IIgs starts up from it at once.</p>
     <p>EmuBuddy also looks through the other hard disks for you. A real IIgs tries hard disk 1 and no other. If the waiting IIgs has a startup disk in one of the hard disks 2 to 7, EmuBuddy takes the first one it finds, puts it into S7D1, where it swaps places with whatever was there, and starts the IIgs up from it. The status bar tells you so.</p>
     <div class="note"><span class="nt">By the way</span>A shared folder (Chapter 3) takes the first free hard disk from S7D2 on. S7D1 stays free for your startup disk.</div>
-    <p>At any other time a new disk just appears on the IIgs desktop, and the IIgs keeps running. To start up from a different disk then, put it in the first drive of its kind and choose Hard Reset from the Machine menu.</p>
+    <p>At any other time a new disk just appears on the IIgs desktop after a moment, hard disks included, and the IIgs keeps running. To start up from a different disk then, put it in the first drive of its kind and choose Hard Reset from the Machine menu.</p>
   </div>
 </section>
 
@@ -737,6 +737,7 @@
     </table>
     <h2>Disks and files</h2>
     <table class="keys wide">
+      <tr><td>A hard disk image does not appear on the desktop</td><td>Give it a few seconds. If all seven hard disk drives are full, EmuBuddy does not take it: eject one in the Drives window first. A volume with the same name as one already on the desktop is not shown twice.</td></tr>
       <tr><td>A disk does not eject</td><td>The IIgs is reading or writing. Wait until the drive lights in the status bar are dark, then click Eject again.</td></tr>
       <tr><td>The IIgs cannot change a disk</td><td>Its Lock box is checked in the Drives window, or the image file is protected on your computer.</td></tr>
       <tr><td>A folder cannot be shared</td><td>It holds more than 32 MB. Share a smaller folder.</td></tr>

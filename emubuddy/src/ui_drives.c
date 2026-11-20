@@ -31,6 +31,7 @@ extern int	g_bridge_off;
 
 #define N_RECENT	10
 #define SCSI_DRIVES	7	/* the SCSI card has 7 hard drives (S7D1-S7D7) */
+static void	hd_mark_new(int slot, int drive);
 
 static const char *
 base_name(const char *path)
@@ -186,6 +187,7 @@ part_draw(UiWindow *win, int cx, int cy)
 		if(g_part_sel >= 0 && g_part_sel < n) {
 			if(cfg_ui_partition_choose(g_part_sel, g_part_slot,
 					g_part_drive, g_part_path)) {
+				hd_mark_new(g_part_slot, g_part_drive);
 				recent_add(g_part_path);
 				ui_message("Inserted in S%dD%d", g_part_slot,
 							g_part_drive + 1);
@@ -232,6 +234,17 @@ folder_blocks(int slot)
 }
 
 /* Mount a Mac/PC folder as a live ProDOS volume in a drive. */
+/* A hard disk put in while the IIgs runs: GS/OS asks every hard disk
+ * for its status again and again, but only mounts a disk the drive reports as
+ * newly inserted ("disk switched"). Floppies report that themselves. */
+static void
+hd_mark_new(int slot, int drive)
+{
+	if(slot == 7 && drive >= 0 && drive < SCSI_DRIVES) {
+		iwm_get_dsk_from_slot_drive(7, drive)->just_ejected = 1;
+	}
+}
+
 static void
 folder_mount(int slot, int drive, const char *path)
 {
@@ -250,6 +263,7 @@ folder_mount(int slot, int drive, const char *path)
 	}
 	insert_disk(slot, drive, clean, 0, 0, -1, folder_blocks(slot));
 	if(dsk->fd >= 0) {
+		hd_mark_new(slot, drive);
 		ui_message("Shared folder %s is in S%dD%d", base_name(clean),
 							slot, drive + 1);
 	} else {
@@ -289,6 +303,8 @@ folder_drive(void)
 	}
 	return (iwm_get_dsk_from_slot_drive(7, 0)->fd < 0) ? 0 : -1;
 }
+
+
 
 /* A shared folder in hard disk 1 moves to a later drive, so that a startup
  * disk can go there (only while the IIgs is waiting for one: nothing uses
@@ -433,6 +449,7 @@ drive_insert(int slot, int drive, const char *path)
 		return 1;
 	}
 	if(cfg_maybe_insert_disk(slot, drive, path)) {
+		hd_mark_new(slot, drive);
 		recent_add(path);
 		ui_message("Inserted %s in S%dD%d", base_name(path), slot,
 								drive + 1);
@@ -493,7 +510,13 @@ ui_insert_auto(const char *path)
 		}
 	}
 	if(d == nd) {
-		d = 0;			/* all full: replace the first */
+		if(slot == 7) {
+			/* all seven taken: replacing hard disk 1 would pull the
+			 * startup disk out from under a running IIgs */
+			ui_message("All 7 hard disk drives are in use - eject one first");
+			return;
+		}
+		d = 0;			/* both floppy drives full: replace the first */
 	}
 	drive_insert(slot, d, path);
 }
