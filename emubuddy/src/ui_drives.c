@@ -314,39 +314,89 @@ share_leaves_drive1(void)
 
 static int drive_insert(int slot, int drive, const char *path);
 
-/* The IIgs starts up from hard disk 1 only. If it says "Check startup device!"
- * with hard disk 1 and the first floppy drives empty while a hard disk image
- * sits in a later drive (a saved set-up, or a disk put into another row of the
- * Drives window), that image moves to hard disk 1 and the IIgs starts up from
- * it. If it cannot start from it either, it then says "UNABLE TO LOAD PRODOS"
- * with hard disk 1 taken, and nothing more is moved. */
+/* Can the IIgs start up from this disk image? A ProDOS disk with boot blocks
+ * and the file PRODOS in its main folder (GS/OS disks have it too). */
+static int
+image_is_bootable(const char *path)
+{
+	PImg		img;
+	const char	*err;
+	unsigned char	first = 0;
+	int		ok = 0;
+
+	if(pimg_open(&img, path, &err) != 0) {
+		return 0;
+	}
+	if(fseek(img.f, img.offset, SEEK_SET) == 0 && fread(&first, 1, 1, img.f) == 1 &&
+								first == 0x01) {
+		ok = pimg_has_entry(&img, 2, "PRODOS");
+	}
+	pimg_close(&img);
+	return ok;
+}
+
+/* The IIgs starts up from hard disk 1 only; it does not look at the other six.
+ * So while it waits for a startup disk ("Check startup device!", or "UNABLE TO
+ * LOAD PRODOS" from a disk it cannot start from), EmuBuddy looks through hard
+ * disks 2 to 7 for the first disk image that can start it, puts that one into
+ * hard disk 1 (what was there takes its place) and starts the IIgs. The drives
+ * are looked at again only when what is in them has changed. */
 static void
 startup_disk_moves_up(void)
 {
-	Disk	*dsk;
-	char	path[1100];
-	int	d;
+	static char	seen[SCSI_DRIVES * 64];
+	char		now[SCSI_DRIVES * 64], path[1100], old[1100];
+	const char	*t;
+	Disk		*dsk, *d1;
+	int		d, n = 0, old_is_folder = 0;
 
-	if(!g_slot7_scsi || (g_cur_a2_stat & ALL_STAT_SUPER_HIRES) ||
-			!strstr(cfg_text_screen_str(), "Check startup device") ||
-			iwm_motor_busy()) {
+	if(!g_slot7_scsi || (g_cur_a2_stat & ALL_STAT_SUPER_HIRES) || iwm_motor_busy()) {
 		return;
 	}
-	if(iwm_get_dsk_from_slot_drive(7, 0)->fd >= 0 ||
-			iwm_get_dsk_from_slot_drive(6, 0)->fd >= 0 ||
-			iwm_get_dsk_from_slot_drive(5, 0)->fd >= 0) {
+	t = cfg_text_screen_str();
+	if(!strstr(t, "Check startup device") && !strstr(t, "UNABLE TO LOAD PRODOS")) {
+		seen[0] = 0;
 		return;
+	}
+	now[0] = 0;
+	for(d = 0; d < SCSI_DRIVES; d++) {		/* what is in the drives now */
+		dsk = iwm_get_dsk_from_slot_drive(7, d);
+		n += snprintf(now + n, sizeof(now) - (size_t)n, "%d:%.56s|", d,
+			(dsk->fd >= 0 && dsk->name_ptr) ? base_name(dsk->name_ptr) : "");
+	}
+	if(!strcmp(now, seen)) {
+		return;
+	}
+	snprintf(seen, sizeof(seen), "%s", now);
+
+	d1 = iwm_get_dsk_from_slot_drive(7, 0);
+	if(d1->fd >= 0 && !d1->dynapro_info_ptr && d1->name_ptr &&
+					image_is_bootable(d1->name_ptr)) {
+		return;			/* hard disk 1 is a startup disk already */
 	}
 	for(d = 1; d < SCSI_DRIVES; d++) {
 		dsk = iwm_get_dsk_from_slot_drive(7, d);
-		if(dsk->fd >= 0 && !dsk->dynapro_info_ptr && dsk->name_ptr) {
-			snprintf(path, sizeof(path), "%s", dsk->name_ptr);
-			iwm_eject_disk_by_num(7, d);
-			drive_insert(7, 0, path);	/* restarts the waiting IIgs */
-			ui_message("%s moved to hard disk 1 to start up from it",
-							base_name(path));
-			return;
+		if(dsk->fd < 0 || dsk->dynapro_info_ptr || !dsk->name_ptr ||
+					!image_is_bootable(dsk->name_ptr)) {
+			continue;
 		}
+		snprintf(path, sizeof(path), "%s", dsk->name_ptr);
+		old[0] = 0;
+		if(d1->fd >= 0 && d1->name_ptr) {
+			snprintf(old, sizeof(old), "%s", d1->name_ptr);
+			old_is_folder = (d1->dynapro_info_ptr != 0);
+			iwm_eject_disk_by_num(7, 0);
+		}
+		iwm_eject_disk_by_num(7, d);
+		if(old[0] && old_is_folder) {
+			folder_mount(7, d, old);
+		} else if(old[0]) {
+			drive_insert(7, d, old);
+		}
+		seen[0] = 0;
+		drive_insert(7, 0, path);		/* restarts the waiting IIgs */
+		ui_message("Starting up from %s (moved to hard disk 1)", base_name(path));
+		return;
 	}
 }
 

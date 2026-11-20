@@ -102,7 +102,8 @@ be included. Without one, EmuBuddy shows a **ROM Required** window instead of a 
 
 Drop a disk image on the window, or open **Disks > Drives Window** (F2) and click a drive. While the IIgs is waiting
 for a startup disk ("Check startup device!" or "UNABLE TO LOAD PRODOS"), EmuBuddy puts the disk you drop into the first
-drive of its kind and starts up from it at once. GS/OS system disks, games and hard disk images all work the same way.
+drive of its kind and starts up from it at once. It also looks through hard disks 2 to 7 for the first disk that can
+start the IIgs and moves it to hard disk 1 (a real IIgs tries hard disk 1 only). GS/OS system disks, games and hard disk images all work the same way.
 
 ## Using EmuBuddy
 

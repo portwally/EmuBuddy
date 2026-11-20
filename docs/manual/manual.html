@@ -222,6 +222,7 @@
     <h2>Which disk the IIgs starts up from</h2>
     <p>The IIgs starts up the way a real one does. Unless you changed the Startup Slot in its Control Panel, it looks at slot 7 first, then slot 6, then slot 5, and at the first drive of each: hard disk 1 (S7D1), then 5.25-inch drive 1 (S6D1), then 3.5-inch drive 1 (S5D1). So the hard disk you want to start up from belongs in S7D1.</p>
     <p>When the IIgs is waiting for a startup disk, with <i>Check startup device!</i> or <i>UNABLE TO LOAD PRODOS</i> on its screen, EmuBuddy helps: a disk image you drop on the window goes into the first drive of its kind and the IIgs starts up from it at once.</p>
+    <p>EmuBuddy also looks through the other hard disks for you. A real IIgs tries hard disk 1 and no other. If the waiting IIgs has a startup disk in one of the hard disks 2 to 7, EmuBuddy takes the first one it finds, puts it into S7D1, where it swaps places with whatever was there, and starts the IIgs up from it. The status bar tells you so.</p>
     <div class="note"><span class="nt">By the way</span>A shared folder (Chapter 3) takes the first free hard disk from S7D2 on. S7D1 stays free for your startup disk.</div>
     <p>At any other time a new disk just appears on the IIgs desktop, and the IIgs keeps running. To start up from a different disk then, put it in the first drive of its kind and choose Hard Reset from the Machine menu.</p>
   </div>
@@ -731,7 +732,7 @@
       <tr><td>Windows says a <code>.dll</code> file is missing</td><td>The program was moved away from its files. Unpack the whole <code>.zip</code> file again and leave everything together.</td></tr>
       <tr><td>The ROM Required window stays</td><td>The file you chose is not a ROM 01 (128 KB) or ROM 03 (256 KB) file. A zip file must be unpacked first.</td></tr>
       <tr><td><i>Check startup device!</i></td><td>The ROM works, but no drive holds a startup disk. Drop a startup disk image on the window.</td></tr>
-      <tr><td><i>UNABLE TO LOAD PRODOS</i></td><td>The disk in hard disk 1 is not a startup disk. Drop a startup disk image on the window; EmuBuddy puts it in S7D1 and starts up from it.</td></tr>
+      <tr><td><i>UNABLE TO LOAD PRODOS</i></td><td>The disk in hard disk 1 is not a startup disk, and none of the other hard disks holds one. Drop a startup disk image on the window; EmuBuddy puts it in S7D1 and starts up from it.</td></tr>
       <tr><td>The IIgs starts up from the wrong disk</td><td>Put the disk you want in S7D1 in the Drives window, then choose Hard Reset from the Machine menu.</td></tr>
     </table>
     <h2>Disks and files</h2>
