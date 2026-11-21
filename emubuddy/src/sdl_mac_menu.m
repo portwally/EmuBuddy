@@ -61,3 +61,14 @@ sdl_mac_fix_menu(void)
 		}
 	}
 }
+
+/* The window's close button: EmuBuddy keeps running, hidden, the Mac way.
+ * Clicking its Dock icon (or Command-Tab) shows it again; AppKit does that
+ * by itself for a hidden application. */
+void
+sdl_mac_hide_app(void)
+{
+	@autoreleasepool {
+		[NSApp hide:nil];
+	}
+}

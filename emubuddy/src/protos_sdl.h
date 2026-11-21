@@ -23,6 +23,8 @@ int	write_png_rgba(const char *path, const unsigned char *rgba,
 /* sdl_mac_menu.m -- retune SDL's default macOS menu so ⌘ combos reach the
  * IIgs and GSplus quits on ⌥⌘Q instead of ⌘Q. */
 void	sdl_mac_fix_menu(void);
+/* Hide EmuBuddy (like Command-H); clicking its Dock icon brings it back */
+void	sdl_mac_hide_app(void);
 #endif
 
 #endif /* GSPLUS_PROTOS_SDL_H */

@@ -522,6 +522,11 @@ sdl_video_init(void)
 	Kimage	*km;
 	int	w, h;
 
+#ifdef __APPLE__
+	/* Closing the window does not quit by itself; see
+	 * SDL_EVENT_WINDOW_CLOSE_REQUESTED in sdl_poll_events */
+	SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
+#endif
 	if(!SDL_Init(SDL_INIT_VIDEO)) {
 		printf("SDL_Init failed: %s\n", SDL_GetError());
 		exit(1);
@@ -1373,6 +1378,21 @@ sdl_poll_events(void)
 		case SDL_EVENT_QUIT:
 			g_quit_requested = 1;
 			break;
+#ifdef __APPLE__
+		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+			/* The close button: on the Mac, EmuBuddy keeps running
+			 * hidden and its Dock icon brings it back. A game the
+			 * Launcher started ends, as before (the Launcher starts a
+			 * new EmuBuddy for each game). */
+			if(cli_from_launcher()) {
+				g_quit_requested = 1;
+			} else {
+				sdl_mac_hide_app();
+				ui_message("EmuBuddy keeps running - Option-Command-Q "
+								"quits");
+			}
+			break;
+#endif
 		case SDL_EVENT_WINDOW_EXPOSED:
 		case SDL_EVENT_WINDOW_SHOWN:
 		case SDL_EVENT_WINDOW_RESIZED:
@@ -1813,6 +1833,14 @@ sdl_dev_snapshot(Window_info *win)
 					win->main_height + UI_TOP_H + UI_BAR_H);
 	}
 	sdl_dev_drops(win, frames);
+	if(getenv("EMUBUDDY_CLOSEAT") && atoi(getenv("EMUBUDDY_CLOSEAT")) == frames) {
+		SDL_Event	e;	/* EMUBUDDY_CLOSEAT=frame: the close button */
+
+		SDL_zero(e);
+		e.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+		e.window.windowID = SDL_GetWindowID(win->window);
+		SDL_PushEvent(&e);
+	}
 	{	/* EMUBUDDY_REC="a:b" toggles recording at frames a and b;
 		 * EMUBUDDY_WSHOT=n takes a window screenshot at frame n */
 		const char *rc = getenv("EMUBUDDY_REC"), *ws = getenv("EMUBUDDY_WSHOT"),

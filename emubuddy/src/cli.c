@@ -25,6 +25,13 @@ static char	*g_later_insert[32];	/* shares and loose images */
 static int	g_nlater;
 static int	g_win_w, g_win_h, g_scale;
 static char	g_title[200], g_profile[100];
+
+/* 1 when the Launcher started this EmuBuddy (it always passes -profile) */
+int
+cli_from_launcher(void)
+{
+	return g_profile[0] != 0;
+}
 static char	g_quitshot[1100];	/* -quitshot: picture of the screen when quitting */
 static char	*g_check[64];		/* paths -validate looks at: "kind path" */
 static int	g_ncheck;
