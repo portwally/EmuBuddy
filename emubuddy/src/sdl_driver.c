@@ -1063,6 +1063,19 @@ joystick_update(dword64 dfcyc)
 						SDL_GAMEPAD_AXIS_LEFTX);
 	g_paddle_val[1] = SDL_GetGamepadAxis(g_sdl_gamepad,
 						SDL_GAMEPAD_AXIS_LEFTY);
+	/* The D-pad moves the joystick too, all the way, like a digital stick */
+	if(SDL_GetGamepadButton(g_sdl_gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT)) {
+		g_paddle_val[0] = -32768;
+	} else if(SDL_GetGamepadButton(g_sdl_gamepad,
+					SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) {
+		g_paddle_val[0] = 32767;
+	}
+	if(SDL_GetGamepadButton(g_sdl_gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP)) {
+		g_paddle_val[1] = -32768;
+	} else if(SDL_GetGamepadButton(g_sdl_gamepad,
+					SDL_GAMEPAD_BUTTON_DPAD_DOWN)) {
+		g_paddle_val[1] = 32767;
+	}
 	joystick_update_buttons();
 	paddle_update_trigger_dcycs(dfcyc);
 }
