@@ -64,6 +64,7 @@ extern int g_joystick_trim_amount_x;
 extern int g_joystick_trim_amount_y;
 extern int g_swap_paddles;
 extern int g_invert_paddles;
+extern int g_joystick_swap_buttons;
 extern int g_voc_enable;
 extern int g_status_enable;
 extern int g_video_center_a2;
@@ -284,6 +285,8 @@ Cfg_menu g_cfg_joystick_menu[] = {
 		KNMP(g_swap_paddles), CFGTYPE_INT },
 { "Invert Joystick,0,Normal operation,1,Left becomes right and up becomes down",
 		KNMP(g_invert_paddles), CFGTYPE_INT },
+{ "Swap Joystick Buttons,0,Normal operation,1,Button 0 and button 1 swapped",
+		KNMP(g_joystick_swap_buttons), CFGTYPE_INT },
 { "", 0, 0, 0, 0 },
 { "Back to Main Config", g_cfg_main_menu, 0, 0, CFGTYPE_MENU },
 { 0, 0, 0, 0, 0 },

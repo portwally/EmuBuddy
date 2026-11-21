@@ -249,6 +249,14 @@ In the **File** menu:
   bar shows REC and the time. Recording needs [FFmpeg](https://ffmpeg.org) (if it is missing, a window shows how to
   get it). Quitting while recording saves the file.
 
+### Joystick
+
+A game controller (Xbox, PlayStation, Switch and the like) or a plain USB joystick is the IIgs joystick: the left
+stick, D-pad or hat switch move it, and two buttons are button 0 and 1. Without one, the numeric keypad moves it. The
+status bar says when a controller is plugged in or pulled out. **Machine > Controllers...** shows what is connected,
+the stick and buttons live, and what the IIgs program reads (0-255, and whether it is reading at all). There you
+choose Auto / Controller / Keypad / Mouse and can swap the two buttons; both are saved.
+
 ### Keyboard
 
 EmuBuddy passes the character your keyboard makes to the IIgs, so a German, French or Spanish keyboard types what

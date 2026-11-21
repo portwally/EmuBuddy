@@ -65,7 +65,7 @@ enum {
 	CMD_SPEED_1 = 20, CMD_SPEED_28, CMD_ZIP_8, CMD_ZIP_16, CMD_ZIP_32,
 	CMD_ZIP_64, CMD_ZIP_128, CMD_UNLIMITED,
 	CMD_FULLSCREEN = 30, CMD_CRT, CMD_SCANLINES, CMD_SCREENSHOT, CMD_CORE_STATUS,
-	CMD_PASTE = 45, CMD_COPY_SCREEN,
+	CMD_PASTE = 45, CMD_COPY_SCREEN, CMD_CONTROLLERS,
 	CMD_SIZE_1 = 50, CMD_SIZE_2, CMD_SIZE_3, CMD_SIZE_4,
 	CMD_SHOT_WIN = 55, CMD_RECORD, CMD_DROPDEST, CMD_SHOWSHARE, CMD_BRIDGE, CMD_BRIDGE_OFF, CMD_SKIN_IIGS, CMD_SKIN_SYS, CMD_INSTALL_RECEIVE, CMD_AUTOSHARE,
 	CMD_ABOUT = 40,
@@ -100,6 +100,7 @@ static const UiMenuItem machine_items[] = {
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Slots...", CMD_SLOTS, "F4", 0 },
 	{ "Printer", CMD_PRINTER, NULL, 0 },
+	{ "Controllers...", CMD_CONTROLLERS, NULL, 0 },
 };
 static const UiMenuItem speed_items[] = {
 	{ "1.0 MHz", CMD_SPEED_1, NULL, 0 },
@@ -633,6 +634,7 @@ app_command(int id)
 	case CMD_DRIVES: ui_drives_toggle(); break;
 	case CMD_SLOTS: ui_slots_toggle(); break;
 	case CMD_PRINTER: ui_printer_toggle(); break;
+	case CMD_CONTROLLERS: ui_controllers_toggle(); break;
 	case CMD_EJECT_ALL: ui_eject_all(); break;
 	case CMD_SHARE: ui_shared_folder_choose(); break;
 	case CMD_BROWSER: ui_browser_toggle(); break;
@@ -699,6 +701,7 @@ app_item_state(int id)
 	case CMD_BROWSER: return ui_browser_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_SLOTS: return ui_slots_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_PRINTER: return ui_printer_is_open() ? UI_MI_CHECKED : 0;
+	case CMD_CONTROLLERS: return ui_controllers_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_SPEED_1: return g_limit_speed == 1 ? UI_MI_CHECKED : 0;
 	case CMD_SPEED_28: return g_limit_speed == 2 ? UI_MI_CHECKED : 0;
 	case CMD_ZIP_8: return zip == 8 ? UI_MI_CHECKED : 0;
@@ -894,6 +897,7 @@ ui_app_init(SDL_Window *w, SDL_Renderer *r)
 	if(t && !strcmp(t, "drives")) app_command(CMD_DRIVES);
 	if(t && !strcmp(t, "slots")) app_command(CMD_SLOTS);
 	if(t && !strcmp(t, "printer")) app_command(CMD_PRINTER);
+	if(t && !strcmp(t, "controllers")) app_command(CMD_CONTROLLERS);
 	if(t && !strcmp(t, "browser")) app_command(CMD_BROWSER);
 	t = getenv("EMUBUDDY_BROWSE");		/* developer aid: image path */
 	if(t) ui_browser_open_image(t);

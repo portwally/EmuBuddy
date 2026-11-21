@@ -179,6 +179,20 @@ extern UiTheme	g_ui_theme;
 #define UI_GOOD		0x00AA00
 #define UI_WARN		0xFF6600
 #define UI_BAD		0xDD0000
+/* ---- joysticks (sdl_driver.c), for the Controllers window ---- */
+typedef struct {
+	char	name[80];
+	char	kind[24];		/* "game controller" / "USB joystick" */
+	int	x, y;			/* -32768..32767, D-pad / hat included */
+	int	dpad;			/* 1 up, 2 right, 4 down, 8 left */
+	int	buttons;		/* bit 0, bit 1: IIgs buttons 0 and 1 */
+	char	label[2][16];		/* controller button for IIgs button 0, 1 */
+} JoyInfo;
+int	joystick_info(JoyInfo *ji);
+int	joystick_list(char (*names)[80], int max, int *used);
+void	ui_controllers_toggle(void);
+int	ui_controllers_is_open(void);
+
 #endif
 
 /* ---- EmuBuddy app layer (ui_app.c) ---- */

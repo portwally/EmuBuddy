@@ -234,6 +234,7 @@ add_executable(gsplus-sdl
     ui_app.c
     ui_drives.c
     ui_slots.c
+    ui_controllers.c
     ui_browser.c
     cli.c
     prodos_img.c

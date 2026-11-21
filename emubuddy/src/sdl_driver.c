@@ -998,21 +998,64 @@ static SDL_Gamepad *g_sdl_gamepad = NULL;	/* the open controller, or NULL */
  * gamepad, read from IOKit. Used only while there is no SDL gamepad. */
 void mac_hidstick_init(void);
 int mac_hidstick_present(void);
+const char *mac_hidstick_name(void);
+int mac_hidstick_dpad(void);
 int mac_hidstick_read(int *x_ptr, int *y_ptr, int *buttons_ptr);
 #else
 # define mac_hidstick_init()		((void)0)
 # define mac_hidstick_present()		0
+# define mac_hidstick_name()		((const char *)0)
+# define mac_hidstick_dpad()		0
 # define mac_hidstick_read(x, y, b)	0
 #endif
 
 /* "A joystick is there" (what the Auto joystick setting goes by): an SDL
  * gamepad, or a plain USB joystick. The latter comes and goes without an
  * SDL event, so this is called every frame. */
+static int g_joy_quiet = 1;	/* no plug-in message before the UI is up */
+
 static void
 sdl_joystick_sync_present(void)
 {
+	static char	last[64];
+	const char	*name;
+	int		quiet = g_joy_quiet;
+
+	g_joy_quiet = 0;
 	g_joystick_native_type1 =
 		(g_sdl_gamepad || mac_hidstick_present()) ? 1 : -1;
+	/* A message in the status bar when the joystick in use changes */
+	name = g_sdl_gamepad ? SDL_GetGamepadName(g_sdl_gamepad) :
+							mac_hidstick_name();
+	if(!name) {
+		name = "";
+	} else if(!name[0]) {
+		name = "Game controller";
+	}
+	if(!strcmp(name, last)) {
+		return;
+	}
+	if(!quiet) {
+		if(name[0]) {
+			ui_message("%s connected - it is the joystick", name);
+		} else {
+			ui_message("%s disconnected - the keypad is the joystick",
+									last);
+		}
+	}
+	snprintf(last, sizeof(last), "%s", name);
+}
+
+/* The two IIgs buttons with "Swap Joystick Buttons" applied */
+extern int g_joystick_swap_buttons;
+static int
+joy_swap(int buttons)
+{
+	if(g_joystick_swap_buttons) {
+		buttons = (buttons & ~3) | ((buttons & 1) << 1) |
+							((buttons >> 1) & 1);
+	}
+	return buttons;
 }
 
 /* Open the first connected controller SDL has a gamepad mapping for. */
@@ -1077,7 +1120,8 @@ joystick_update_buttons(void)
 
 	if(!g_sdl_gamepad) {
 		if(mac_hidstick_read(&x, &y, &buttons)) {
-			g_paddle_buttons = (g_paddle_buttons & ~3) | buttons;
+			g_paddle_buttons = (g_paddle_buttons & ~3) |
+							joy_swap(buttons);
 		}
 		return;
 	}
@@ -1088,7 +1132,7 @@ joystick_update_buttons(void)
 	if(SDL_GetGamepadButton(g_sdl_gamepad, SDL_GAMEPAD_BUTTON_EAST)) {
 		buttons |= 2;		/* button 1 (e.g. B) */
 	}
-	g_paddle_buttons = (g_paddle_buttons & ~3) | buttons;
+	g_paddle_buttons = (g_paddle_buttons & ~3) | joy_swap(buttons);
 }
 
 /* Sample axes + buttons into the paddle globals. Called from paddles.c. */
@@ -1111,7 +1155,7 @@ joystick_update(dword64 dfcyc)
 		if(mac_hidstick_read(&x, &y, &buttons)) {
 			g_paddle_val[0] = x;
 			g_paddle_val[1] = y;
-			g_paddle_buttons = 0xc | buttons;
+			g_paddle_buttons = 0xc | joy_swap(buttons);
 			paddle_update_trigger_dcycs(dfcyc);
 			sdl_joystick_debug(x, y, buttons);
 		}
@@ -1145,6 +1189,7 @@ void
 joystick_init(void)
 {
 	g_joystick_native_type1 = -1;
+	g_joy_quiet = 1;
 	mac_hidstick_init();
 	if(!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
 		printf("SDL_INIT_GAMEPAD failed: %s\n", SDL_GetError());
@@ -1153,6 +1198,113 @@ joystick_init(void)
 	}
 	sdl_open_first_gamepad();
 	sdl_joystick_sync_present();
+}
+
+/* ---- for the Controllers window (ui_controllers.c) ---- */
+
+static const char *
+joy_label(SDL_GamepadButtonLabel l)
+{
+	switch(l) {
+	case SDL_GAMEPAD_BUTTON_LABEL_A: return "A";
+	case SDL_GAMEPAD_BUTTON_LABEL_B: return "B";
+	case SDL_GAMEPAD_BUTTON_LABEL_X: return "X";
+	case SDL_GAMEPAD_BUTTON_LABEL_Y: return "Y";
+	case SDL_GAMEPAD_BUTTON_LABEL_CROSS: return "Cross";
+	case SDL_GAMEPAD_BUTTON_LABEL_CIRCLE: return "Circle";
+	case SDL_GAMEPAD_BUTTON_LABEL_SQUARE: return "Square";
+	case SDL_GAMEPAD_BUTTON_LABEL_TRIANGLE: return "Triangle";
+	default: return "?";
+	}
+}
+
+/* The joystick in use right now, read for display (the IIgs is not
+ * touched). Returns 0 when there is none. */
+int
+joystick_info(JoyInfo *ji)
+{
+	SDL_Gamepad *gp = g_sdl_gamepad;
+	int	b;
+
+	memset(ji, 0, sizeof(*ji));
+	if(gp) {
+		snprintf(ji->name, sizeof(ji->name), "%s",
+			SDL_GetGamepadName(gp) ? SDL_GetGamepadName(gp) :
+							"Game controller");
+		snprintf(ji->kind, sizeof(ji->kind), "game controller");
+		ji->x = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX);
+		ji->y = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY);
+		ji->dpad =
+		    (SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_UP) ? 1 : 0) |
+		    (SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? 2 : 0) |
+		    (SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_DOWN) ? 4 : 0) |
+		    (SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? 8 : 0);
+		if(ji->dpad & 8) ji->x = -32768;
+		if(ji->dpad & 2) ji->x = 32767;
+		if(ji->dpad & 1) ji->y = -32768;
+		if(ji->dpad & 4) ji->y = 32767;
+		b = (SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_SOUTH) ? 1 : 0) |
+		    (SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_EAST) ? 2 : 0);
+		ji->buttons = joy_swap(b);
+		snprintf(ji->label[0], sizeof(ji->label[0]), "%s", joy_label(
+			SDL_GetGamepadButtonLabel(gp, SDL_GAMEPAD_BUTTON_SOUTH)));
+		snprintf(ji->label[1], sizeof(ji->label[1]), "%s", joy_label(
+			SDL_GetGamepadButtonLabel(gp, SDL_GAMEPAD_BUTTON_EAST)));
+	} else if(mac_hidstick_read(&ji->x, &ji->y, &b)) {
+		snprintf(ji->name, sizeof(ji->name), "%s", mac_hidstick_name());
+		snprintf(ji->kind, sizeof(ji->kind), "USB joystick");
+		ji->dpad = mac_hidstick_dpad();
+		ji->buttons = joy_swap(b);
+		snprintf(ji->label[0], sizeof(ji->label[0]), "1,3,5..");
+		snprintf(ji->label[1], sizeof(ji->label[1]), "2,4,6..");
+	} else {
+		return 0;
+	}
+	if(g_joystick_swap_buttons) {
+		char	t[16];
+
+		memcpy(t, ji->label[0], sizeof(t));
+		memcpy(ji->label[0], ji->label[1], sizeof(t));
+		memcpy(ji->label[1], t, sizeof(t));
+	}
+	return 1;
+}
+
+/* Everything connected, for the list: "Name (kind)", the one in use first
+ * (*used = 0) when there is one. Returns how many. */
+int
+joystick_list(char (*names)[80], int max, int *used)
+{
+	SDL_JoystickID *ids;
+	const char *nm;
+	int	n = 0, count = 0, i;
+
+	*used = -1;
+	if(g_sdl_gamepad && n < max) {
+		nm = SDL_GetGamepadName(g_sdl_gamepad);
+		snprintf(names[n++], 80, "%s (game controller)",
+						nm ? nm : "Game controller");
+		*used = 0;
+	}
+	ids = SDL_GetJoysticks(&count);
+	for(i = 0; ids && i < count && n < max; i++) {
+		if(g_sdl_gamepad && ids[i] == SDL_GetGamepadID(g_sdl_gamepad)) {
+			continue;
+		}
+		nm = SDL_GetJoystickNameForID(ids[i]);
+		snprintf(names[n++], 80, "%s (%s)", nm ? nm : "Joystick",
+			SDL_IsGamepad(ids[i]) ? "game controller" :
+						"joystick, not supported");
+	}
+	SDL_free(ids);
+	if(mac_hidstick_present() && n < max) {
+		snprintf(names[n], 80, "%s (USB joystick)", mac_hidstick_name());
+		if(*used < 0) {
+			*used = n;
+		}
+		n++;
+	}
+	return n;
 }
 
 /* Apply the g_fullscreen config var to the live window whenever it changes.

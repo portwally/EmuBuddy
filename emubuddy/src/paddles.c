@@ -31,6 +31,11 @@ int	g_joystick_native_type = -1;
 extern int g_paddle_buttons;
 
 int	g_paddle_val[4] = { 0, 0, 0, 0 };
+/* EmuBuddy (Controllers window): how often the program has started the
+ * paddle timers, and the joystick X and Y it got the last time (0-255) */
+dword64	g_paddle_trig_count = 0;
+int	g_paddle_seen[2] = { 128, 128 };
+int	g_joystick_swap_buttons = 0;	/* 1: button 0 and 1 swapped */
 		/* g_paddle_val[0]: Joystick X coord, [1]:Y coord */
 
 dword64	g_paddle_dfcyc[4] = { 0, 0, 0, 0 };
@@ -115,6 +120,7 @@ paddle_trigger(dword64 dfcyc)
 {
 	/* Called by read/write to $c070 */
 	g_paddle_trig_dfcyc = dfcyc;
+	g_paddle_trig_count++;
 
 	/* Determine what all the paddle values are right now */
 	paddle_fixup_joystick_type();
@@ -222,6 +228,9 @@ paddle_update_trigger_dcycs(dword64 dfcyc)
 		/* Val is now from -128 to + 128 since scale is */
 		/*  256=1.0, 128 = 0.5 */
 		val = val + 128 + trim;
+		if(i < 2) {
+			g_paddle_seen[i] = (val < 0) ? 0 : (val > 255) ? 255 : val;
+		}
 		if(val >= 255) {
 			val = 280;	/* increase range */
 		}

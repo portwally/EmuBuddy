@@ -50,6 +50,9 @@ static unsigned int g_hidstick_rep_btn, g_hidstick_has_btn;	/* bit: usage - 1 */
  * is passed on, is printed */
 static int g_hidstick_debug = 0;
 
+static char g_hidstick_name[128];	/* the stick's product name */
+static int g_hidstick_dpad;		/* hat at the last read: 1 up 2 right 4 down 8 left */
+
 static void
 hidstick_drop(void)
 {
@@ -138,6 +141,7 @@ hidstick_adopt(IOHIDDeviceRef dev)
 		CFStringGetCString((CFStringRef)name_ref, name, sizeof(name),
 						kCFStringEncodingUTF8);
 	}
+	snprintf(g_hidstick_name, sizeof(g_hidstick_name), "%s", name);
 	printf("USB joystick opened: %s\n", name);
 }
 
@@ -299,6 +303,19 @@ mac_hidstick_init(void)
 	hidstick_adopt_any();
 }
 
+const char *
+mac_hidstick_name(void)
+{
+	return g_hidstick_dev ? g_hidstick_name : NULL;
+}
+
+/* The hat switch at the last mac_hidstick_read (1 up 2 right 4 down 8 left) */
+int
+mac_hidstick_dpad(void)
+{
+	return g_hidstick_dev ? g_hidstick_dpad : 0;
+}
+
 int
 mac_hidstick_present(void)
 {
@@ -381,6 +398,17 @@ mac_hidstick_read(int *x_ptr, int *y_ptr, int *buttons_ptr)
 			} else if((max - min) == 3) {
 				dir = (val - min) * 2;
 			}
+		}
+		g_hidstick_dpad = 0;
+		if((dir == 7) || (dir == 0) || (dir == 1)) {
+			g_hidstick_dpad |= 1;
+		} else if((dir >= 3) && (dir <= 5)) {
+			g_hidstick_dpad |= 4;
+		}
+		if((dir >= 1) && (dir <= 3)) {
+			g_hidstick_dpad |= 2;
+		} else if((dir >= 5) && (dir <= 7)) {
+			g_hidstick_dpad |= 8;
 		}
 		if((dir == 7) || (dir == 0) || (dir == 1)) {
 			y = -32768;

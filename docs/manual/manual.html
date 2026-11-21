@@ -554,6 +554,17 @@
 
     <h2>Joysticks</h2>
     <p>A game controller connected to your computer is the joystick of the IIgs. The left stick and the D-pad move it, the bottom button of the four on the right is button 0 and the right one is button 1. Without a controller, the keys of the numeric keypad move the joystick.</p>
+    <p>A plain USB joystick, an arcade or retro stick, works too: its stick or hat switch moves the joystick, its odd-numbered buttons are button 0 and its even-numbered ones button 1. When a controller is plugged in or pulled out while EmuBuddy runs, the status bar says so.</p>
+    <p><b>Machine &gt; Controllers&hellip;</b> shows what is connected and the one in use. The square follows the stick as you move it, and the buttons and the D-pad light up as you press them. To the right is what the IIgs program reads: the joystick position from 0 to 255, whether it is reading it now, and the range it has seen. The outlined square in the picture marks that position. If a game does not react and the window says the joystick is not being read, the game is not looking at the joystick, and the controller is not the problem.</p>
+    <figure>
+      <div class="shot"><img src="img/controllers.png" alt=""></div>
+      <figcaption>The Controllers window</figcaption>
+    </figure>
+    <table class="keys">
+      <tr><td>Joystick</td><td>Auto uses a controller when one is connected, and the numeric keypad otherwise. Controller, Keypad and Mouse use only that.</td></tr>
+      <tr><td>Buttons</td><td>Swapped exchanges button 0 and button 1, for games where fire is on the wrong button.</td></tr>
+    </table>
+    <p>Both settings are kept for the next start.</p>
   </div>
 </section>
 
