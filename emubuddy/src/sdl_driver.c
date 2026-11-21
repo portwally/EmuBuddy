@@ -993,6 +993,28 @@ extern int g_paddle_val[4];		/* paddles.c: [0]=X [1]=Y, -32768..32767 */
 
 static SDL_Gamepad *g_sdl_gamepad = NULL;	/* the open controller, or NULL */
 
+#ifdef __APPLE__
+/* sdl_mac_hidstick.c: a plain USB joystick that SDL does not offer as a
+ * gamepad, read from IOKit. Used only while there is no SDL gamepad. */
+void mac_hidstick_init(void);
+int mac_hidstick_present(void);
+int mac_hidstick_read(int *x_ptr, int *y_ptr, int *buttons_ptr);
+#else
+# define mac_hidstick_init()		((void)0)
+# define mac_hidstick_present()		0
+# define mac_hidstick_read(x, y, b)	0
+#endif
+
+/* "A joystick is there" (what the Auto joystick setting goes by): an SDL
+ * gamepad, or a plain USB joystick. The latter comes and goes without an
+ * SDL event, so this is called every frame. */
+static void
+sdl_joystick_sync_present(void)
+{
+	g_joystick_native_type1 =
+		(g_sdl_gamepad || mac_hidstick_present()) ? 1 : -1;
+}
+
 /* Open the first connected controller SDL has a gamepad mapping for. */
 static void
 sdl_open_first_gamepad(void)
@@ -1022,13 +1044,41 @@ sdl_open_first_gamepad(void)
 	SDL_free(ids);
 }
 
+/* EMUBUDDY_JOYDEBUG=1 in the environment: each time the IIgs program starts
+ * the paddle timers and the joystick is not where it was, what it is given
+ * is printed (and how often it has asked so far). */
+static void
+sdl_joystick_debug(int x, int y, int buttons)
+{
+	static int debug = -1, last_x = 1, last_y = 1, last_buttons = -1;
+	static long reads = 0;
+
+	if(debug < 0) {
+		debug = (getenv("EMUBUDDY_JOYDEBUG") != NULL);
+	}
+	reads++;
+	if(!debug || ((x == last_x) && (y == last_y) &&
+						(buttons == last_buttons))) {
+		return;
+	}
+	last_x = x;
+	last_y = y;
+	last_buttons = buttons;
+	printf("IIgs joystick read %ld: x %d, y %d, buttons %d\n", reads, x, y,
+								buttons);
+	fflush(stdout);
+}
+
 /* Read the two face buttons into the low bits of g_paddle_buttons. */
 void
 joystick_update_buttons(void)
 {
-	int	buttons;
+	int	buttons, x, y;
 
 	if(!g_sdl_gamepad) {
+		if(mac_hidstick_read(&x, &y, &buttons)) {
+			g_paddle_buttons = (g_paddle_buttons & ~3) | buttons;
+		}
 		return;
 	}
 	buttons = 0;
@@ -1055,6 +1105,16 @@ joystick_update(dword64 dfcyc)
 	g_paddle_buttons = 0xc;
 
 	if(!g_sdl_gamepad) {
+		int	x, y, buttons;
+
+		/* No gamepad: a plain USB joystick, if there is one */
+		if(mac_hidstick_read(&x, &y, &buttons)) {
+			g_paddle_val[0] = x;
+			g_paddle_val[1] = y;
+			g_paddle_buttons = 0xc | buttons;
+			paddle_update_trigger_dcycs(dfcyc);
+			sdl_joystick_debug(x, y, buttons);
+		}
 		return;
 	}
 	/* SDL gamepad axes are already Sint16 (-32768..32767), exactly the
@@ -1085,11 +1145,14 @@ void
 joystick_init(void)
 {
 	g_joystick_native_type1 = -1;
+	mac_hidstick_init();
 	if(!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
 		printf("SDL_INIT_GAMEPAD failed: %s\n", SDL_GetError());
+		sdl_joystick_sync_present();
 		return;
 	}
 	sdl_open_first_gamepad();
+	sdl_joystick_sync_present();
 }
 
 /* Apply the g_fullscreen config var to the live window whenever it changes.
@@ -1332,6 +1395,7 @@ sdl_poll_events(void)
 			break;
 		}
 	}
+	sdl_joystick_sync_present();
 	sdl_flush_pending_key(win);	/* key without text (arrows are not here) */
 }
 
