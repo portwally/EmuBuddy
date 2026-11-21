@@ -83,6 +83,31 @@ sdl_send_audio(byte *ptr, int size)
 
 	rec_audio((const unsigned char *)ptr, size);	/* video recording */
 
+#ifdef __APPLE__
+	/* While EmuBuddy is hidden (closed window, Command-H) the IIgs keeps
+	 * running but the sound pauses: drop what was queued and the new
+	 * samples; showing EmuBuddy again starts it from the current sound. */
+	if(g_sdl_audio_stream) {
+		static int	paused = 0;
+		int		hidden = sdl_mac_app_hidden();
+
+		if(hidden != paused) {
+			paused = hidden;
+			printf("sdl_snd: sound %s\n", hidden ? "paused (hidden)" :
+								"resumed");
+			fflush(stdout);
+			SDL_ClearAudioStream(g_sdl_audio_stream);
+			if(hidden) {
+				SDL_PauseAudioStreamDevice(g_sdl_audio_stream);
+			} else {
+				SDL_ResumeAudioStreamDevice(g_sdl_audio_stream);
+			}
+		}
+		if(paused) {
+			return size;
+		}
+	}
+#endif
 	if(g_sdl_audio_stream) {
 		/* SDL's audio thread drains this queue at a steady rate on its own
 		 * thread, decoupled from our main-loop pushes. The emulator feeds us

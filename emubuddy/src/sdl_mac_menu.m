@@ -72,3 +72,10 @@ sdl_mac_hide_app(void)
 		[NSApp hide:nil];
 	}
 }
+
+/* 1 while EmuBuddy is hidden (the close button or Command-H) */
+int
+sdl_mac_app_hidden(void)
+{
+	return [NSApp isHidden] ? 1 : 0;
+}
