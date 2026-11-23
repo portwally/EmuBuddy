@@ -252,10 +252,31 @@ build(const Profile *p, char *buf, int bsz, char **argv, char *err, int esz, int
 void	launcher_mac_front(SDL_Process *proc);	/* launcher_mac.m */
 #endif
 
+static SDL_Window	*g_win;
+static int		g_game_other;	/* 1: games open on a screen the Launcher is not on */
+
+/* The number EmuBuddy's -screen takes (1 = the first screen the system lists) of the first
+ * screen the Launcher's window is not on, or 0 when there is only one. */
+static int
+other_screen(void)
+{
+	SDL_DisplayID	*d, own = SDL_GetDisplayForWindow(g_win);
+	int		n = 0, i, r = 0;
+
+	d = SDL_GetDisplays(&n);
+	for(i = 0; d && i < n && !r; i++) {
+		if(d[i] != own) {
+			r = i + 1;
+		}
+	}
+	SDL_free(d);
+	return r;
+}
+
 static int
 play(const Profile *p, char *msg, size_t msgsz)
 {
-	char		buf[6000], err[200], exe[1100];
+	char		buf[6000], err[200], exe[1100], scr[8];
 	char		*argv[PROFILE_MAX_ARGS];
 	int		n;
 	SDL_Process	*proc;
@@ -268,6 +289,16 @@ play(const Profile *p, char *msg, size_t msgsz)
 	if(n < 0) {
 		snprintf(msg, msgsz, "%s", err);
 		return -1;
+	}
+	if(g_game_other && g_win && n + 2 < PROFILE_MAX_ARGS) {	/* the game on the other screen */
+		int	other = other_screen();
+
+		if(other > 0) {
+			snprintf(scr, sizeof(scr), "%d", other);
+			argv[n++] = "-screen";
+			argv[n++] = scr;
+			argv[n] = NULL;
+		}
 	}
 	proc = SDL_CreateProcess((const char * const *)argv, false);
 	if(!proc) {
@@ -351,7 +382,6 @@ static int		g_lang;		/* texts: 0 = like the system, 1 = English, 2 = German */
 static char		g_art_root[1100];
 static int		g_skin, g_wscale = 100, g_full;	/* window size in percent of 800x640 */
 static const int	g_steps[6] = { 80, 100, 125, 150, 200, 300 };
-static SDL_Window	*g_win;
 static SDL_Renderer	*g_ren;
 static int		g_sel, g_top, g_running = 1;
 static UiWindow		g_lib, g_edit_win, g_easy_win;
@@ -861,6 +891,7 @@ static PathField g_pf[] = {
 	{ "hard7", "Hard disk 7", "", 0 },
 	{ "flop4", "3.5\" drive 2", "", 0 },
 	{ "flop2", "5.25\" drive 2", "", 0 },
+	{ "screen", "Screenshot", "", 0 },	/* shown when the Launcher shows screenshots */
 };
 #define NPF	((int)(sizeof(g_pf) / sizeof(g_pf[0])))
 
@@ -1046,7 +1077,7 @@ edit_draw(UiWindow *win, int cx, int cy)
 	y += 30;
 	{
 		/* ROM on its own row, then two columns: the 7 hard disks | the 4 floppy drives and the folders */
-		static const int left[] = { 1, 2, 3, 9, 10, 11, 12 }, right[] = { 4, 13, 5, 14, 6, 7, 8 };
+		static const int left[] = { 1, 2, 3, 9, 10, 11, 12, -1 }, right[] = { 4, 13, 5, 14, 6, 7, 8, 15 };
 		int	colw = (win->w - 2 - 20 - 12) / 2, c, r, bl = text_w(T("Lib"), 36), bc = text_w("...", 30), bx = 24;
 
 		/* a narrower label column for the two-column part */
@@ -1070,9 +1101,16 @@ edit_draw(UiWindow *win, int cx, int cy)
 		for(c = 0; c < 2; c++) {
 			int	x0 = 10 + c * (colw + 12), xx = x0 + colw - bx, xc = xx - 2 - bc, xl = xc - 2 - bl;
 
-			for(r = 0; r < 7; r++) {
-				PathField *f = &g_pf[c ? right[r] : left[r]];
-				int	yy = y + r * 24, disk = !f->folder && strcmp(f->key, "cover") != 0;
+			for(r = 0; r < 8; r++) {
+				int	fi = c ? right[r] : left[r];
+				PathField *f;
+				int	yy = y + r * 24, disk;
+
+				if(fi < 0) {
+					continue;
+				}
+				f = &g_pf[fi];
+				disk = !f->folder && strcmp(f->key, "cover") != 0 && strcmp(f->key, "screen") != 0;
 
 				ui_draw_text(cx + x0, cy + yy + 1, T(f->label), UI_BLACK);
 				field(win, cx, cy, x0 + lw, yy, (disk ? xl : xc) - 4 - x0 - lw, f->buf, sizeof(f->buf));
@@ -1087,7 +1125,7 @@ edit_draw(UiWindow *win, int cx, int cy)
 				}
 			}
 		}
-		y += 7 * 24;
+		y += 8 * 24;
 	}
 	y += 6;
 	ui_hline(cx + 10, cy + y, win->w - 22, UI_LGREY);
@@ -1174,7 +1212,7 @@ edit_open_full(void)
 	focus_clear();
 	snprintf(g_edit_win.title, sizeof(g_edit_win.title), "%s", g_e.is_new ? T("New Profile") : T("Edit Profile"));
 	g_edit_win.w = 740;
-	g_edit_win.h = 590;
+	g_edit_win.h = 614;
 	g_edit_win.modal = 1;
 	g_edit_win.closable = 1;
 	g_edit_win.draw = edit_draw;
@@ -1324,6 +1362,16 @@ easy_picture_choose(void)
 	SDL_ShowOpenFileDialog(pick_cb, NULL, g_win, filters, 1, NULL, false);
 }
 
+static void
+easy_screen_choose(void)
+{
+	static const SDL_DialogFileFilter filters[] = { { "Pictures", "png;jpg;jpeg;bmp" } };
+
+	g_pick_target = g_pf[15].buf;
+	g_pick_cap = (int)sizeof(g_pf[15].buf);
+	SDL_ShowOpenFileDialog(pick_cb, NULL, g_win, filters, 1, NULL, false);
+}
+
 /* one disk line: a name box, Library, Choose, clear */
 static void
 easy_disk_row(UiWindow *win, int cx, int cy, int y, int lc, const char *label, int fi, int is_rom)
@@ -1390,7 +1438,7 @@ easy_draw(UiWindow *win, int cx, int cy)
 	}
 	bx = 10 + pw + 14;
 	{
-		int	bw = text_w(T("Choose Picture..."), 150);
+		int	bw = SDL_max(text_w(T("Choose Picture..."), 150), text_w(T("Choose Screenshot..."), 150));
 
 		if(nbutton(win, cx, cy, bx, y, bw, 24, "Choose Picture...", 1)) {
 			easy_picture_choose();
@@ -1398,8 +1446,11 @@ easy_draw(UiWindow *win, int cx, int cy)
 		if(nbutton(win, cx, cy, bx, y + 30, bw, 24, "Remove Picture", g_pf[8].buf[0] != 0)) {
 			g_pf[8].buf[0] = 0;
 		}
-		ui_draw_text(cx + bx, cy + y + 66, T("or drop a picture"), UI_GREY);
-		ui_draw_text(cx + bx, cy + y + 84, T("or a disk here"), UI_GREY);
+		if(nbutton(win, cx, cy, bx, y + 60, bw, 24, "Choose Screenshot...", 1)) {
+			easy_screen_choose();
+		}
+		ui_draw_text(cx + bx, cy + y + 96, T("or drop a picture"), UI_GREY);
+		ui_draw_text(cx + bx, cy + y + 114, T("or a disk here"), UI_GREY);
 	}
 	y += ph + 14;
 	ui_hline(cx + 10, cy + y, win->w - 22, UI_LGREY);
@@ -1775,6 +1826,8 @@ settings_load(void)
 			g_portrait = atoi(line + 11) != 0;
 		} else if(!strncmp(line, "layout = ", 9)) {
 			fe_set_rows(atoi(line + 9));
+		} else if(!strncmp(line, "gamescreen = ", 13)) {
+			g_game_other = !strcmp(line + 13, "other");
 		} else if(!strncmp(line, "pictures = ", 11)) {
 			fe_set_art(!strcmp(line + 11, "screen"));
 		} else if(!strncmp(line, "language = ", 11)) {
@@ -1801,7 +1854,8 @@ settings_save(void)
 		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\nsound = %d\nsort = %d\nfavonly = %d\nidle = %d\n", g_wscale, g_full,
 			g_arcade ? "arcade" : "classic", g_art_root, snd_enabled(), g_sort, g_favonly, g_idle);
 		fprintf(f, "portrait = %d\nlanguage = %s\n", g_portrait, g_lang == 1 ? "en" : (g_lang == 2 ? "de" : "auto"));
-		fprintf(f, "layout = %d\npictures = %s\n", fe_rows(), fe_art() ? "screen" : "box");
+		fprintf(f, "layout = %d\npictures = %s\ngamescreen = %s\n", fe_rows(), fe_art() ? "screen" : "box",
+			g_game_other ? "other" : "this");
 		fclose(f);
 	}
 }
@@ -2648,7 +2702,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FAV = 85, C_SORT0 = 80, C_SORT1, C_SORT2, C_SORT3, C_FAVONLY = 84, C_SORT = 86, C_SOUND = 78, C_IDLE = 77, C_FULL = 79, C_PORTRAIT = 76, C_LANG = 87, C_LAY0 = 110, C_LAY1, C_LAY2, C_LAY3, C_LAYOUT, C_ARTBOX, C_ARTSCREEN, C_ART, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FAV = 85, C_SORT0 = 80, C_SORT1, C_SORT2, C_SORT3, C_FAVONLY = 84, C_SORT = 86, C_SOUND = 78, C_IDLE = 77, C_FULL = 79, C_PORTRAIT = 76, C_LANG = 87, C_LAY0 = 110, C_LAY1, C_LAY2, C_LAY3, C_LAYOUT, C_ARTBOX, C_ARTSCREEN, C_ART, C_SCRTHIS, C_SCROTHER, C_SCR, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -2691,6 +2745,8 @@ static const UiMenuItem m_view[] = {
 	{ "Layout: 3 Rows", C_LAY3, NULL, 0 },
 	{ "Pictures: Box Art", C_ARTBOX, NULL, 0 },
 	{ "Pictures: Screenshots", C_ARTSCREEN, NULL, 0 },
+	{ "Games on This Screen", C_SCRTHIS, NULL, 0 },
+	{ "Games on the Other Screen", C_SCROTHER, NULL, 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Arcade View", C_VIEW, "Cmd-0", 0 },
 };
@@ -2993,7 +3049,7 @@ art_dir_choose(void)
 /* The menu of the Arcade view (Space): the same commands the menu bar has. */
 
 static struct { const char *label; int id; } g_ovl_items[] = {
-	{ "Play", C_PLAY }, { "Details", C_INFO }, { "Favourite", C_FAV }, { "Sort", C_SORT }, { "Layout", C_LAYOUT }, { "Pictures", C_ART }, { "Edit...", C_EDIT }, { "New Game...", C_NEW },
+	{ "Play", C_PLAY }, { "Details", C_INFO }, { "Favourite", C_FAV }, { "Sort", C_SORT }, { "Layout", C_LAYOUT }, { "Pictures", C_ART }, { "Games on", C_SCR }, { "Edit...", C_EDIT }, { "New Game...", C_NEW },
 	{ "Duplicate", C_DUP }, { "Delete...", C_DEL }, { "Disks and ROMs...", C_LIB },
 	{ "Set Picture...", C_SETPIC }, { "Remove Picture...", C_RMPIC },
 	{ "Artwork Folder...", C_ARTDIR }, { "Import from Attract-Mode...", C_IMPORT },
@@ -3079,7 +3135,7 @@ ovl_open(void)
 {
 	snprintf(g_ovl.title, sizeof(g_ovl.title), "%s", T("Menu"));
 	{
-		static char fav[48], sort[48], lang[48], up[48], lay[48], art[48];
+		static char fav[48], sort[48], lang[48], up[48], lay[48], art[48], scrl[64];
 
 		snprintf(fav, sizeof(fav), "%s", g_nprof && is_fav(&g_prof[g_sel]) ? T("Remove from Favourites") : T("Add to Favourites"));
 		snprintf(sort, sizeof(sort), T("Sort: %s"), T(g_sort_names[g_sort]));
@@ -3091,6 +3147,9 @@ ovl_open(void)
 			} else if(g_ovl_items[i].id == C_LAYOUT) {
 				snprintf(lay, sizeof(lay), T("Layout: %s"), T(g_layout_names[fe_rows()]));
 				g_ovl_items[i].label = lay;
+			} else if(g_ovl_items[i].id == C_SCR) {
+				snprintf(scrl, sizeof(scrl), "%s", T(g_game_other ? "Games on the Other Screen" : "Games on This Screen"));
+				g_ovl_items[i].label = scrl;
 			} else if(g_ovl_items[i].id == C_ART) {
 				snprintf(art, sizeof(art), T("Pictures: %s"), T(fe_art() ? "Screenshots" : "Box Art"));
 				g_ovl_items[i].label = art;
@@ -3199,6 +3258,14 @@ app_command(int id)
 		snd_play(SND_SELECT);
 		settings_save();
 		break;
+	case C_SCRTHIS: case C_SCROTHER: case C_SCR:
+		g_game_other = id == C_SCR ? !g_game_other : id == C_SCROTHER;
+		if(g_game_other && !other_screen()) {
+			ui_message("%s", T("Only one screen is connected now: games open on it"));
+		}
+		snd_play(SND_SELECT);
+		settings_save();
+		break;
 	case C_ARTBOX: case C_ARTSCREEN: case C_ART:
 		fe_set_art(id == C_ART ? !fe_art() : id == C_ARTSCREEN);
 		snd_play(SND_SELECT);
@@ -3269,6 +3336,9 @@ app_state(int id)
 	}
 	if(id >= C_LAY0 && id <= C_LAY3) {
 		return fe_rows() == id - C_LAY0 ? UI_MI_CHECKED : 0;
+	}
+	if(id == C_SCRTHIS || id == C_SCROTHER) {
+		return g_game_other == (id == C_SCROTHER) ? UI_MI_CHECKED : 0;
 	}
 	if(id == C_ARTBOX || id == C_ARTSCREEN) {
 		return fe_art() == (id == C_ARTSCREEN) ? UI_MI_CHECKED : 0;

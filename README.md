@@ -313,7 +313,10 @@ the window); **Return** starts EmuBuddy with the matching command line (see [Com
   3 Rows: a grid of three columns in the style of Arcadeflow that scrolls sideways (Left/Right move a column, Up/Down
   within it). Space > Pictures switches the covers between box art and screenshots: a game's `screen` picture (a key in
   its profile), the last screen EmuBuddy saved, or a picture from a `snap`/`screenshots` folder, else the box. Both are
-  in the View menu of the Classic view too and are saved in `Launcher.settings` (`layout`, `pictures`).
+  in the View menu of the Classic view too and are saved in `Launcher.settings` (`layout`, `pictures`). The editors
+  have a Screenshot field (Choose Screenshot... in the simple one) for the `screen` picture.
+- **Two screens:** Space > Games on the Other Screen opens every game on a screen the launcher is not on (EmuBuddy's
+  `-screen <n>`), so the launcher stays on your main screen and the game fills the other one.
 - **Portrait screens:** when the window is taller than wide the view changes to a portrait layout (a big picture on
   top, the row of covers below). It does so by itself on a turned screen; View > Portrait Window (or the Space menu)
   opens an upright window.

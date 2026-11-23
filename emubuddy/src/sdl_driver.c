@@ -580,17 +580,51 @@ sdl_video_init(void)
 #else
 	g_skin = 0;
 #endif
-	g_mainwin_info.window = SDL_CreateWindow(emubuddy_cli_title()[0] ?
-			emubuddy_cli_title() : "EmuBuddy",
-				w, h + UI_TOP_H + UI_BOT_H, flags);
-	if(!g_mainwin_info.window) {
-		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
-		exit(1);
-	}
-	SDL_StartTextInput(g_mainwin_info.window);	/* host layout characters */
-	if(!g_fullscreen) {
-		SDL_SetWindowPosition(g_mainwin_info.window,
-					g_mainwin_xpos, g_mainwin_ypos);
+	{
+		/* -screen n: the window (or full screen) on that screen, in the
+		 * order the system lists them; 1 is the main screen */
+		SDL_PropertiesID	props = SDL_CreateProperties();
+		SDL_DisplayID		*disp, on = 0;
+		int			nd = 0, want = emubuddy_cli_screen();
+
+		disp = SDL_GetDisplays(&nd);
+		if(want > 0 && disp && want <= nd) {
+			on = disp[want - 1];
+		} else if(want > 0) {
+			printf("EmuBuddy: there is no screen %d (%d found), using the "
+						"main screen\n", want, nd);
+		}
+		SDL_free(disp);
+		SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING,
+			emubuddy_cli_title()[0] ? emubuddy_cli_title() : "EmuBuddy");
+		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, w);
+		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER,
+						h + UI_TOP_H + UI_BOT_H);
+		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, flags);
+		if(on) {
+			SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER,
+					SDL_WINDOWPOS_CENTERED_DISPLAY(on));
+			SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER,
+					SDL_WINDOWPOS_CENTERED_DISPLAY(on));
+		}
+		g_mainwin_info.window = SDL_CreateWindowWithProperties(props);
+		SDL_DestroyProperties(props);
+		if(!g_mainwin_info.window) {
+			printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
+			exit(1);
+		}
+		SDL_StartTextInput(g_mainwin_info.window);	/* host layout characters */
+		if(on) {
+			SDL_DisplayID got = SDL_GetDisplayForWindow(g_mainwin_info.window);
+
+			printf("EmuBuddy: screen %d, %s%s\n", want,
+				SDL_GetDisplayName(got) ? SDL_GetDisplayName(got) : "?",
+				got == on ? "" : " (not the one asked for)");
+		}
+		if(!g_fullscreen && !on) {
+			SDL_SetWindowPosition(g_mainwin_info.window,
+						g_mainwin_xpos, g_mainwin_ypos);
+		}
 	}
 
 	/* Window/taskbar icon for Linux and Windows. Not on macOS: SDL3's

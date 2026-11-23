@@ -23,7 +23,7 @@ static char	*g_out[512];
 static int	g_nout;
 static char	*g_later_insert[32];	/* shares and loose images */
 static int	g_nlater;
-static int	g_win_w, g_win_h, g_scale;
+static int	g_win_w, g_win_h, g_scale, g_screen;	/* g_screen: -screen, 1 = main */
 static char	g_title[200], g_profile[100];
 
 /* 1 when the Launcher started this EmuBuddy (it always passes -profile) */
@@ -123,6 +123,7 @@ usage(void)
 "  -scale <n>           window size as a multiple of the IIgs screen\n"
 "  -crt                 curved CRT effect\n"
 "  -nostatus            no status bar under the picture\n"
+"  -screen <n>          open on screen n: 1 the main screen, 2 the next one\n"
 "  -scanlines <0-100>   scanline strength\n"
 "\n"
 "Other:\n"
@@ -321,6 +322,12 @@ show_config(void)
 	}
 }
 
+int
+emubuddy_cli_screen(void)
+{
+	return g_screen;
+}
+
 const char *
 emubuddy_cli_title(void)
 {
@@ -408,7 +415,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 				is(o, "-mhz") || is(o, "-ramsize") ||
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines") ||
-				is(o, "-title") || is(o, "-profile") || is(o, "-quitshot"))) {
+				is(o, "-title") || is(o, "-profile") || is(o, "-quitshot") || is(o, "-screen"))) {
 			fprintf(stderr, "EmuBuddy: %s needs a value (see -help)\n", a);
 			return -1;
 		}
@@ -488,6 +495,13 @@ emubuddy_cli(int *pargc, char ***pargv)
 							"1408x1136\n");
 				return -1;
 			}
+		} else if(is(o, "-screen")) {
+			g_screen = atoi(v);
+			if(g_screen < 1 || g_screen > 16) {
+				fprintf(stderr, "EmuBuddy: -screen 1 (the main screen) to 16\n");
+				return -1;
+			}
+			any = 1;
 		} else if(is(o, "-scale")) {
 			g_scale = atoi(v);
 			if(g_scale < 1 || g_scale > 8) {
