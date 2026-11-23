@@ -9,7 +9,7 @@
   Menus, windows, drag and drop, printing, internet and file exchange with your computer, all without typing a command.
 </p>
 
-![EmuBuddy running System 6 on macOS](docs/screenshots/desktop.png)
+![EmuBuddy running System 6](docs/screenshots/desktop.png)
 
 EmuBuddy is built on [KEGS](http://kegs.sourceforge.net), Kent Dickey's Apple IIgs emulator, through the
 [GSplus](https://github.com/digarok/gsplus) SDL3 build. The emulator core is the proven KEGS one. What EmuBuddy adds is
@@ -53,7 +53,9 @@ It runs on **macOS (Apple Silicon)**, **Windows (x64)** and **Linux (x64 and arm
 | ![Printer window](docs/screenshots/printer.png) | ![Disk Browser](docs/screenshots/browser.png) |
 | **Printer.** Pages from the IIgs, ready to save as PDF, print or open. | **Disk Browser.** Look inside any ProDOS disk image and take files out. |
 | ![Drop Destination window](docs/screenshots/dropdest.png) | ![Machine menu](docs/screenshots/machine.png) |
-| **Drop Destination.** Files you drop go to the front Finder window, or to a folder you choose. | **Machine menu.** Soft and hard reset, pause, slots, printer. |
+| **Drop Destination.** Files you drop go to the front Finder window, or to a folder you choose. | **Machine menu.** Soft and hard reset, pause, slots, printer, controllers. |
+| ![Controllers window](docs/screenshots/controllers.png) | |
+| **Controllers.** The joystick you have, its stick and buttons as they move, and what the IIgs program reads. | |
 
 ## Getting started
 
