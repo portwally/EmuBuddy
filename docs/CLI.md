@@ -54,6 +54,7 @@ used when its slot is set to "Your Card" in the IIgs Control Panel.
 | `-resolution <WxH>` | window size, e.g. `1408x1136` |
 | `-scale <n>` | window size as a multiple of the IIgs screen (made smaller if it doesn't fit the screen) |
 | `-crt` | curved CRT effect |
+| `-nostatus` | no status bar under the picture (the EmuBuddy Launcher passes it when a game's Status bar box is off) |
 | `-scanlines <0-100>` | scanline strength |
 
 ## Other

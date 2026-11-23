@@ -296,7 +296,10 @@ the window); **Return** starts EmuBuddy with the matching command line (see [Com
 - **Sounds:** short soft interface sounds when you move, choose, open the menu and start a game. Switch them off under
   View > Sounds (or in the Space menu).
 - **Simple editor:** Edit and New Game show a small window with the name, the picture, a main disk and a floppy, and
-  switches for sound card, internet, printer, fast and full screen. "More settings..." opens the full editor.
+  switches for sound card, internet, printer, fast, full screen and the status bar. "More settings..." opens the full
+  editor.
+- **The game in front:** on the Mac a game the launcher starts comes to the front by itself, so the first key or
+  joystick button reaches it without a click. EmuBuddy also tells macOS not to slow it down as a background program.
 - **Keys:** Left/Right move, Return plays, Tab shows the details page, Space opens the menu, type to search, Esc goes
   back. The mouse works too (click, double-click, wheel). A **Classic view** with windows, menus and skins is a switch
   away (Space > Classic View).

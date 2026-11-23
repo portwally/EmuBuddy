@@ -213,7 +213,7 @@ ui_window_center(UiWindow *w)
 	int	lh = g_lh ? g_lh : 440;
 
 	w->x = (lw - w->w) / 2;
-	w->y = UI_TOP_H + (lh - UI_TOP_H - UI_BAR_H - w->h) / 2;
+	w->y = UI_TOP_H + (lh - UI_TOP_H - UI_BOT_H - w->h) / 2;
 	if(w->y < UI_TOP_H) {
 		w->y = UI_TOP_H;
 	}
@@ -439,7 +439,7 @@ menu_dropdown_hit(float px, float py)
 static int
 over_ui(float px, float py)
 {
-	if(py < UI_TOP_H || py >= g_lh - UI_BAR_H) {
+	if(py < UI_TOP_H || py >= g_lh - UI_BOT_H) {
 		return 1;
 	}
 	if(menu_dropdown_hit(px, py)) {
@@ -479,8 +479,8 @@ handle_mouse(SDL_Event *ev)
 			if(nx < 40 - g_cap_win->w) nx = 40 - g_cap_win->w;
 			if(nx > g_lw - 40) nx = g_lw - 40;
 			if(ny < UI_TOP_H) ny = UI_TOP_H;
-			if(ny > g_lh - UI_BAR_H - UI_TITLE_H)
-				ny = g_lh - UI_BAR_H - UI_TITLE_H;
+			if(ny > g_lh - UI_BOT_H - UI_TITLE_H)
+				ny = g_lh - UI_BOT_H - UI_TITLE_H;
 			g_cap_win->x = nx;
 			g_cap_win->y = ny;
 		}
@@ -1316,7 +1316,7 @@ ui_draw(int lw, int lh)
 	}
 	run_posted();
 	if(g_app->cover_picture && g_app->cover_picture()) {
-		ui_fill(0, UI_TOP_H, lw, lh - UI_TOP_H - UI_BAR_H, UI_BLACK);
+		ui_fill(0, UI_TOP_H, lw, lh - UI_TOP_H - UI_BOT_H, UI_BLACK);
 	}
 	{
 		UiWindow *snap[UI_MAX_WINDOWS];

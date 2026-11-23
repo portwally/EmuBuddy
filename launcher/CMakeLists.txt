@@ -64,6 +64,8 @@ set(LAUNCHER_LIB ${CMAKE_CURRENT_SOURCE_DIR}/../emubuddy/lib)
 
 file(GLOB LAUNCHER_FONT_FILES ${CMAKE_CURRENT_SOURCE_DIR}/fonts/*.ttf)
 if(APPLE)
+    enable_language(OBJC)
+    list(APPEND LAUNCHER_SOURCES src/launcher_mac.m)
     list(APPEND LAUNCHER_SOURCES ${LAUNCHER_FONT_FILES})
     set_source_files_properties(${LAUNCHER_FONT_FILES} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/fonts)
     set(LAUNCHER_ICON ${LAUNCHER_LIB}/launchericon.icns)
@@ -83,6 +85,9 @@ target_compile_definitions(emubuddy-launcher PRIVATE
     UI_THEMABLE=1
     LAUNCHER_VERSION_STR="${EMUBUDDY_VERSION}")
 target_link_libraries(emubuddy-launcher PRIVATE launcher_profile launcher_library launcher_jpeg SDL3::SDL3 $<$<NOT:$<PLATFORM_ID:Windows>>:m>)
+if(APPLE)
+    target_link_libraries(emubuddy-launcher PRIVATE "-framework AppKit")
+endif()
 
 if(APPLE)
     set_target_properties(emubuddy-launcher PROPERTIES

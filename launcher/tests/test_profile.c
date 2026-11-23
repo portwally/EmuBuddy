@@ -49,6 +49,12 @@ main(void)
 						PROFILE_MAX_ARGS, err, sizeof(err));
 		profile_cmdline(argv, n, line2, sizeof(line2));
 		CHECK(n > 0 && !strstr(line2, "-quitshot"));
+		CHECK(!strstr(line2, "-nostatus"));	/* the status bar is shown */
+		profile_set(&off, "statusbar", "0");
+		n = profile_build_args(&off, "EmuBuddy", "/data/Games", buf, sizeof(buf), argv,
+						PROFILE_MAX_ARGS, err, sizeof(err));
+		profile_cmdline(argv, n, line2, sizeof(line2));
+		CHECK(n > 0 && strstr(line2, "-nostatus"));
 	}
 	CHECK(strstr(line, "-g_limit_speed 0"));
 	CHECK(strstr(line, "-title \"two words\""));

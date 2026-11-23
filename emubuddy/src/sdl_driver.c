@@ -451,7 +451,8 @@ sdl_mask_scale(Window_info *win)
  * turned off for the draw and restored right after (mouse-coordinate mapping
  * needs it). */
 /* The window is the IIgs picture plus a menu bar above and a status bar
- * below (UI_BAR_H each). The renderer's logical size covers all three; the
+ * below (UI_BAR_H each; -nostatus leaves the status bar out). The
+ * renderer's logical size covers all three; the
  * viewport confines the emulator picture (and the CRT effects) to the middle.
  * "off" is for passes that draw in host-pixel space. */
 static void
@@ -461,7 +462,7 @@ sdl_logical_on(Window_info *win)
 
 	SDL_SetRenderViewport(win->renderer, NULL);
 	SDL_SetRenderLogicalPresentation(win->renderer, win->width_req,
-		win->main_height + UI_TOP_H + UI_BAR_H,
+		win->main_height + UI_TOP_H + UI_BOT_H,
 		g_noaspect ? SDL_LOGICAL_PRESENTATION_STRETCH
 			   : SDL_LOGICAL_PRESENTATION_LETTERBOX);
 	vp.x = 0;
@@ -581,7 +582,7 @@ sdl_video_init(void)
 #endif
 	g_mainwin_info.window = SDL_CreateWindow(emubuddy_cli_title()[0] ?
 			emubuddy_cli_title() : "EmuBuddy",
-				w, h + UI_TOP_H + UI_BAR_H, flags);
+				w, h + UI_TOP_H + UI_BOT_H, flags);
 	if(!g_mainwin_info.window) {
 		printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
 		exit(1);
@@ -651,7 +652,9 @@ sdl_video_init(void)
 	if(g_skin == 1) {
 		mac_native_menu_enable(1);
 	}
+	sdl_mac_app_start();
 #endif
+	SDL_RaiseWindow(g_mainwin_info.window);
 }
 
 void	sdl_set_window_scale(int s);
@@ -1828,9 +1831,36 @@ sdl_dev_snapshot(Window_info *win)
 	int		f, x, y, n;
 
 	frames++;
+	if(getenv("EMUBUDDY_FRAMELOG")) {	/* frames per second, longest gap */
+		static Uint64	t0, last;
+		static int	n;
+		static double	worst;
+		Uint64		now = SDL_GetTicksNS();
+		double		gap = last ? (now - last) / 1e6 : 0;
+
+		if(gap > worst) {
+			worst = gap;
+		}
+		last = now;
+		n++;
+		if(!t0) {
+			t0 = now;
+		} else if(now - t0 >= 1000000000ull) {
+#ifdef __APPLE__
+			printf("EMUBUDDY frames %d, longest %.1f ms, active %d\n", n,
+						worst, sdl_mac_app_active());
+#else
+			printf("EMUBUDDY frames %d, longest %.1f ms\n", n, worst);
+#endif
+			fflush(stdout);
+			t0 = now;
+			n = 0;
+			worst = 0;
+		}
+	}
 	if(frames == 2 && getenv("EMUBUDDY_DROPS")) {
 		printf("EMUBUDDY logical %dx%d\n", win->width_req,
-					win->main_height + UI_TOP_H + UI_BAR_H);
+					win->main_height + UI_TOP_H + UI_BOT_H);
 	}
 	sdl_dev_drops(win, frames);
 	if(getenv("EMUBUDDY_CLOSEAT") && atoi(getenv("EMUBUDDY_CLOSEAT")) == frames) {
@@ -1978,12 +2008,12 @@ sdl_fit_scale(Window_info *win, int want)
 	if(getenv("EMUBUDDY_USABLE") &&		/* test aid: "WxH" pretends this screen */
 			sscanf(getenv("EMUBUDDY_USABLE"), "%dx%d", &r.w, &r.h) == 2) {
 		while(s > 1 && (win->width_req * s > r.w ||
-			(win->main_height + UI_TOP_H + UI_BAR_H) * s + 40 > r.h)) {
+			(win->main_height + UI_TOP_H + UI_BOT_H) * s + 40 > r.h)) {
 			s--;
 		}
 	} else if(SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(win->window), &r)) {
 		while(s > 1 && (win->width_req * s > r.w ||
-			(win->main_height + UI_TOP_H + UI_BAR_H) * s + 40 > r.h)) {
+			(win->main_height + UI_TOP_H + UI_BOT_H) * s + 40 > r.h)) {
 			s--;
 		}
 	}
@@ -2010,7 +2040,7 @@ sdl_set_window_scale(int s)
 		sdl_sync_fullscreen(win);
 	}
 	SDL_SetWindowSize(win->window, win->width_req * g_window_scale,
-			(win->main_height + UI_TOP_H + UI_BAR_H) * g_window_scale);
+			(win->main_height + UI_TOP_H + UI_BOT_H) * g_window_scale);
 }
 
 static void
@@ -2036,7 +2066,7 @@ sdl_apply_cli(void)
 		}
 		g_window_scale = scale;
 		SDL_SetWindowSize(win->window, win->width_req * scale,
-				(win->main_height + UI_TOP_H + UI_BAR_H) * scale);
+				(win->main_height + UI_TOP_H + UI_BOT_H) * scale);
 	}
 	if(w > 0 && h > 0) {
 		g_cli_fixed_size = 1;
@@ -2064,7 +2094,7 @@ sdl_grab_picture(Window_info *win, int whole)
 	SDL_FRect	lr;
 
 	if(!whole && SDL_GetRenderLogicalPresentationRect(win->renderer, &lr)) {
-		float th = (float)(win->main_height + UI_TOP_H + UI_BAR_H);
+		float th = (float)(win->main_height + UI_TOP_H + UI_BOT_H);
 
 		pic.x = (int)lr.x;
 		pic.y = (int)(lr.y + lr.h * UI_TOP_H / th);
@@ -2452,7 +2482,7 @@ sdl_update_display(Window_info *win)
 			int sc = sdl_fit_scale(win, g_window_scale);
 
 			SDL_SetWindowSize(win->window, w * sc,
-					(h + UI_TOP_H + UI_BAR_H) * sc);
+					(h + UI_TOP_H + UI_BOT_H) * sc);
 		}
 		/* Honor -noaspect here too, matching init and the CRT path; otherwise
 		 * a stretched view reverts to letterbox after the first mode change. */
@@ -2520,7 +2550,7 @@ sdl_update_display(Window_info *win)
 		sdl_record_frame(win);
 	}
 
-	ui_draw(win->width_req, win->main_height + UI_TOP_H + UI_BAR_H);
+	ui_draw(win->width_req, win->main_height + UI_TOP_H + UI_BOT_H);
 	if(g_screenshot_window_requested) {
 		g_screenshot_window_requested = 0;
 		sdl_save_screenshot(win, 1);

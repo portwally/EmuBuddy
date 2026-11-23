@@ -292,6 +292,9 @@ profile_build_args(const Profile *p, const char *exe, const char *cfgdir,
 	if(!is_off(profile_get(p, "crt"))) {
 		add(&o, "-crt");
 	}
+	if((v = profile_get(p, "statusbar"))[0] && is_off(v)) {
+		add(&o, "-nostatus");
+	}
 	if((v = profile_get(p, "scanlines"))[0]) {
 		add(&o, "-scanlines");
 		add(&o, v);

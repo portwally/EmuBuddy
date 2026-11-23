@@ -73,6 +73,41 @@ sdl_mac_hide_app(void)
 	}
 }
 
+/* At start: EmuBuddy is the front application, so keys and the joystick
+ * reach the IIgs without a click first, also when the Launcher started it.
+ * And no App Nap: macOS slows a background application's timers and lowers
+ * its priority, which makes the emulation stutter. */
+void
+sdl_mac_app_start(void)
+{
+	static id	activity;
+
+	@autoreleasepool {
+		if(!activity) {
+			activity = [[NSProcessInfo processInfo] beginActivityWithOptions:
+				NSActivityUserInitiatedAllowingIdleSystemSleep |
+				NSActivityLatencyCritical
+				reason:@"Emulating an Apple IIgs"];
+			[activity retain];	/* kept for the whole run (no ARC here) */
+		}
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+		if(@available(macOS 14.0, *)) {
+			[NSApp activate];
+		} else {
+			[NSApp activateIgnoringOtherApps:YES];
+		}
+#pragma clang diagnostic pop
+	}
+}
+
+/* 1 while EmuBuddy is the front application */
+int
+sdl_mac_app_active(void)
+{
+	return [NSApp isActive] ? 1 : 0;
+}
+
 /* 1 while EmuBuddy is hidden (the close button or Command-H) */
 int
 sdl_mac_app_hidden(void)

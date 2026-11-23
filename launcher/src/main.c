@@ -247,6 +247,10 @@ build(const Profile *p, char *buf, int bsz, char **argv, char *err, int esz, int
 	return profile_build_args(p, exe, data, buf, bsz, argv, PROFILE_MAX_ARGS, err, esz);
 }
 
+#ifdef __APPLE__
+void	launcher_mac_front(SDL_Process *proc);	/* launcher_mac.m */
+#endif
+
 static int
 play(const Profile *p, char *msg, size_t msgsz)
 {
@@ -269,6 +273,9 @@ play(const Profile *p, char *msg, size_t msgsz)
 		snprintf(msg, msgsz, T("Could not start EmuBuddy: %s"), SDL_GetError());
 		return -1;
 	}
+#ifdef __APPLE__
+	launcher_mac_front(proc);	/* the game gets the keys without a click */
+#endif
 	SDL_DestroyProcess(proc);
 	snprintf(msg, msgsz, T("Started %s"), profile_name(p));
 	return 0;
@@ -859,7 +866,7 @@ static PathField g_pf[] = {
 static struct {
 	Profile	p;
 	char	name[100], desc[200], extra[300];
-	int	crt, full, is_new;
+	int	crt, full, bar, is_new;	/* bar: the status bar under the picture */
 	char	orig_path[1100];
 } g_e;
 
@@ -912,6 +919,7 @@ edit_load(const Profile *src, int is_new)
 	snprintf(g_e.extra, sizeof(g_e.extra), "%s", profile_get(src, "extra"));
 	g_e.crt = !!profile_get(src, "crt")[0] && strcmp(profile_get(src, "crt"), "0");
 	g_e.full = !!profile_get(src, "fullscreen")[0] && strcmp(profile_get(src, "fullscreen"), "0");
+	g_e.bar = strcmp(profile_get(src, "statusbar"), "0") != 0;
 	for(int i = 0; i < NCH; i++) {
 		g_ch[i].sel = idx_of(&g_ch[i], profile_get(src, g_ch[i].key));
 	}
@@ -959,6 +967,7 @@ edit_save(void)
 	}
 	set_keep(&g_e.p, "crt", g_e.crt ? "1" : "");
 	set_keep(&g_e.p, "fullscreen", g_e.full ? "1" : "");
+	set_keep(&g_e.p, "statusbar", g_e.bar ? "" : "0");
 	file_name_for(g_e.name, path, sizeof(path));
 	if(profile_save(&g_e.p, path) != 0) {
 		snprintf(g_toast, sizeof(g_toast), T("Could not save %s"), path);
@@ -1096,6 +1105,8 @@ edit_draw(UiWindow *win, int cx, int cy)
 	}
 	ncheck(win, cx, cy, 10, y, "Curved CRT look", &g_e.crt);
 	ncheck(win, cx, cy, 30 + ui_text_width(T("Curved CRT look")) + 20, y, "Full screen", &g_e.full);
+	ncheck(win, cx, cy, 30 + ui_text_width(T("Curved CRT look")) + 20 + 30 +
+			ui_text_width(T("Full screen")) + 20, y, "Status bar", &g_e.bar);
 	y += 24;
 	ui_draw_text(cx + 10, cy + y + 1, T("Extra options"), UI_BLACK);
 	field(win, cx, cy, lc, y, win->w - 2 - 10 - lc, g_e.extra, sizeof(g_e.extra));
@@ -1417,6 +1428,8 @@ easy_draw(UiWindow *win, int cx, int cy)
 		}
 		ncheck(win, cx, cy, x2, y, "Full screen", &g_e.full);
 		ncheck(win, cx, cy, x2 + ui_text_width(T("Full screen")) + 60, y, "Curved screen", &g_e.crt);
+		y += 26;
+		ncheck(win, cx, cy, x2, y, "Status bar", &g_e.bar);
 	}
 	y += 40;
 	{
@@ -1451,7 +1464,7 @@ edit_open(const Profile *src, int is_new)
 	focus_clear();
 	snprintf(g_easy_win.title, sizeof(g_easy_win.title), "%s", is_new ? T("New Game") : T("Edit Game"));
 	g_easy_win.w = 560;
-	g_easy_win.h = 20 + 10 + 34 + 150 + 14 + 10 + 60 + 36 + 10 + 26 + 40 + 26 - 6;
+	g_easy_win.h = 20 + 10 + 34 + 150 + 14 + 10 + 60 + 36 + 10 + 26 + 26 + 40 + 26 - 6;
 	g_easy_win.modal = 1;
 	g_easy_win.closable = 1;
 	g_easy_win.draw = easy_draw;

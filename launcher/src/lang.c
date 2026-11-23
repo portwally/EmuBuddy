@@ -132,6 +132,7 @@ static const struct { const char *en, *de; } g_text[] = {
 	{ "Fast (16 MHz)", "Schnell (16 MHz)" },
 	{ "Full screen", "Vollbild" },
 	{ "Curved screen", "Gewölbter Schirm" },
+	{ "Status bar", "Statuszeile" },
 	{ "Curved CRT look", "Gewölbter Röhrenschirm" },
 	{ "More settings...", "Mehr Einstellungen..." },
 	{ "Cancel", "Abbrechen" },

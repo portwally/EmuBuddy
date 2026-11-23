@@ -25,6 +25,9 @@ int	write_png_rgba(const char *path, const unsigned char *rgba,
 void	sdl_mac_fix_menu(void);
 /* Hide EmuBuddy (like Command-H); clicking its Dock icon brings it back */
 void	sdl_mac_hide_app(void);
+/* Front application at start, and no App Nap */
+void	sdl_mac_app_start(void);
+int	sdl_mac_app_active(void);
 /* 1 while EmuBuddy is hidden; the sound pauses then */
 int	sdl_mac_app_hidden(void);
 #endif

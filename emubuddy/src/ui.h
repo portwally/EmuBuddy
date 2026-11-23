@@ -13,6 +13,7 @@
 extern int	g_ui_hide_status;	/* 1: no status bar (Launcher front end) */
 extern int	g_ui_top_h;		/* drawn menu bar height: 20, or 0 with the native menu bar */
 #define UI_TOP_H	g_ui_top_h
+#define UI_BOT_H	(g_ui_hide_status ? 0 : UI_BAR_H)	/* status bar height */
 #define UI_FONT_H	16
 #define UI_MAX_WINDOWS	16
 

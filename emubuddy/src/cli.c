@@ -122,6 +122,7 @@ usage(void)
 "  -resolution <WxH>    window size in pixels, e.g. 1408x1136\n"
 "  -scale <n>           window size as a multiple of the IIgs screen\n"
 "  -crt                 curved CRT effect\n"
+"  -nostatus            no status bar under the picture\n"
 "  -scanlines <0-100>   scanline strength\n"
 "\n"
 "Other:\n"
@@ -385,6 +386,13 @@ emubuddy_cli(int *pargc, char ***pargv)
 		if(is(o, "-nowindow") ||
 				(is(o, "-fullscreen") && (!v || v[0] == '-'))) {
 			emit2("-fullscreen", "1");
+			any = 1;
+			continue;
+		}
+		if(is(o, "-nostatus")) {
+			extern int g_ui_hide_status;	/* ui.c */
+
+			g_ui_hide_status = 1;
 			any = 1;
 			continue;
 		}
