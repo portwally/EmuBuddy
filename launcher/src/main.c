@@ -102,6 +102,7 @@ enum_cb(void *ud, const char *dirname, const char *fname)
 static int	g_sort;			/* 0 A-Z, 1 favourites first, 2 last played, 3 most played */
 static int	g_favonly;
 static const char *g_sort_names[] = { "A-Z", "Favourites first", "Last played", "Most played" };
+static const char *g_layout_names[] = { "Carousel", "1 Row", "2 Rows", "3 Rows" };
 
 static int
 is_fav(const Profile *p)
@@ -1283,8 +1284,15 @@ easy_preview(int *w, int *h)
 
 	profile_set(&tmp, "name", g_e.name);
 	profile_set(&tmp, "cover", g_pf[8].buf);
-	if(!fe_find_art(&tmp, g_art_root, 0, path, sizeof(path))) {
-		return NULL;
+	{
+		int	scr = fe_art(), found;
+
+		fe_set_art(0);			/* the editor shows the box picture it chooses */
+		found = fe_find_art(&tmp, g_art_root, 0, path, sizeof(path));
+		fe_set_art(scr);
+		if(!found) {
+			return NULL;
+		}
 	}
 	if(strcmp(path, g_prev_path) != 0) {
 		SDL_Surface *sf = fe_load_picture(path);
@@ -1765,6 +1773,10 @@ settings_load(void)
 			snd_enable(atoi(line + 8) != 0);
 		} else if(!strncmp(line, "portrait = ", 11)) {
 			g_portrait = atoi(line + 11) != 0;
+		} else if(!strncmp(line, "layout = ", 9)) {
+			fe_set_rows(atoi(line + 9));
+		} else if(!strncmp(line, "pictures = ", 11)) {
+			fe_set_art(!strcmp(line + 11, "screen"));
 		} else if(!strncmp(line, "language = ", 11)) {
 			g_lang = !strcmp(line + 11, "en") ? 1 : (!strcmp(line + 11, "de") ? 2 : 0);
 		}
@@ -1789,6 +1801,7 @@ settings_save(void)
 		fprintf(f, "size = %d\nfullscreen = %d\nview = %s\nartwork = %s\nsound = %d\nsort = %d\nfavonly = %d\nidle = %d\n", g_wscale, g_full,
 			g_arcade ? "arcade" : "classic", g_art_root, snd_enabled(), g_sort, g_favonly, g_idle);
 		fprintf(f, "portrait = %d\nlanguage = %s\n", g_portrait, g_lang == 1 ? "en" : (g_lang == 2 ? "de" : "auto"));
+		fprintf(f, "layout = %d\npictures = %s\n", fe_rows(), fe_art() ? "screen" : "box");
 		fclose(f);
 	}
 }
@@ -2635,7 +2648,7 @@ about_open(void)
 
 /* ---- menus ---- */
 
-enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FAV = 85, C_SORT0 = 80, C_SORT1, C_SORT2, C_SORT3, C_FAVONLY = 84, C_SORT = 86, C_SOUND = 78, C_IDLE = 77, C_FULL = 79, C_PORTRAIT = 76, C_LANG = 87, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
+enum { C_VIEW = 60, C_INFO, C_ARTDIR, C_IMPORT, C_SETPIC, C_RMPIC, C_SIZE1 = 70, C_SIZE2, C_SIZE3, C_SIZE4, C_SIZE5, C_SIZE6, C_FAV = 85, C_SORT0 = 80, C_SORT1, C_SORT2, C_SORT3, C_FAVONLY = 84, C_SORT = 86, C_SOUND = 78, C_IDLE = 77, C_FULL = 79, C_PORTRAIT = 76, C_LANG = 87, C_LAY0 = 110, C_LAY1, C_LAY2, C_LAY3, C_LAYOUT, C_ARTBOX, C_ARTSCREEN, C_ART, C_CUT = 90, C_COPY, C_PASTE, C_SELALL, C_SKIN0 = 100, C_NEW = 1, C_DUP, C_DEL, C_FOLDER, C_QUIT, C_PLAY, C_EDIT, C_ABOUT, C_LIB };
 
 static const UiMenuItem m_file[] = {
 	{ "New Profile", C_NEW, "Cmd-N", 0 },
@@ -2671,6 +2684,13 @@ static const UiMenuItem m_view[] = {
 	{ "Sort: Last Played", C_SORT2, NULL, 0 },
 	{ "Sort: Most Played", C_SORT3, NULL, 0 },
 	{ "Favourites Only", C_FAVONLY, NULL, 0 },
+	{ "", 0, NULL, UI_MI_SEP },
+	{ "Layout: Carousel", C_LAY0, NULL, 0 },
+	{ "Layout: 1 Row", C_LAY1, NULL, 0 },
+	{ "Layout: 2 Rows", C_LAY2, NULL, 0 },
+	{ "Layout: 3 Rows", C_LAY3, NULL, 0 },
+	{ "Pictures: Box Art", C_ARTBOX, NULL, 0 },
+	{ "Pictures: Screenshots", C_ARTSCREEN, NULL, 0 },
 	{ "", 0, NULL, UI_MI_SEP },
 	{ "Arcade View", C_VIEW, "Cmd-0", 0 },
 };
@@ -2973,7 +2993,7 @@ art_dir_choose(void)
 /* The menu of the Arcade view (Space): the same commands the menu bar has. */
 
 static struct { const char *label; int id; } g_ovl_items[] = {
-	{ "Play", C_PLAY }, { "Details", C_INFO }, { "Favourite", C_FAV }, { "Sort", C_SORT }, { "Edit...", C_EDIT }, { "New Game...", C_NEW },
+	{ "Play", C_PLAY }, { "Details", C_INFO }, { "Favourite", C_FAV }, { "Sort", C_SORT }, { "Layout", C_LAYOUT }, { "Pictures", C_ART }, { "Edit...", C_EDIT }, { "New Game...", C_NEW },
 	{ "Duplicate", C_DUP }, { "Delete...", C_DEL }, { "Disks and ROMs...", C_LIB },
 	{ "Set Picture...", C_SETPIC }, { "Remove Picture...", C_RMPIC },
 	{ "Artwork Folder...", C_ARTDIR }, { "Import from Attract-Mode...", C_IMPORT },
@@ -3059,7 +3079,7 @@ ovl_open(void)
 {
 	snprintf(g_ovl.title, sizeof(g_ovl.title), "%s", T("Menu"));
 	{
-		static char fav[48], sort[48], lang[48], up[48];
+		static char fav[48], sort[48], lang[48], up[48], lay[48], art[48];
 
 		snprintf(fav, sizeof(fav), "%s", g_nprof && is_fav(&g_prof[g_sel]) ? T("Remove from Favourites") : T("Add to Favourites"));
 		snprintf(sort, sizeof(sort), T("Sort: %s"), T(g_sort_names[g_sort]));
@@ -3068,6 +3088,12 @@ ovl_open(void)
 				g_ovl_items[i].label = fav;
 			} else if(g_ovl_items[i].id == C_SORT) {
 				g_ovl_items[i].label = sort;
+			} else if(g_ovl_items[i].id == C_LAYOUT) {
+				snprintf(lay, sizeof(lay), T("Layout: %s"), T(g_layout_names[fe_rows()]));
+				g_ovl_items[i].label = lay;
+			} else if(g_ovl_items[i].id == C_ART) {
+				snprintf(art, sizeof(art), T("Pictures: %s"), T(fe_art() ? "Screenshots" : "Box Art"));
+				g_ovl_items[i].label = art;
 			} else if(g_ovl_items[i].id == C_LANG) {	/* says what a click changes to */
 				snprintf(lang, sizeof(lang), "%s", lang_german() ? "English" : "Deutsch");
 				g_ovl_items[i].label = lang;
@@ -3165,6 +3191,19 @@ app_command(int id)
 		snd_play(SND_SELECT);
 		settings_save();
 		break;
+	case C_LAY0: case C_LAY1: case C_LAY2: case C_LAY3: case C_LAYOUT:
+		fe_set_rows(id == C_LAYOUT ? (fe_rows() + 1) % 4 : id - C_LAY0);
+		if(id != C_LAYOUT) {
+			set_view(1);			/* the layouts belong to the Arcade view */
+		}
+		snd_play(SND_SELECT);
+		settings_save();
+		break;
+	case C_ARTBOX: case C_ARTSCREEN: case C_ART:
+		fe_set_art(id == C_ART ? !fe_art() : id == C_ARTSCREEN);
+		snd_play(SND_SELECT);
+		settings_save();
+		break;
 	case C_FAVONLY: {
 		char	keep[1100];
 
@@ -3227,6 +3266,12 @@ app_state(int id)
 	}
 	if(id == C_PORTRAIT) {
 		return g_portrait ? UI_MI_CHECKED : 0;
+	}
+	if(id >= C_LAY0 && id <= C_LAY3) {
+		return fe_rows() == id - C_LAY0 ? UI_MI_CHECKED : 0;
+	}
+	if(id == C_ARTBOX || id == C_ARTSCREEN) {
+		return fe_art() == (id == C_ARTSCREEN) ? UI_MI_CHECKED : 0;
 	}
 	if(id == C_LANG) {
 		return lang_german() ? UI_MI_CHECKED : 0;

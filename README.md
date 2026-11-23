@@ -309,6 +309,11 @@ the window); **Return** starts EmuBuddy with the matching command line (see [Com
   or BMP.
 - **Automatic picture:** a game without a picture gets one by itself: EmuBuddy saves the last IIgs screen when it
   quits and the launcher shows it (`autosnap = 0` in a profile file switches this off for that game).
+- **Layouts and pictures:** Space > Layout steps through Carousel (one row, the selected cover big), 1 Row, 2 Rows and
+  3 Rows: a grid of three columns in the style of Arcadeflow that scrolls sideways (Left/Right move a column, Up/Down
+  within it). Space > Pictures switches the covers between box art and screenshots: a game's `screen` picture (a key in
+  its profile), the last screen EmuBuddy saved, or a picture from a `snap`/`screenshots` folder, else the box. Both are
+  in the View menu of the Classic view too and are saved in `Launcher.settings` (`layout`, `pictures`).
 - **Portrait screens:** when the window is taller than wide the view changes to a portrait layout (a big picture on
   top, the row of covers below). It does so by itself on a turned screen; View > Portrait Window (or the Space menu)
   opens an upright window.

@@ -39,6 +39,14 @@ int	fe_is_picture(const char *path);
 /* Picture files may have changed on disk: load the changed ones again. */
 void	fe_refresh(void);
 int	fe_info_open(void);
+/* The layout of a wide window: 0 the carousel (one row, the middle cover big), 1-3 a grid of that
+ * many rows, three columns in full (Arcadeflow style). A portrait window always shows the carousel. */
+void	fe_set_rows(int rows);
+int	fe_rows(void);
+/* What the covers show: 0 box art first (the cover, then artwork folders, then the last screen),
+ * 1 screenshots first (the profile's "screen" picture, the last screen, snap folders, then box art). */
+void	fe_set_art(int screen);
+int	fe_art(void);
 /* 1: show the controller hints (A play, X details, Y menu) instead of the key hints. */
 void	fe_set_pad_hints(int on);
 

@@ -14,6 +14,10 @@ static SDL_Renderer	*g_r;
 static FeData		g_d;
 static UiFont		*g_small, *g_mid, *g_big;
 static float		g_pos;			/* animated position in the row */
+static int		g_rows;			/* 0: the carousel; 1-3: a grid of that many rows */
+static float		g_colpos;		/* grid: animated first visible column */
+#define GRID_COLS	3			/* columns a grid shows in full */
+static int		g_tall;			/* the last frame was a portrait window */
 static int		g_info, g_pad_hints;
 static char		g_search[64];
 static Uint64		g_last;
@@ -115,9 +119,73 @@ find_in(const char *dir, const char *name, char *out, int outsize)
 	return found;
 }
 
+static int	g_art_screen;		/* 1: covers show screenshots first, 0: box art first */
+
+void
+fe_set_art(int screen)
+{
+	g_art_screen = screen ? 1 : 0;
+}
+
+int
+fe_art(void)
+{
+	return g_art_screen;
+}
+
+static int
+find_tile(const Profile *p, const char *root, char *out, int outsize, int box_first);
+
+/* Screenshot first: the game's own screen picture, the last screen EmuBuddy left, a picture in a
+ * snap or screenshots folder; then the box art as usual. */
+static int
+find_screen(const Profile *p, const char *root, char *out, int outsize)
+{
+	static const char *dirs[] = { "snap", "screenshots", "video", NULL };
+	const char	*name = profile_get(p, "art_name")[0] ? profile_get(p, "art_name") : profile_name(p);
+	const char	*roots[2];
+	char		own[1200], full[1300], dir[1400];
+	SDL_PathInfo	info;
+
+	if(profile_get(p, "screen")[0]) {
+		profile_expand_path(profile_get(p, "screen"), out, outsize);
+		return 1;
+	}
+	if(g_d.data_root && g_d.data_root[0]) {
+		snprintf(out, (size_t)outsize, "%s/%s.data/snap.png", g_d.data_root, profile_name(p));
+		if(SDL_GetPathInfo(out, &info) && info.type == SDL_PATHTYPE_FILE) {
+			return 1;
+		}
+	}
+	profile_expand_path(profile_get(p, "artwork"), own, sizeof(own));
+	profile_expand_path(root ? root : "", full, sizeof(full));
+	roots[0] = own;
+	roots[1] = full;
+	for(int r = 0; r < 2; r++) {
+		for(int i = 0; roots[r][0] && dirs[i]; i++) {
+			snprintf(dir, sizeof(dir), "%s/%s", roots[r], dirs[i]);
+			if(find_in(dir, name, out, outsize)) {
+				return 1;
+			}
+		}
+	}
+	return find_tile(p, root, out, outsize, 1);
+}
+
 int
 fe_find_art(const Profile *p, const char *root, int kind, char *out, int outsize)
 {
+	if(kind == 0) {
+		return g_art_screen ? find_screen(p, root, out, outsize) : find_tile(p, root, out, outsize, 1);
+	}
+	return find_tile(p, root, out, outsize, 0);
+}
+
+/* kind: 1 = a tile (box art first), 0 = the logo */
+static int
+find_tile(const Profile *p, const char *root, char *out, int outsize, int tile)
+{
+	int	kind = tile ? 0 : 1;
 	static const char *tile_dirs[] = { "boxart", "flyer", "snap", "video", "screenshots", "marquee", NULL };
 	static const char *logo_dirs[] = { "wheel", "logo", NULL };
 	const char	*roots[2], *name = profile_get(p, "art_name")[0] ? profile_get(p, "art_name") : profile_name(p);
@@ -729,6 +797,94 @@ hints(int W, int H, float u)
 	}
 }
 
+/* The grid layouts, after Arcadeflow: 1 to 3 rows of covers, GRID_COLS columns in full and the
+ * neighbouring columns fading at the sides. The games fill each column from the top; the columns
+ * scroll sideways so that the selected one stays in view, in the middle where it can. */
+static void
+draw_grid(int W, int H, float u, int n, int sel, float dt)
+{
+	int	R = g_rows, ncols = (n + R - 1) / R, sc = sel / R, first, c, r, i;
+	float	gap = 18 * u, y0 = 186 * u, y1 = H * 0.80f - 18 * u, avail = y1 - y0;
+	float	th = (avail - (R - 1) * gap) / R * 0.92f, tw = th * 1.5f, maxw, x0, ys;
+
+	maxw = (W - 300 * u - (GRID_COLS - 1) * gap) / GRID_COLS;	/* room for the faded neighbours */
+	if(tw > maxw) {
+		tw = maxw;
+		th = tw / 1.5f;
+	}
+	first = sc - 1;
+	if(first > ncols - GRID_COLS) {
+		first = ncols - GRID_COLS;
+	}
+	if(first < 0) {
+		first = 0;
+	}
+	g_colpos += ((float)first - g_colpos) * SDL_min(1.0f, dt * 11.0f);
+	if(fabsf(g_colpos - first) < 0.002f) {
+		g_colpos = (float)first;
+	}
+	x0 = W / 2.0f - (GRID_COLS * tw + (GRID_COLS - 1) * gap) / 2;
+	ys = y0 + (avail - (R * th + (R - 1) * gap)) / 2;
+	for(int pass = 0; pass < 2; pass++) {		/* the selected one last, on top */
+		for(c = (int)floorf(g_colpos) - 2; c <= (int)g_colpos + GRID_COLS + 2; c++) {
+			float	dc = (float)c - g_colpos, out, x;
+
+			if(c < 0 || c >= ncols) {
+				continue;
+			}
+			x = x0 + dc * (tw + gap);
+			if(x > W || x + tw < 0) {
+				continue;
+			}
+			out = dc < 0 ? -dc : (dc > GRID_COLS - 1 ? dc - (GRID_COLS - 1) : 0);	/* columns outside the three */
+			for(r = 0; r < R; r++) {
+				float	s, w, h, xx, yy;
+				int	alpha;
+
+				i = c * R + r;
+				if(i >= n || (pass == 1) != (i == sel)) {
+					continue;
+				}
+				s = i == sel ? 1.07f : 1.0f;
+				w = tw * s;
+				h = th * s;
+				xx = x + (tw - w) / 2;
+				yy = ys + r * (th + gap) + (th - h) / 2;
+				alpha = (int)(255 * (1.0f - SDL_min(1.0f, out) * 0.75f));
+				if(!search_match(profile_name(&g_d.list[i]))) {
+					alpha = alpha / 4;
+				}
+				/* faded by a veil in the background colour, not by the picture's own
+				 * alpha: renderers differ in when they read that */
+				draw_tile(&g_d.list[i], xx, yy, w, h, i == sel ? 1.0f : 0.0f, 255);
+				if(alpha < 255) {
+					fill(xx - 1, yy - 1, w + 2, h + 2, 0x0A0B10, 255 - alpha);
+				}
+				if(g_ntiles < 64) {
+					g_tx[g_ntiles] = xx; g_ty[g_ntiles] = yy; g_tw[g_ntiles] = w; g_th[g_ntiles] = h;
+					g_ti[g_ntiles] = i;
+					g_ntiles++;
+				}
+			}
+		}
+	}
+}
+
+void
+fe_set_rows(int rows)
+{
+	g_rows = rows < 0 ? 0 : (rows > 3 ? 3 : rows);
+	if(g_d.sel && g_rows > 0) {
+		g_colpos = (float)SDL_max(0, *g_d.sel / g_rows - 1);
+	}
+}
+
+int
+fe_rows(void)
+{
+	return g_rows;
+}
+
 /* The view is laid out for a wide window (a row of covers in the middle) or, when the window is
  * taller than wide, for a portrait screen (a big picture on top, the row of covers below). */
 void
@@ -743,6 +899,7 @@ fe_draw(int W, int H)
 	char	art[1300];
 
 	g_last = now;
+	g_tall = tall;
 	g_loaded_this_frame = 0;
 	if(dt > 0.1f) {
 		dt = 0.1f;
@@ -863,9 +1020,12 @@ fe_draw(int W, int H)
 		}
 	}
 
-	/* the row of covers */
 	g_ntiles = 0;
-	for(int pass = 0; pass < 2; pass++) {
+	if(g_rows > 0 && !tall) {
+		draw_grid(W, H, u, n, sel, dt);
+	}
+	/* the row of covers */
+	for(int pass = 0; pass < 2 && (g_rows == 0 || tall); pass++) {
 		for(i = 0; i < n; i++) {
 			float	d = (float)i - g_pos, ad = fabsf(d), s, x, y, w, h;
 			int	alpha;
@@ -972,6 +1132,35 @@ move(int step)
 	}
 }
 
+/* grid: one column to the left or right (step -1 or 1); to the last game when the last column
+ * is shorter than the others */
+static void
+move_col(int step)
+{
+	int	n = g_d.count ? *g_d.count : 0, R = g_rows, s;
+
+	if(!g_d.sel || !n) {
+		return;
+	}
+	s = *g_d.sel + step * R;
+	if(s >= n) {
+		if(*g_d.sel / R == (n - 1) / R) {
+			return;
+		}
+		s = n - 1;
+	}
+	if(s < 0) {
+		return;
+	}
+	move(s - *g_d.sel);
+}
+
+static int
+grid_on(void)
+{
+	return g_rows > 0 && !g_tall;		/* a portrait window keeps the carousel */
+}
+
 static void
 search_apply(void)
 {
@@ -995,10 +1184,10 @@ fe_key(SDL_Keycode k, SDL_Keymod mod)
 
 	(void)mod;
 	switch(k) {
-	case SDLK_LEFT: move(-1); return 1;
-	case SDLK_RIGHT: move(1); return 1;
-	case SDLK_UP: move(-5); return 1;
-	case SDLK_DOWN: move(5); return 1;
+	case SDLK_LEFT: if(grid_on() && g_rows > 1) { move_col(-1); } else { move(-1); } return 1;
+	case SDLK_RIGHT: if(grid_on() && g_rows > 1) { move_col(1); } else { move(1); } return 1;
+	case SDLK_UP: move(grid_on() && g_rows > 1 ? -1 : (grid_on() ? -GRID_COLS : -5)); return 1;
+	case SDLK_DOWN: move(grid_on() && g_rows > 1 ? 1 : (grid_on() ? GRID_COLS : 5)); return 1;
 	case SDLK_HOME: move(-100000); return 1;
 	case SDLK_END: move(100000); return 1;
 	case SDLK_RETURN:
@@ -1086,8 +1275,8 @@ void
 fe_wheel(float dy)
 {
 	if(dy > 0.3f) {
-		move(-1);
+		if(grid_on() && g_rows > 1) { move_col(-1); } else { move(-1); }
 	} else if(dy < -0.3f) {
-		move(1);
+		if(grid_on() && g_rows > 1) { move_col(1); } else { move(1); }
 	}
 }
