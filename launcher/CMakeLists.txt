@@ -102,8 +102,8 @@ if(APPLE)
     # Re-sign after the icon went into the bundle (see EmuBuddy's CMakeLists).
     add_custom_command(TARGET emubuddy-launcher POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:emubuddy-launcher>/EmuBuddy Launcher.d"
-        COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:emubuddy-launcher>"
-        COMMENT "Re-signing EmuBuddy Launcher.app (ad-hoc)"
+        COMMAND codesign --force --sign "$<IF:$<BOOL:${EMUBUDDY_SIGN_IDENTITY}>,${EMUBUDDY_SIGN_IDENTITY},->" "$<TARGET_BUNDLE_DIR:emubuddy-launcher>"
+        COMMENT "Re-signing EmuBuddy Launcher.app"
         VERBATIM)
     install(TARGETS emubuddy-launcher BUNDLE DESTINATION .)
     install(CODE "

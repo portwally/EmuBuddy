@@ -312,13 +312,20 @@ if(APPLE)
     # AppleTalk (localtalk.c) talks to other programs and computers in the local
     # network by UDP multicast. macOS asks the user before it lets an app do
     # that; this is the text of the question. (plutil -replace adds or replaces.)
+    # Who signs the built apps: "-" (ad-hoc, the default, and what the release
+    # packages use) or a certificate such as "Apple Development". An ad-hoc app
+    # is known to macOS only by its exact contents, so every rebuild is a new
+    # app and the privacy questions (the Documents folder, the local network)
+    # come again; signed with a certificate it stays the same app.
+    #   cmake -DEMUBUDDY_SIGN_IDENTITY="Apple Development" build
+    set(EMUBUDDY_SIGN_IDENTITY "-" CACHE STRING "codesign identity for the built apps (- = ad-hoc)")
     add_custom_command(TARGET gsplus-sdl POST_BUILD
         COMMAND plutil -replace NSLocalNetworkUsageDescription -string
             "EmuBuddy's Apple IIgs uses the local network for AppleTalk: to find file servers, printers and other computers."
             "$<TARGET_BUNDLE_DIR:gsplus-sdl>/Contents/Info.plist"
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:gsplus-sdl>/EmuBuddy.d"
-        COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:gsplus-sdl>"
-        COMMENT "Re-signing EmuBuddy.app (ad-hoc)"
+        COMMAND codesign --force --sign "${EMUBUDDY_SIGN_IDENTITY}" "$<TARGET_BUNDLE_DIR:gsplus-sdl>"
+        COMMENT "Re-signing EmuBuddy.app (${EMUBUDDY_SIGN_IDENTITY})"
         VERBATIM)
 endif()
 
