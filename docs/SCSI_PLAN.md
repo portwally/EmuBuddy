@@ -170,6 +170,43 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
   shows up without a restart? Check first that the firmware and ProDOS 8 cope with a drive that has no disk.
 - Goal: GS/OS mounts an HFS CD and an ISO 9660 CD, and files copy from them.
 
+**Done (2026-11-24), except plain ISO 9660 (see below).**
+- `scsi_cd.c`: the drive says it is a Sony CDU-8002 (the AppleCD SC). 2048-byte blocks, or 512 after MODE SELECT, which
+  is what GS/OS's driver asks for. It answers READ(6)/(10), READ CAPACITY, MODE SENSE/SELECT, READ TOC, eject (START STOP
+  and Apple's `0xC0`) and Apple's own commands `0xC1`, `0xC2`, `0xCC` for a disc with one data track.
+- Details the Apple software needs (the first two from MAME's `nscsi/cd.cpp`, the rest found here):
+  - An empty drive answers NOT READY with code `0xB0`, not the usual `0x3A`. With `0x3A`, GS/OS offered to initialize the
+    missing disc.
+  - The commands `0xC0`–`0xCE` are 10 bytes long.
+  - GS/OS's driver asks REQUEST SENSE again and again to see the drive's state, with no failed command before it. So a
+    new disc and an empty drive are reported there too.
+  - **The size the drive reports.** `SCSICD.Driver` asks READ CAPACITY once, when it starts. Only if the answer is
+    more than 65,535 blocks does it allow itself READ(10) (it sets bits in its list of allowed commands, at `$1440` in
+    the driver). Later it reads with READ(10) only. A disc under 32 MB, or a drive that was empty at startup, could
+    then never be read: the driver refused its own read with error `$21` before it reached the bus, and GS/OS said
+    "can't read this disk". So a small image reports 32 MB (reading past its end gives zeroes), and the empty drive
+    answers READ CAPACITY with the size of a 74-minute disc. A real drive may behave differently here; this is what
+    makes Apple's driver work.
+- `hsscsi.c`: a drive with a `.iso`, `.cdr` or `.toast` image is a CD-ROM drive and stays one when the disc comes out.
+  S7D7 is a CD-ROM drive also when it is empty at startup. A CD image goes in whole, without the partition chooser, and
+  is write protected. A dropped CD image goes into an empty CD-ROM drive.
+- `test_scsi` covers the empty drive, a new disc, the reported sizes, both block sizes, writing refused, the disc change
+  in the sense data, and eject.
+- **Works** (GS/OS 6.0.x, ROM 03):
+  - A CD with an Apple partition map (the System 7 CD, HFS) shows up in the Finder with a CD icon.
+  - A CD without a partition map (a ProDOS volume) shows up too.
+  - A CD dropped on EmuBuddy while GS/OS runs goes into S7D7 and shows up in the Finder without a restart.
+  - The firmware and GS/OS start normally with an empty CD-ROM drive on the bus.
+  - With the Hard Disk Card, Total Replay and GS/OS start as before.
+- **Open: plain ISO 9660.** With a test CD made by macOS (`hdiutil makehybrid -iso`), GS/OS reads the volume
+  descriptor and the path table without an error, but no icon appears. It is not clear whether `HS.FST` dislikes
+  this image or something is still wrong in the drive. Needs a CD image that is known to work on a real IIgs.
+- How the driver problem was found: a memory dump of the working and the failing case, a small 65816 disassembler,
+  and temporary breakpoint output at the driver's error exits. `SCSICD.Driver` loads at `$03/0000` on the test system;
+  its read routine is at `$14AF`.
+- Not tested: copying files from the CD, eject from the Finder, taking a disc out and putting another in, the Drives
+  window with a CD, ProDOS 8 with a CD, starting up from a CD, and ROM 01.
+
 ### Phase 5: true DMA (small to medium, optional)
 - Turn on SW4. The card's DMA engine moves bytes between the 53C80 and IIgs memory without the 65816: the `$C0n8–$C0nB`
   address and count, stopping at a page boundary, and stopping on interrupt.

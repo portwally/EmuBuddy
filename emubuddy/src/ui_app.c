@@ -449,7 +449,7 @@ ui_is_disk_image(const char *path)
 {
 	static const char *exts[] = { "po", "hdv", "2mg", "2img", "dsk", "do",
 		"woz", "nib", "dc", "dc42", "image", "img", "raw", "sdk",
-		"gz", NULL };
+		"gz", "iso", "cdr", "toast", NULL };
 	const char	*dot = strrchr(path_base(path), '.');	/* in the name, not in a folder's */
 	int		i;
 

@@ -80,6 +80,9 @@ typedef struct {
 	int	(*write_prot)(int unit);
 	int	(*read)(int unit, unsigned blk, unsigned char *buf);	/* 0 ok */
 	int	(*write)(int unit, unsigned blk, const unsigned char *buf);
+	/* for removable media (the CD-ROM); both may be 0 */
+	unsigned (*media)(int unit);	/* a number that changes with the disc */
+	void	(*eject)(int unit);	/* the computer asks for the disc */
 } Scsi_block_backend;
 
 typedef struct {
@@ -92,5 +95,20 @@ typedef struct {
 } Scsi_disk;
 
 void	scsi_disk_init(Scsi_disk *disk, int unit, const Scsi_block_backend *be);
+
+/* ---- SCSI CD-ROM drive (scsi_cd.c) ---- */
+typedef struct {
+	Scsi_dev	dev;
+	int		unit;
+	const Scsi_block_backend *be;
+	unsigned	lba;		/* first block of the current transfer */
+	unsigned	bs;		/* block size: 2048, or 512 after MODE SELECT */
+	unsigned	media;		/* the disc the computer knows; 0 none */
+	int		ua;		/* a new disc went in: unit attention */
+	unsigned char	op;
+	unsigned char	resp[256];
+} Scsi_cd;
+
+void	scsi_cd_init(Scsi_cd *cd, int unit, const Scsi_block_backend *be);
 
 #endif

@@ -14,7 +14,12 @@
  * The drives S7D1-S7D7 are SCSI hard disks at the IDs 6 down to 0: the
  * firmware looks for devices from ID 6 downwards and starts up from the first
  * one it finds, so S7D1 is the startup disk and the drives keep their order
- * in ProDOS and GS/OS. The card itself is ID 7. DIP switch SW4 is off: the firmware moves the data by
+ * in ProDOS and GS/OS. The card itself is ID 7.
+ *
+ * A drive with a CD image (.iso, .cdr, .toast) in it is a CD-ROM drive
+ * (scsi_cd.c). It stays one when the disc comes out, so discs can be swapped
+ * while the IIgs runs. S7D7 is a CD-ROM drive also when it is empty at
+ * startup: a disc can go in later without a restart. DIP switch SW4 is off: the firmware moves the data by
  * pseudo-DMA, byte by byte. The 53C80's interrupt is not connected (as in
  * MAME): Apple's firmware and drivers poll the chip.
  *
@@ -45,6 +50,13 @@ static word32	g_hs_c0nc, g_hs_c0ne, g_hs_c0nf;
 static word32	g_hs_dma_addr, g_hs_dma_size;
 static dword64	g_hs_watchdog_dfcyc;	/* the watchdog runs until then */
 static Scsi_disk g_hs_disk[HSSCSI_DISKS];
+static Scsi_cd	g_hs_cd[HSSCSI_DISKS];
+static int	g_hs_is_cd[HSSCSI_DISKS];	/* the drive is a CD-ROM drive */
+#define HSSCSI_CD_UNIT	(HSSCSI_DISKS - 1)	/* S7D7: a CD drive when empty */
+static unsigned g_hs_inserts[HSSCSI_DISKS];	/* discs put in, counted */
+static int	g_hs_had_disk[HSSCSI_DISKS];
+static Slot_card g_hs_card;
+static void	hs_update_devices(int at_reset);
 static int	g_hs_scanned;	/* the firmware used the 53C80 since the reset */
 
 char	*g_hsscsi_rom = "";		/* config: the card ROM; "" = search */
@@ -62,6 +74,7 @@ hs_reset(void)
 	g_hs_watchdog_dfcyc = 0;
 	g_hs_scanned = 0;
 	ncr5380_reset();
+	hs_update_devices(1);
 }
 
 /* 1 when the card is in slot 7 and its firmware has started to look for
@@ -111,9 +124,93 @@ hs_be_write(int unit, unsigned blk, const unsigned char *buf)
 	return smartport_write_block(unit, blk, (byte *)buf);
 }
 
+/* A number for the disc in the drive, from its name and size */
+static unsigned
+hs_be_media(int unit)
+{
+	Disk	*dsk = hs_drive(unit);
+	const char *p = dsk->name_ptr ? dsk->name_ptr : "";
+	unsigned h = (unsigned)dsk->dimage_size * 2654435761U;
+
+	while(*p) {
+		h = (h ^ (unsigned char)*p++) * 16777619U;
+	}
+	return h + g_hs_inserts[unit] * 40503U;
+}
+
+static void
+hs_be_eject(int unit)
+{
+	iwm_eject_disk_by_num(7, unit);
+}
+
 static const Scsi_block_backend g_hs_backend = {
-	hs_be_present, hs_be_blocks, hs_be_write_prot, hs_be_read, hs_be_write
+	hs_be_present, hs_be_blocks, hs_be_write_prot, hs_be_read, hs_be_write,
+	hs_be_media, hs_be_eject
 };
+
+/* 1 if the file name is that of a CD image */
+int
+hsscsi_is_cd_image(const char *name)
+{
+	static const char *ext[] = { ".iso", ".cdr", ".toast", 0 };
+	size_t	len, elen;
+	int	i;
+
+	if(!name) {
+		return 0;
+	}
+	len = strlen(name);
+	for(i = 0; ext[i]; i++) {
+		elen = strlen(ext[i]);
+		if(len > elen && !cfgcasecmp(name + len - elen, ext[i])) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* Decides for every drive whether a hard disk or a CD-ROM drive sits at its
+ * SCSI ID, from what is in it. Called while the bus is free. at_reset: an
+ * empty drive goes back to what it is at startup. */
+static void
+hs_update_devices(int at_reset)
+{
+	Disk	*dsk;
+	int	i, cd;
+
+	for(i = 0; i < HSSCSI_DISKS; i++) {
+		dsk = hs_drive(i);
+		cd = g_hs_is_cd[i];
+		if(dsk->fd >= 0) {
+			cd = !dsk->dynapro_info_ptr &&
+					hsscsi_is_cd_image(dsk->name_ptr);
+			if(!g_hs_had_disk[i]) {
+				g_hs_inserts[i]++;	/* a disc went in */
+			}
+			g_hs_had_disk[i] = 1;
+		} else {
+			g_hs_had_disk[i] = 0;
+			if(at_reset) {
+				cd = (i == HSSCSI_CD_UNIT);
+			}
+		}
+		if(cd != g_hs_is_cd[i] || at_reset) {
+			g_hs_is_cd[i] = cd;
+			ncr5380_attach(HSSCSI_DISKS - 1 - i, cd ?
+				&g_hs_cd[i].dev : &g_hs_disk[i].dev);
+		}
+	}
+}
+
+/* 1 when drive unit (0 = S7D1) is a CD-ROM drive on the card: a disc put in
+ * shows up without a restart. */
+int
+hsscsi_drive_is_cd(int unit)
+{
+	return slot_card_get(7) == &g_hs_card && unit >= 0 &&
+				unit < HSSCSI_DISKS && g_hs_is_cd[unit];
+}
 
 static unsigned hs_io_read2(int reg, unsigned long long dfcyc);
 static void hs_io_write2(int reg, unsigned val, unsigned long long dfcyc);
@@ -183,6 +280,9 @@ hs_io_write2(int reg, unsigned val, unsigned long long dfcyc)
 		break;
 	case 0x1: case 0x2: case 0x3: case 0x4: case 0x5: case 0x6: case 0x7:
 		g_hs_scanned = 1;
+		if(reg == 1 && ncr5380_busy_id() < 0) {
+			hs_update_devices(0);	/* before a selection */
+		}
 		ncr5380_write(reg, val);
 		break;
 	case 0x8: g_hs_dma_addr = (g_hs_dma_addr & 0xff00) | val; break;
@@ -422,7 +522,8 @@ hsscsi_attach(int on, const char *iigs_rom)
 				atoi(getenv("EMUBUDDY_SCSI_TRACE")) : 0;
 	for(i = 0; i < HSSCSI_DISKS; i++) {
 		scsi_disk_init(&g_hs_disk[i], i, &g_hs_backend);
-		ncr5380_attach(HSSCSI_DISKS - 1 - i, &g_hs_disk[i].dev);
+		scsi_cd_init(&g_hs_cd[i], i, &g_hs_backend);
+		g_hs_is_cd[i] = 0;
 	}
 	slot_card_set(7, &g_hs_card);
 	return 0;

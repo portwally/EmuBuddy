@@ -179,6 +179,7 @@ int	g_window_scale = 1;		/* EmuBuddy window size: 1x..4x */
 int	g_slot7_scsi = 1;		/* slot 7: 1 hard disk card (7 drives), 2 High-Speed SCSI card, 0 empty */
 extern char *g_hsscsi_rom;		/* hsscsi.c: the card ROM */
 int	hsscsi_attach(int on, const char *iigs_rom);
+int	hsscsi_is_cd_image(const char *name);
 int	g_uthernet2_slot = 4;		/* slot of the Uthernet II card, 0 = none */
 
 int	g_fullscreen = 0;	/* fullscreen state; applied live, F11 also toggles it */
@@ -2313,6 +2314,9 @@ insert_disk(int slot, int drive, const char *name, int ejected,
 	}
 
 	dsk->image_type = image_type;
+	if(hsscsi_is_cd_image(name_ptr)) {
+		dsk->write_prot = 1;		/* EmuBuddy: a CD image */
+	}
 	dsk->disk_dirty = 0;
 	dsk->cur_fbit_pos = 0;
 	dsk->cur_track_bits = 0;
@@ -2735,6 +2739,12 @@ cfg_maybe_insert_disk(int slot, int drive, const char *namestr)
 	int	num_parts;
 
 	g_cfg_part_path[0] = 0;
+	if(slot == 7 && g_slot7_scsi == 2 && hsscsi_is_cd_image(namestr)) {
+		/* EmuBuddy: a CD in the SCSI CD-ROM drive goes in whole; the
+		 * IIgs reads its partition map itself */
+		insert_disk(slot, drive, namestr, 0, 0, -1, 0);
+		return 1;
+	}
 	num_parts = cfg_partition_make_list_from_name(namestr);
 
 	if(num_parts > 0) {

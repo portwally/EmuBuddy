@@ -27,6 +27,8 @@ extern int	g_cfg_select_partition;
 extern int	g_cfg_slotdrive;
 extern int	g_slot7_scsi;
 int		hsscsi_scanned(void);	/* hsscsi.c */
+int		hsscsi_is_cd_image(const char *name);
+int		hsscsi_drive_is_cd(int unit);
 extern int	g_cur_a2_stat;
 extern int	g_bridge_off;
 
@@ -248,11 +250,13 @@ hd_mark_new(int slot, int drive)
 
 /* With the High-Speed SCSI Card, a disk put into a hard disk drive while the
  * IIgs runs is found at the next restart only: the card's firmware and GS/OS
- * look for SCSI devices once, at startup, as on a real SCSI bus. */
+ * look for SCSI devices once, at startup, as on a real SCSI bus.
+ * A CD-ROM drive is different: a disc can go in at any time. */
 static int
-scsi_needs_restart(int slot)
+scsi_needs_restart(int slot, int drive)
 {
-	return slot == 7 && g_slot7_scsi == 2 && hsscsi_scanned();
+	return slot == 7 && g_slot7_scsi == 2 && hsscsi_scanned() &&
+						!hsscsi_drive_is_cd(drive);
 }
 
 static void
@@ -275,7 +279,7 @@ folder_mount(int slot, int drive, const char *path)
 	if(dsk->fd >= 0) {
 		hd_mark_new(slot, drive);
 		/* the status bar is short: what to do comes first */
-		ui_message(scsi_needs_restart(slot) ?
+		ui_message(scsi_needs_restart(slot, drive) ?
 			"Restart the IIgs to see folder %s (S%dD%d)" :
 			"Shared folder %s is in S%dD%d", base_name(clean),
 							slot, drive + 1);
@@ -464,7 +468,7 @@ drive_insert(int slot, int drive, const char *path)
 	if(cfg_maybe_insert_disk(slot, drive, path)) {
 		hd_mark_new(slot, drive);
 		recent_add(path);
-		ui_message(scsi_needs_restart(slot) ?
+		ui_message(scsi_needs_restart(slot, drive) ?
 			"Restart the IIgs to see %s (S%dD%d)" :
 			"Inserted %s in S%dD%d", base_name(path), slot,
 								drive + 1);
@@ -485,7 +489,7 @@ drive_insert(int slot, int drive, const char *path)
 void
 ui_insert_auto(const char *path)
 {
-	int	slot, d, nd;
+	int	slot, d, nd, cd;
 
 	if(is_folder(path)) {
 		/* a folder becomes a hard disk volume on the SCSI card */
@@ -522,6 +526,16 @@ ui_insert_auto(const char *path)
 	for(d = 0; d < nd; d++) {
 		if(iwm_get_dsk_from_slot_drive(slot, d)->fd < 0) {
 			break;
+		}
+	}
+	if(slot == 7 && hsscsi_is_cd_image(path)) {
+		/* a CD goes into an empty CD-ROM drive, if there is one */
+		for(cd = 0; cd < nd; cd++) {
+			if(hsscsi_drive_is_cd(cd) &&
+				iwm_get_dsk_from_slot_drive(7, cd)->fd < 0) {
+				d = cd;
+				break;
+			}
 		}
 	}
 	if(d == nd) {

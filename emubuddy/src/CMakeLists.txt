@@ -92,6 +92,7 @@ set(GSPLUS_CORE_SOURCES
     hsscsi.c
     ncr5380.c
     scsi_disk.c
+    scsi_cd.c
     sim65816.c
     smartport.c
     doc.c
@@ -209,7 +210,7 @@ endif()
 # Host test for the SCSI controller and hard disk (ncr5380.c, scsi_disk.c),
 # not built by default:
 #   cmake --build build --target test_scsi && build/test_scsi
-add_executable(test_scsi EXCLUDE_FROM_ALL tests/test_scsi.c ncr5380.c scsi_disk.c)
+add_executable(test_scsi EXCLUDE_FROM_ALL tests/test_scsi.c ncr5380.c scsi_disk.c scsi_cd.c)
 
 # Host test for AppleTalk (localtalk.c), not built by default:
 #   cmake --build build --target test_localtalk && build/test_localtalk

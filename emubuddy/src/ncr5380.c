@@ -99,8 +99,9 @@ scsi_cdb_len(unsigned char op)
 	case 0: return 6;
 	case 1: case 2: return 10;
 	case 5: return 12;
+	case 6: return 10;	/* vendor: the AppleCD SC's 0xC0-0xCE */
 	}
-	return 6;		/* groups 3, 4, 6, 7: vendor; take 6 */
+	return 6;		/* groups 3, 4, 7: take 6 */
 }
 
 void
@@ -248,6 +249,15 @@ run_command(void)
 			go_status();
 			return;
 		}
+		if(g_scsi_trace && d->xfer_len <= 64) {
+			unsigned i;
+
+			printf("scsi:   data in:");
+			for(i = 0; i < d->xfer_len; i++) {
+				printf(" %02x", g_ncr.chunk[i]);
+			}
+			printf("\n");
+		}
 		go_phase(T_DATA_IN, PH_DATA_IN, g_ncr.chunk[0]);
 	} else if(d->xfer_dir == SCSI_DIR_OUT && d->xfer_len) {
 		g_ncr.chunk_len = chunk_size(d);
@@ -318,6 +328,15 @@ byte_done(unsigned out)
 		g_ncr.chunk[g_ncr.chunk_pos++] = (unsigned char)out;
 		g_ncr.pos++;
 		if(g_ncr.chunk_pos >= g_ncr.chunk_len) {
+			if(g_scsi_trace && d->xfer_len <= 64) {
+				unsigned i;
+
+				printf("scsi:   data out:");
+				for(i = 0; i < g_ncr.chunk_pos; i++) {
+					printf(" %02x", g_ncr.chunk[i]);
+				}
+				printf("\n");
+			}
 			if(d->data_out(d, g_ncr.pos - g_ncr.chunk_pos,
 					g_ncr.chunk, g_ncr.chunk_pos) != 0) {
 				go_status();

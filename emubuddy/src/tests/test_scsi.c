@@ -39,6 +39,16 @@ static const Scsi_block_backend g_be = {
 	be_present, be_blocks, be_wp, be_read, be_write
 };
 
+/* the CD-ROM drive: unit 1 of the images, with a disc that can be changed */
+static int	g_cd_in, g_cd_gen, g_cd_ejects;
+static int cd_be_present(int u) { (void)u; return g_cd_in; }
+static unsigned cd_be_media(int u) { (void)u; return (unsigned)g_cd_gen * 2; }
+static void cd_be_eject(int u) { (void)u; g_cd_in = 0; g_cd_ejects++; }
+static const Scsi_block_backend g_cd_be = {
+	cd_be_present, be_blocks, be_wp, be_read, be_write, cd_be_media,
+	cd_be_eject
+};
+
 /* ---- initiator, as card firmware does it ---- */
 #define RD(r)		ncr5380_read(r)
 #define WR(r, v)	ncr5380_write(r, v)
@@ -307,7 +317,7 @@ main(void)
 
 	/* 8. unknown command, and MODE SENSE */
 	memset(cdb, 0, sizeof(cdb));
-	cdb[0] = 0xc5;
+	cdb[0] = 0xe5;
 	CHECK(command(0, cdb, 6) == 0 && finish() == SCSI_CHECK_CONDITION,
 						"unknown command not refused");
 	memset(cdb, 0, sizeof(cdb));
@@ -368,6 +378,120 @@ main(void)
 	WR(2, 0);
 	CHECK(st == 0 && !(RD(4) & 0x40), "status %d, bus %02x", st, RD(4));
 	RD(7);
+
+	/* 11. CD-ROM drive at ID 4: empty, then a disc, block sizes, eject */
+	{
+		static Scsi_cd cd;
+
+		for(i = 0; i < NBLK * 512; i++) {
+			g_img[1][i] = (unsigned char)(i * 3 + i / 2048);
+		}
+		scsi_cd_init(&cd, 1, &g_cd_be);
+		ncr5380_attach(4, &cd.dev);
+		memset(cdb, 0, sizeof(cdb));
+		cdb[0] = 0x12;
+		cdb[4] = 36;
+		CHECK(command(4, cdb, 6) == 0, "empty CD drive not on the bus");
+		for(i = 0; i < 36; i++) {
+			buf[i] = (unsigned char)pio_in(1);
+		}
+		CHECK(finish() == 0 && buf[0] == 5 && (buf[1] & 0x80) &&
+			!memcmp(buf + 8, "SONY    CD-ROM CDU-8002", 23),
+			"CD INQUIRY wrong");
+		memset(cdb, 0, sizeof(cdb));		/* TEST UNIT READY */
+		CHECK(command(4, cdb, 6) == 0 &&
+			finish() == SCSI_CHECK_CONDITION &&
+			cd.dev.sense_key == SENSE_NOT_READY &&
+			cd.dev.asc == 0xb0, "empty drive: sense %x/%02x",
+			cd.dev.sense_key, cd.dev.asc);
+		cdb[0] = 0x25;		/* the empty drive gives a size too */
+		CHECK(command(4, cdb, 10) == 0, "READ CAPACITY, empty");
+		for(i = 0; i < 8; i++) {
+			buf[i] = (unsigned char)pio_in(1);
+		}
+		CHECK(finish() == 0 && (buf[1] || buf[2] >= 0x40),
+						"empty drive: no size");
+		memset(cdb, 0, sizeof(cdb));
+		g_cd_in = 1;				/* a disc goes in */
+		g_cd_gen = 1;
+		CHECK(command(4, cdb, 6) == 0 &&
+			finish() == SCSI_CHECK_CONDITION &&
+			cd.dev.sense_key == SENSE_UNIT_ATTENTION &&
+			cd.dev.asc == 0x28, "new disc: sense %x/%02x",
+			cd.dev.sense_key, cd.dev.asc);
+		CHECK(command(4, cdb, 6) == 0 && finish() == 0,
+						"disc not ready the 2nd time");
+		/* READ CAPACITY: a small disc says 32 MB, so that GS/OS's
+		 * driver allows itself READ(10) */
+		cdb[0] = 0x25;
+		CHECK(command(4, cdb, 10) == 0, "CD READ CAPACITY");
+		for(i = 0; i < 8; i++) {
+			buf[i] = (unsigned char)pio_in(1);
+		}
+		CHECK(finish() == 0 && buf[1] == 0 && buf[2] == 0x3f &&
+			buf[3] == 0xff && buf[6] == 8,
+			"CD capacity %02x%02x%02x blocks of %d", buf[1],
+			buf[2], buf[3], buf[6] << 8);
+		memset(cdb, 0, sizeof(cdb));
+		cdb[0] = 0x28;				/* 2 sectors at 3 */
+		cdb[5] = 3;
+		cdb[8] = 2;
+		CHECK(command(4, cdb, 10) == 0, "CD READ(10)");
+		n = dma_in(buf, sizeof(buf));
+		dma_end();
+		CHECK(n == 4096 && !memcmp(buf, &g_img[1][3 * 2048], 4096),
+					"CD read of 2048-byte blocks: %d", n);
+		CHECK(finish() == 0, "CD READ(10) status");
+		memset(cdb, 0, sizeof(cdb));		/* 512-byte blocks */
+		cdb[0] = 0x15;
+		cdb[4] = 12;
+		memset(wbuf, 0, 12);
+		wbuf[3] = 8;
+		wbuf[10] = 2;
+		CHECK(command(4, cdb, 6) == 0, "CD MODE SELECT");
+		for(i = 0; i < 12; i++) {
+			CHECK(pio_out(0, wbuf[i], 0) == 0, "mode byte %d", i);
+		}
+		CHECK(finish() == 0, "CD MODE SELECT status");
+		memset(cdb, 0, sizeof(cdb));
+		cdb[0] = 0x08;
+		cdb[3] = 9;
+		cdb[4] = 1;
+		CHECK(command(4, cdb, 6) == 0, "CD READ(6)");
+		n = dma_in(buf, sizeof(buf));
+		dma_end();
+		CHECK(n == 512 && !memcmp(buf, &g_img[1][9 * 512], 512),
+					"CD read of a 512-byte block: %d", n);
+		CHECK(finish() == 0, "CD READ(6) status");
+		cdb[0] = 0x0a;				/* a CD is read-only */
+		CHECK(command(4, cdb, 6) == 0 &&
+			finish() == SCSI_CHECK_CONDITION, "CD took a write");
+		memset(cdb, 0, sizeof(cdb));		/* takes that sense */
+		cdb[0] = 0x03;
+		cdb[4] = 16;
+		CHECK(command(4, cdb, 6) == 0, "CD REQUEST SENSE");
+		for(i = 0; i < 16; i++) {
+			buf[i] = (unsigned char)pio_in(1);
+		}
+		CHECK(finish() == 0 && (buf[2] & 15) == SENSE_DATA_PROTECT,
+						"sense after the write");
+		g_cd_gen = 2;				/* another disc */
+		memset(cdb, 0, sizeof(cdb));		/* GS/OS asks by sense */
+		cdb[0] = 0x03;
+		cdb[4] = 16;
+		CHECK(command(4, cdb, 6) == 0, "CD REQUEST SENSE");
+		for(i = 0; i < 16; i++) {
+			buf[i] = (unsigned char)pio_in(1);
+		}
+		CHECK(finish() == 0 && (buf[2] & 15) == SENSE_UNIT_ATTENTION &&
+			buf[12] == 0x28, "disc change not in the sense data");
+		memset(cdb, 0, sizeof(cdb));
+		cdb[0] = 0x1b;				/* eject */
+		cdb[4] = 2;
+		CHECK(command(4, cdb, 6) == 0 && finish() == 0 &&
+			g_cd_ejects == 1 && !g_cd_in, "CD not ejected");
+		ncr5380_attach(4, 0);
+	}
 
 	if(g_fails) {
 		printf("%d SCSI tests FAILED\n", g_fails);
