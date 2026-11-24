@@ -233,7 +233,9 @@ do_c70d(word32 arg0)
 			engine.yreg = 0;
 			disk_printf("just finished unit %d, stat 0\n", unit);
 		} else if(ctl_code == 3) {
-			if((unit > MAX_C7_DISKS) ||
+			// EmuBuddy: unit 0 (the controller) has no drive:
+			//  KEGS read smartport[-1] here (Total Replay asks)
+			if((unit == 0) || (unit > MAX_C7_DISKS) ||
 					(g_iwm.smartport[unit-1].fd < 0)) {
 				// EmuBuddy: an empty drive is a removable drive
 				//  with no disk in it (readable, writable,
