@@ -72,6 +72,8 @@ extern int g_uthernet2_slot;
 int uthernet2_read(int reg);
 void uthernet2_write(int reg, int val);
 
+word32	g_c037_dmareg = 0;	/* EmuBuddy: $C037, the DMA bank */
+
 /* EmuBuddy: slot cards with their own firmware (slotcard.h) */
 static Slot_card *g_slot_card[8];
 static int	g_c800_slot = 0;	/* slot that owns $C800-$CFFF, 0 = none */
@@ -1212,8 +1214,8 @@ io_read(word32 loc, dword64 *cyc_ptr)
 			return g_c035_shadow_reg;
 		case 0x36: /* 0xc036 = CYAREG */
 			return g_c036_val_speed;
-		case 0x37: /* 0xc037 */
-			return 0;
+		case 0x37: /* 0xc037: DMAREG (EmuBuddy: kept for slot cards) */
+			return g_c037_dmareg;
 		case 0x38: /* 0xc038 */
 			return scc_read_reg(dfcyc, 1);
 		case 0x39: /* 0xc039 */
@@ -1860,8 +1862,9 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 				fixup_shadow_all_banks();
 			}
 			return;
-		case 0x37: /* 0xc037 */
-			/* just ignore, probably someone writing c036 m=0 */
+		case 0x37: /* 0xc037: DMAREG, the bank a slot card's DMA goes
+			 *  to (EmuBuddy: used by hsscsi.c) */
+			g_c037_dmareg = val & 0xff;
 			return;
 		case 0x38: /* 0xc038 */
 			scc_write_reg(dfcyc, 1, val);

@@ -555,10 +555,22 @@ ncr5380_write(int reg, unsigned val)
 	eval_bus();
 }
 
+/* The card's DMA counter ran out (the EOP pin): the chip stops asking for
+ * bytes and says so, with an interrupt if the mode register asks for one. */
+void
+ncr5380_eop(void)
+{
+	g_ncr.eod = 1;
+	if(g_ncr.mr & MR_EOP_INT) {
+		g_ncr.irq = 1;
+	}
+}
+
 int
 ncr5380_drq(void)
 {
-	if(!(g_ncr.mr & MR_DMA) || g_ncr.dma == DMA_NONE || !g_ncr.req) {
+	if(!(g_ncr.mr & MR_DMA) || g_ncr.dma == DMA_NONE || !g_ncr.req ||
+								g_ncr.eod) {
 		return 0;
 	}
 	if(!phase_match()) {

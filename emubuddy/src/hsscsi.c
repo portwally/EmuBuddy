@@ -48,6 +48,11 @@ static int	g_hs_rom_ok = 0;
 static word32	g_hs_rombank, g_hs_rambank;
 static word32	g_hs_c0nc, g_hs_c0ne, g_hs_c0nf;
 static word32	g_hs_dma_addr, g_hs_dma_size;
+static int	g_hs_dma_active;	/* the DMA engine answers the chip's DRQ */
+static int	g_hs_dma_in;		/* 1: SCSI to memory, 0: memory to SCSI */
+static unsigned g_hs_dma_bytes;		/* bytes moved by true DMA, counted */
+int	g_hsscsi_dma = 1;		/* config: switch SW4, true DMA */
+extern word32	g_c037_dmareg;		/* moremem.c: the DMA bank */
 static dword64	g_hs_watchdog_dfcyc;	/* the watchdog runs until then */
 static Scsi_disk g_hs_disk[HSSCSI_DISKS];
 static Scsi_cd	g_hs_cd[HSSCSI_DISKS];
@@ -73,6 +78,8 @@ hs_reset(void)
 	g_hs_dma_addr = 0;
 	g_hs_dma_size = 0;
 	g_hs_watchdog_dfcyc = 0;
+	g_hs_dma_active = 0;
+	g_hs_dma_in = 0;
 	g_hs_scanned = 0;
 	ncr5380_reset();
 	hs_update_devices(1);
@@ -213,6 +220,47 @@ hsscsi_drive_is_cd(int unit)
 				unit < HSSCSI_DISKS && g_hs_is_cd[unit];
 }
 
+/* True DMA (switch SW4 on): while the 53C80 asks for bytes, the card moves
+ * them itself between the chip and IIgs memory, at the address in $C0n8/9
+ * and in the bank of the IIgs's DMA register ($C037), without the 65816.
+ * Address and count both count up: the count is loaded as a negative number
+ * and the transfer ends when it reaches zero. When the address goes past the
+ * end of the bank first, the card stops (bit 2 of $C0nC) and the firmware
+ * moves on to the next bank and resumes with $C0nD. As in MAME's
+ * a2hsscsi.cpp. The targets answer at once, so a transfer takes no IIgs
+ * time. */
+static void
+hs_dma_run(void)
+{
+	word32	addr;
+	unsigned start = g_hs_dma_bytes;
+
+	while(g_hs_dma_active && ncr5380_drq()) {
+		addr = ((g_c037_dmareg & 0xff) << 16) | (g_hs_dma_addr & 0xffff);
+		if(g_hs_dma_in) {
+			set_memory_c(addr, ncr5380_dma_read(), 0);
+		} else {
+			ncr5380_dma_write(get_memory_c(addr) & 0xff);
+		}
+		g_hs_dma_bytes++;
+		g_hs_dma_addr = (g_hs_dma_addr + 1) & 0xffff;
+		g_hs_dma_size = (g_hs_dma_size + 1) & 0xffff;
+		if(g_hs_dma_size == 0) {
+			g_hs_dma_active = 0;
+			ncr5380_eop();
+		} else if(g_hs_dma_addr == 0) {
+			g_hs_dma_active = 0;
+			g_hs_c0nc |= 0x04;
+		}
+	}
+	if(g_scsi_trace && g_hs_dma_bytes != start) {
+		printf("hs: true DMA %s, %u bytes, ends at %02x/%04x, at %.3f s\n",
+			g_hs_dma_in ? "in" : "out", g_hs_dma_bytes - start,
+			g_c037_dmareg & 0xff, g_hs_dma_addr,
+			(double)(g_cur_dfcyc >> 16) / 1020484.0);
+	}
+}
+
 static unsigned hs_io_read2(int reg, unsigned long long dfcyc);
 static void hs_io_write2(int reg, unsigned val, unsigned long long dfcyc);
 
@@ -220,6 +268,8 @@ static unsigned
 hs_io_read(int reg, unsigned long long dfcyc)
 {
 	unsigned val = hs_io_read2(reg, dfcyc);
+
+	hs_dma_run();
 
 	if(g_scsi_trace > 1) {
 		printf("hs: R %x = %02x\n", reg, val);
@@ -234,6 +284,7 @@ hs_io_write(int reg, unsigned val, unsigned long long dfcyc)
 		printf("hs: W %x = %02x\n", reg, val & 0xff);
 	}
 	hs_io_write2(reg, val, dfcyc);
+	hs_dma_run();
 }
 
 static unsigned
@@ -252,9 +303,9 @@ hs_io_read2(int reg, unsigned long long dfcyc)
 	case 0xa: return g_hs_dma_size & 0xff;
 	case 0xb: return (g_hs_dma_size >> 8) & 0xff;
 	case 0xc:
-		/* bit 4: the watchdog still runs. Bit 6 (SW4, true DMA) is
-		 * off. Reading clears bit 2 (DMA address rollover). */
-		val = g_hs_c0nc;
+		/* bit 4: the watchdog still runs. Bit 6: switch SW4, true
+		 * DMA. Reading clears bit 2 (DMA address rollover). */
+		val = g_hs_c0nc | (g_hsscsi_dma ? 0x40 : 0);
 		if(dfcyc < g_hs_watchdog_dfcyc) {
 			val |= 0x10;
 		}
@@ -284,14 +335,29 @@ hs_io_write2(int reg, unsigned val, unsigned long long dfcyc)
 		if(reg == 1 && ncr5380_busy_id() < 0) {
 			hs_update_devices(0);	/* before a selection */
 		}
+		if(reg >= 5) {			/* a DMA transfer starts */
+			g_hs_dma_in = (reg != 5);
+			if(g_hs_c0nc & 0x02) {
+				g_hs_dma_active = 1;
+			}
+		}
 		ncr5380_write(reg, val);
 		break;
 	case 0x8: g_hs_dma_addr = (g_hs_dma_addr & 0xff00) | val; break;
 	case 0x9: g_hs_dma_addr = (g_hs_dma_addr & 0xff) | (val << 8); break;
 	case 0xa: g_hs_dma_size = (g_hs_dma_size & 0xff00) | val; break;
 	case 0xb: g_hs_dma_size = (g_hs_dma_size & 0xff) | (val << 8); break;
-	case 0xc: g_hs_c0nc = (g_hs_c0nc & ~0x2bU) | (val & 0x2b); break;
+	case 0xc:
+		g_hs_c0nc = (g_hs_c0nc & ~0x2bU) | (val & 0x2b);
+		if(!(g_hs_c0nc & 0x02)) {
+			g_hs_dma_active = 0;
+		}
+		break;
 	case 0xd:
+		if((val & 1) && (g_hs_c0nc & 0x02) && g_hs_dma_size &&
+							!(g_hs_c0nc & 0x04)) {
+			g_hs_dma_active = 1;	/* resume after a rollover */
+		}
 		if(val & 2) {
 			ncr5380_reset();
 		}

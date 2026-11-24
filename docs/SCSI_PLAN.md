@@ -215,6 +215,24 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
   address and count, stopping at a page boundary, and stopping on interrupt.
 - Compare speed with phase 3, and keep it only if GS/OS works the same.
 
+**Done (2026-11-24).** True DMA is on by default.
+- `hsscsi.c`: the DMA engine as in MAME's `a2hsscsi.cpp`. While the 53C80 asks for bytes, the card moves them between
+  the chip and IIgs memory, at the address in `$C0n8/9` and in the bank of the IIgs's DMA register `$C037` (which
+  `moremem.c` now keeps). Address and count both count up; the count is loaded as a negative number. At the end of
+  the count the chip gets EOP (`ncr5380_eop`); at the end of the bank the card stops and waits for `$C0nD`.
+- Setting `g_hsscsi_dma` (switch SW4): 1 true DMA (default), 0 pseudo-DMA only. No place in the windows yet;
+  `-g_hsscsi_dma 0` on the command line.
+- The firmware and GS/OS use it at once: 579 DMA transfers during a GS/OS start, most of 512 bytes. The firmware
+  also lets the card write into its own RAM at `$C9xx` this way.
+- Speed, GS/OS start to the Finder at 2.8 MHz: about 70 s with true DMA, about 75 s with pseudo-DMA (measured in
+  steps of 5 s). At unlimited speed there is no difference to see. A transfer takes no IIgs time at all, which is
+  faster than the real card.
+- Tested with true DMA: Total Replay; GS/OS with the System 7 CD; Grand Theft Apple; an ISO CD dropped in while GS/OS
+  runs; 6 blocks written through the firmware and read back with no difference, right on the Mac and no other block
+  changed. With the Hard Disk Card, Total Replay and GS/OS start as before.
+- Not tested: a transfer that crosses the end of a bank (the stop and resume), and interrupts during DMA (not
+  built, as in MAME).
+
 ### Phase 6: settings, Launcher and documents (medium)
 - Slots: the slot 7 choice and the ROM file in the config (`emubuddy.config`).
 - CLI:

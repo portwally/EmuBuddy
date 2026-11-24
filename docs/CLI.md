@@ -36,7 +36,8 @@ Images: `.po .hdv .2mg .dsk .do .woz .dc .shk .sdk` and more.
 
 The High-Speed SCSI Card needs its ROM, which EmuBuddy does not ship: `341-0803.bin` or MAME's `a2hsscsi.zip` next to
 the IIgs ROM file, or `-hsscsirom <file>`. Without it, slot 7 keeps the Hard Disk Card. With this card a hard disk has
-to be in its drive at startup; a CD (`-cdrom`, or dropped on the window) can go in at any time.
+to be in its drive at startup; a CD (`-cdrom`, or dropped on the window) can go in at any time. The card moves its
+data by true DMA; `-g_hsscsi_dma 0` turns that off (pseudo-DMA only, a little slower).
 
 Slots 5 and 6 hold the built-in drives. As on a real IIgs, a card is only
 used when its slot is set to "Your Card" in the IIgs Control Panel.

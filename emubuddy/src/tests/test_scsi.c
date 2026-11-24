@@ -379,6 +379,27 @@ main(void)
 	CHECK(st == 0 && !(RD(4) & 0x40), "status %d, bus %02x", st, RD(4));
 	RD(7);
 
+	/* 10b. The card's DMA counter runs out (EOP) in the middle of the
+	 * data: the chip stops asking for bytes and says "end of DMA" */
+	memset(cdb, 0, sizeof(cdb));
+	cdb[0] = 0x08;
+	cdb[3] = 5;
+	cdb[4] = 1;
+	CHECK(command(0, cdb, 6) == 0, "READ(6) not taken");
+	WR(3, 1);
+	WR(2, 0x02);
+	WR(7, 0);
+	for(n = 0; n < 100 && (RD(5) & 0x40); n++) {
+		buf[n] = (unsigned char)ncr5380_dma_read();
+	}
+	CHECK(n == 100, "DMA gave %d of 100 bytes", n);
+	ncr5380_eop();
+	CHECK(!ncr5380_drq() && (RD(5) & 0x80), "EOP: bus status %02x", RD(5));
+	WR(1, 0x80);			/* give the command up: bus reset */
+	WR(1, 0);
+	WR(2, 0);
+	RD(7);
+
 	/* 11. CD-ROM drive at ID 4: empty, then a disc, block sizes, eject */
 	{
 		static Scsi_cd cd;

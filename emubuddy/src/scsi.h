@@ -69,6 +69,7 @@ void	ncr5380_write(int reg, unsigned val);
 unsigned ncr5380_dma_read(void);
 void	ncr5380_dma_write(unsigned val);
 int	ncr5380_drq(void);
+void	ncr5380_eop(void);	/* the card's DMA counter ran out */
 int	ncr5380_irq(void);
 /* For the drive activity lights: the ID being talked to, or -1 */
 int	ncr5380_busy_id(void);
