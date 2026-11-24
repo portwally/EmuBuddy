@@ -21,6 +21,11 @@ void		scc_config_changed(int port, int cfg_changed, int remote_changed,
 
 #define ROW_H	34
 
+extern char	*g_hsscsi_rom;		/* hsscsi.c */
+int		hsscsi_rom_found(void);
+int		hsscsi_rom_file_ok(const char *path);
+static int	g_rom_found;		/* looked up when the window opens */
+
 typedef struct {
 	const char	*name;		/* what the slot is for */
 	const char	*labels[4];
@@ -36,7 +41,7 @@ static const SlotDef g_slots[7] = {
 	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II", NULL }, 3, 7, NULL },
 	{ "3.5\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
 	{ "5.25\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
-	{ "Storage", { "Empty", "SCSI Card", NULL, NULL }, 2, 3, NULL },
+	{ "Storage", { "Empty", "Hard Disk Card", "HS SCSI Card", NULL }, 3, 7, NULL },
 };
 
 static UiWindow	g_slots_win;
@@ -54,7 +59,7 @@ slot_current(int i)
 	case 1: return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
 	case 2: return g_uthernet2_slot == 3 ? 2 : (g_voc_enable ? 1 : 0);
 	case 3: return g_uthernet2_slot == 4 ? 2 : (g_slot4_mockingboard ? 1 : 0);
-	case 6: return g_slot7_scsi ? 1 : 0;
+	case 6: return (g_slot7_scsi >= 0 && g_slot7_scsi <= 2) ? g_slot7_scsi : 1;
 	}
 	return 0;
 }
@@ -102,20 +107,35 @@ apply(void)
 	g_voc_enable = g_pend[2] == 1;
 	g_slot4_mockingboard = g_pend[3] == 1;
 	g_uthernet2_slot = (g_pend[2] == 2) ? 3 : (g_pend[3] == 2) ? 4 : 0;
-	if(g_pend[6] != slot_current(6)) {
-		/* only when changed here: a High-Speed SCSI Card (2), set
-		 * elsewhere, stays what it is */
-		g_slot7_scsi = g_pend[6] > 0;
-	}
+	g_slot7_scsi = g_pend[6];	/* 0 empty, 1 hard disk card, 2 HS SCSI */
 	g_config_kegs_update_needed = 1;
 	if(restart) {
 		load_roms_init_memory();	/* new slot 7 card ROM */
 		do_reset();
-		ui_message("Slots applied - machine restarted");
+		if(g_pend[6] == 2 && g_slot7_scsi != 2) {
+			/* config_load_roms() fell back to the hard disk card */
+			ui_message("No SCSI card ROM: Hard Disk Card used");
+		} else {
+			ui_message("Slots applied - machine restarted");
+		}
 	} else {
 		ui_message("Slots applied");
 	}
 	load_pending();
+}
+
+/* The file chosen as the ROM of the High-Speed SCSI Card */
+static void
+scsi_rom_picked(const char *path)
+{
+	if(!hsscsi_rom_file_ok(path)) {
+		ui_message("Not the SCSI card ROM (341-0803.bin, 32 KB)");
+		return;
+	}
+	cfg_file_update_ptr(&g_hsscsi_rom, path, 1);
+	g_rom_found = 1;
+	g_pend[6] = 2;			/* the card it is for */
+	ui_message("SCSI card ROM set - click Apply");
 }
 
 static void
@@ -156,7 +176,14 @@ slots_draw(UiWindow *win, int cx, int cy)
 	}
 	/* AppleTalk: the IIgs chooses the port itself (its Control Panel) */
 	ui_draw_text(cx + 10, cy + by + 51, localtalk_status(), UI_GREY);
-	by += 17 + 17 + 17 + 17 + 8;
+	ui_draw_text(cx + 10, cy + by + 68, g_rom_found ?
+		"HS SCSI Card: its ROM file is there" :
+		"HS SCSI Card: needs its ROM, 341-0803.bin or a2hsscsi.zip",
+		(g_pend[6] == 2 && !g_rom_found) ? UI_BLACK : UI_GREY);
+	by += 17 + 17 + 17 + 17 + 17 + 8;
+	if(ui_button(win, cx, cy, 10, by, 110, 24, "SCSI ROM...", 1)) {
+		ui_file_browser_open("Choose the SCSI Card ROM", scsi_rom_picked);
+	}
 	if(ui_button(win, cx, cy, cw - 10 - 80, by, 80, 24, "Apply", dirty)) {
 		apply();
 	}
@@ -182,7 +209,8 @@ ui_slots_toggle(void)
 	load_pending();
 	snprintf(g_slots_win.title, sizeof(g_slots_win.title), "Slots");
 	g_slots_win.w = 580;
-	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 68 + 8 + 24 + 12;
+	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 85 + 8 + 24 + 12;
+	g_rom_found = hsscsi_rom_found();
 	g_slots_win.closable = 1;
 	g_slots_win.modal = 0;
 	g_slots_win.draw = slots_draw;

@@ -27,6 +27,7 @@ extern int	g_cfg_select_partition;
 extern int	g_cfg_slotdrive;
 extern int	g_slot7_scsi;
 int		hsscsi_scanned(void);	/* hsscsi.c */
+extern int	g_hsscsi_rom_missing;
 int		hsscsi_is_cd_image(const char *name);
 int		hsscsi_drive_is_cd(int unit);
 extern int	g_cur_a2_stat;
@@ -446,7 +447,7 @@ drive_insert(int slot, int drive, const char *path)
 		return 1;
 	}
 	if(slot == 7 && !g_slot7_scsi) {
-		ui_message("No SCSI card - plug it in under Machine > Slots");
+		ui_message("No hard disk card - plug one in under Machine > Slots");
 		return 1;
 	}
 	if(S_ISDIR(sb.st_mode)) {
@@ -494,12 +495,12 @@ ui_insert_auto(const char *path)
 	if(is_folder(path)) {
 		/* a folder becomes a hard disk volume on the SCSI card */
 		if(!g_slot7_scsi) {
-			ui_message("No SCSI card - plug it in under Machine > Slots");
+			ui_message("No hard disk card - plug one in under Machine > Slots");
 			return;
 		}
 		d = folder_drive();
 		if(d < 0) {
-			ui_message("All 7 SCSI drives are in use");
+			ui_message("All 7 hard disk drives are in use");
 			return;
 		}
 		folder_mount(7, d, path);
@@ -516,7 +517,7 @@ ui_insert_auto(const char *path)
 		return;
 	}
 	if(slot == 7 && !g_slot7_scsi) {
-		ui_message("No SCSI card - plug it in under Machine > Slots");
+		ui_message("No hard disk card - plug one in under Machine > Slots");
 		return;
 	}
 	if(slot == 7 && waiting_for_startup_disk()) {
@@ -703,7 +704,8 @@ drives_draw(UiWindow *win, int cx, int cy)
 		drive = g_rows[r].drive;
 		dsk = iwm_get_dsk_from_slot_drive(slot, drive);
 		occupied = dsk->fd >= 0;
-		kind = (slot == 5) ? "3.5" : (slot == 6) ? "5.25" : "HD";
+		kind = (slot == 5) ? "3.5" : (slot == 6) ? "5.25" :
+			(slot == 7 && hsscsi_drive_is_cd(drive)) ? "CD" : "HD";
 
 		if(r == drop_row) {
 			ui_fill(cx, cy + y, cw - DR_SB_W, DR_ROW_H, UI_BLACK);
@@ -766,9 +768,9 @@ drives_draw(UiWindow *win, int cx, int cy)
 	}
 	if(!g_slot7_scsi) {
 		y = DR_TOP + g_nrows * DR_ROW_H + 14;
-		ui_draw_text(cx + 20, cy + y, "Slot 7 is empty: no SCSI card.", UI_GREY);
+		ui_draw_text(cx + 20, cy + y, "Slot 7 is empty: no hard disk card.", UI_GREY);
 		ui_draw_text(cx + 20, cy + y + 18,
-				"Plug it in under Machine > Slots.", UI_GREY);
+				"Plug one in under Machine > Slots.", UI_GREY);
 	}
 	ui_vscroll(win, cx, cy, cw - DR_SB_W, DR_TOP, DR_VISIBLE * DR_ROW_H,
 			g_nrows, DR_VISIBLE, &g_drives_top);
@@ -799,8 +801,13 @@ ui_drives_tick(void)
 
 	if(++poll >= 60) {			/* once a second: notes from Receive */
 		char	note[300];
+		static int secs;
 
 		poll = 0;
+		if(++secs == 4 && g_hsscsi_rom_missing) {
+			/* after the messages of the start; the bar is short */
+			ui_message("No SCSI card ROM: Hard Disk Card used");
+		}
 		startup_disk_moves_up();
 		if(ui_bridge_is_on() && bridge_next_result(note, sizeof(note))) {
 			printf("Receive note: %s\n", note);

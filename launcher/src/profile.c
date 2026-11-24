@@ -273,6 +273,12 @@ profile_build_args(const Profile *p, const char *exe, const char *cfgdir,
 			add_path(&o, cfg, v);
 		}
 	}
+	if((v = profile_get(p, "cdrom"))[0]) {
+		add_path(&o, "-cdrom", v);
+	}
+	if((v = profile_get(p, "hsscsirom"))[0]) {
+		add_path(&o, "-hsscsirom", v);
+	}
 	if((v = profile_get(p, "share"))[0]) {
 		add_path(&o, "-share", v);
 	}

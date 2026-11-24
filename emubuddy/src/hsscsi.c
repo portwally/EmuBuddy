@@ -60,6 +60,7 @@ static void	hs_update_devices(int at_reset);
 static int	g_hs_scanned;	/* the firmware used the 53C80 since the reset */
 
 char	*g_hsscsi_rom = "";		/* config: the card ROM; "" = search */
+int	g_hsscsi_rom_missing = 0;	/* the card was asked for, its ROM not found */
 
 static void
 hs_reset(void)
@@ -478,44 +479,73 @@ hs_read_rom(const char *path)
 	return 0;
 }
 
+static char g_hs_iigs_rom[1024];	/* the IIgs ROM in use: where to look */
+
+/* Looks for the card ROM and reads it: the file of the setting, then
+ * 341-0803.bin and a2hsscsi.zip next to the IIgs ROM. 1 when found. */
+static int
+hs_find_rom(const char *iigs_rom)
+{
+	char	path[1024];
+	const char *slash;
+	int	dirlen;
+
+	if(g_hsscsi_rom && g_hsscsi_rom[0] && hs_read_rom(g_hsscsi_rom) == 0) {
+		return 1;
+	}
+	if(!iigs_rom || !iigs_rom[0]) {
+		return 0;
+	}
+	slash = strrchr(iigs_rom, '/');
+	dirlen = slash ? (int)(slash - iigs_rom + 1) : 0;
+	snprintf(path, sizeof(path), "%.*s341-0803.bin", dirlen, iigs_rom);
+	if(hs_read_rom(path) == 0) {
+		return 1;
+	}
+	snprintf(path, sizeof(path), "%.*sa2hsscsi.zip", dirlen, iigs_rom);
+	return hs_read_rom(path) == 0;
+}
+
+/* For the Slots window: 1 when the card's ROM is there */
+int
+hsscsi_rom_found(void)
+{
+	return slot_card_get(7) == &g_hs_card || hs_find_rom(g_hs_iigs_rom);
+}
+
+/* 1 when path is a ROM file of the card (32 KB, or a zip with it) */
+int
+hsscsi_rom_file_ok(const char *path)
+{
+	return hs_read_rom(path) == 0;
+}
+
 /* Puts the card into slot 7 (on = 1) or takes it out. iigs_rom is the path
  * of the IIgs ROM in use: the card ROM (341-0803.bin or a2hsscsi.zip) is
  * looked for next to it when no path is set. Returns 0 when the card is in, -1 when its ROM was not found. */
 int
 hsscsi_attach(int on, const char *iigs_rom)
 {
-	char	path[1024];
-	const char *slash;
-	int	dirlen, i;
+	int	i;
 
+	if(iigs_rom) {
+		snprintf(g_hs_iigs_rom, sizeof(g_hs_iigs_rom), "%s", iigs_rom);
+	}
 	if(!on) {
 		if(slot_card_get(7) == &g_hs_card) {
 			slot_card_set(7, 0);
 		}
 		return 0;
 	}
-	g_hs_rom_ok = 0;
-	if(g_hsscsi_rom && g_hsscsi_rom[0]) {
-		g_hs_rom_ok = hs_read_rom(g_hsscsi_rom) == 0;
-	}
-	if(!g_hs_rom_ok && iigs_rom) {
-		slash = strrchr(iigs_rom, '/');
-		dirlen = slash ? (int)(slash - iigs_rom + 1) : 0;
-		snprintf(path, sizeof(path), "%.*s341-0803.bin", dirlen,
-								iigs_rom);
-		g_hs_rom_ok = hs_read_rom(path) == 0;
-		if(!g_hs_rom_ok) {
-			snprintf(path, sizeof(path), "%.*sa2hsscsi.zip",
-							dirlen, iigs_rom);
-			g_hs_rom_ok = hs_read_rom(path) == 0;
-		}
-	}
+	g_hs_rom_ok = hs_find_rom(iigs_rom);
 	if(!g_hs_rom_ok) {
 		printf("hsscsi: no card ROM (341-0803.bin, 32 KB, or "
 							"a2hsscsi.zip)\n");
 		slot_card_set(7, 0);
+		g_hsscsi_rom_missing = 1;
 		return -1;
 	}
+	g_hsscsi_rom_missing = 0;
 	memset(g_hs_ram, 0, sizeof(g_hs_ram));
 	ncr5380_init(HSSCSI_ID);
 	g_scsi_trace = getenv("EMUBUDDY_SCSI_TRACE") ?

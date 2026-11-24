@@ -18,6 +18,7 @@ config file, so your normal setup stays as it was. Add `-save` to keep them.
 | `-flop1 <img>`, `-flop2 <img>` | 5.25" drives (slot 6, drive 1/2) |
 | `-flop3 <img>`, `-flop4 <img>` | 3.5" drives (slot 5, drive 1/2) |
 | `-hard1 <img>` … `-hard7 <img>` | SCSI hard disks (slot 7, drive 1–7) |
+| `-cdrom <img>` | a CD image (`.iso`, `.cdr`, `.toast`) in hard disk drive 7, the CD-ROM drive of the High-Speed SCSI Card (`-sl7 hsscsi`) |
 | `-share <folder>` | a Mac/PC folder as a live ProDOS volume |
 | `<img or folder>` | goes into the first free drive that fits |
 
@@ -31,7 +32,11 @@ Images: `.po .hdv .2mg .dsk .do .woz .dc .shk .sdk` and more.
 | `-sl2 <card>` | `modem`, `imagewriter`, `postscript`, `none` (modem port) |
 | `-sl3 <card>` | `uthernet2`, `voc`, `none` |
 | `-sl4 <card>` | `mockingboard`, `uthernet2`, `none` |
-| `-sl7 <card>` | `scsi` (the hard disk card; `cffa2` means the same), `hsscsi` (Apple II High-Speed SCSI Card), `none`. `hsscsi` needs the card's ROM: `341-0803.bin` next to the IIgs ROM, or `-g_hsscsi_rom <file>`. Without it, slot 7 keeps the hard disk card. |
+| `-sl7 <card>` | `hd` (the Hard Disk Card; `scsi` and `cffa2` mean the same), `hsscsi` (Apple II High-Speed SCSI Card), `none` |
+
+The High-Speed SCSI Card needs its ROM, which EmuBuddy does not ship: `341-0803.bin` or MAME's `a2hsscsi.zip` next to
+the IIgs ROM file, or `-hsscsirom <file>`. Without it, slot 7 keeps the Hard Disk Card. With this card a hard disk has
+to be in its drive at startup; a CD (`-cdrom`, or dropped on the window) can go in at any time.
 
 Slots 5 and 6 hold the built-in drives. As on a real IIgs, a card is only
 used when its slot is set to "Your Card" in the IIgs Control Panel.

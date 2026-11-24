@@ -225,6 +225,29 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
 - Docs: README, `docs/CLI.md`, the manual (Slots, Drives, ROMs), German texts in `lang.c`.
 - Builds and a quick check on Windows and Linux (CI).
 
+**Done (2026-11-24), without the Windows and Linux check.**
+- Slots window: slot 7 offers Empty, Hard Disk Card and HS SCSI Card. Without the card's ROM, slot 7 keeps the Hard
+  Disk Card and the status bar says "No SCSI card ROM: Hard Disk Card used" (after Apply, and a few seconds after a
+  start).
+- Slots window, the card's ROM: the last line says whether the ROM file is there, and **SCSI ROM...** picks it (a
+  wrong file is refused). EmuBuddy does not ship or download the ROM: it is Apple's, with no licence to pass it on.
+  Ample downloads its ROMs from `https://www.callapple.org/roms/`; EmuBuddy would do that only with their permission.
+- CLI: `-sl7 hd | hsscsi | none` (`scsi` and `cffa2` still mean `hd`), `-cdrom <img>` (hard disk drive 7) and
+  `-hsscsirom <file>`. Built differently from the plan: one `-cdrom`, not `-cdrom<n>`, because S7D7 is the CD-ROM
+  drive.
+- Drives window: a CD-ROM drive is marked CD instead of HD. Messages say "hard disk card" where they said "SCSI card".
+- Launcher: `sl7` can be `hsscsi`; new profile keys `cdrom` (a field in the editor) and `hsscsirom` (no field: the
+  ROM is found next to the IIgs ROM). `test_profile` covers them.
+- Documents: README, `docs/CLI.md`, and the manual with a new section "The High-Speed SCSI Card and CD-ROMs" (60
+  pages). The three pictures of the Slots window got the new slot 7 row.
+- Tested: the Slots and Drives windows by picture, a start without the ROM, starts with `-sl7 hd`, `-sl7 scsi` and
+  `-sl7 hsscsi` with `-cdrom` and `-hsscsirom`; `test_scsi`, `test_profile` and `test_lang` pass.
+- Not done or not tested:
+  - Windows and Linux builds (CI) have not run with these changes.
+  - The Launcher's editor was not looked at on screen with the new field and choice.
+  - The picture of the Slots window with AppleTalk in the manual still shows the window without the ROM line.
+  - When the ROM is missing, the saved setting becomes Hard Disk Card.
+
 ### Phase 7 (later): CD audio
 - PLAY AUDIO, PAUSE and stop for `.cue`/`.bin` images, mixed into EmuBuddy's sound.
 

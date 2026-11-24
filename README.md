@@ -27,7 +27,7 @@ It runs on **macOS (Apple Silicon)**, **Windows (x64)** and **Linux (x64 and arm
   system's own. On Windows and Linux EmuBuddy draws a dark menu bar and status bar above and below the emulator
   picture, deliberately unlike the white GS/OS menu bar inside the emulator so the two cannot be mixed up.
 - **Disks on the fly.** Drop a disk image on the window, or pick one in the Drives window, while the IIgs is running.
-  Two 3.5" and two 5.25" drives, plus a SCSI card with seven hard disks. `.po`, `.2mg`, `.hdv`, `.dsk`, `.do`, `.woz`
+  Two 3.5" and two 5.25" drives, plus seven hard disks and a CD-ROM drive. `.po`, `.2mg`, `.hdv`, `.dsk`, `.do`, `.woz`
   and more.
 - **Shared folders.** A folder on your computer becomes a ProDOS disk that the IIgs can read and write. Files you
   drop on the emulator appear in it, and files the IIgs saves are ordinary files on your computer.
@@ -49,7 +49,7 @@ It runs on **macOS (Apple Silicon)**, **Windows (x64)** and **Linux (x64 and arm
 | | |
 |---|---|
 | ![Drives window](docs/screenshots/drives.png) | ![Slots window](docs/screenshots/slots.png) |
-| **Drives.** Floppies, a SCSI card with seven hard disks, shared folders. Drop disks or folders here. | **Slots.** Pick the card for each slot. The defaults suit internet access and printing. |
+| **Drives.** Floppies, seven hard disks, shared folders. Drop disks or folders here. | **Slots.** Pick the card for each slot. The defaults suit internet access and printing. |
 | ![Printer window](docs/screenshots/printer.png) | ![Disk Browser](docs/screenshots/browser.png) |
 | **Printer.** Pages from the IIgs, ready to save as PDF, print or open. | **Disk Browser.** Look inside any ProDOS disk image and take files out. |
 | ![Drop Destination window](docs/screenshots/dropdest.png) | ![Machine menu](docs/screenshots/machine.png) |
@@ -112,7 +112,7 @@ start the IIgs and moves it to hard disk 1 (a real IIgs tries hard disk 1 only).
 ### Disks and drives
 
 Open the **Drives** window with **F2**. It lists every drive: 3.5" in slot 5, 5.25" in slot 6 and the seven drives of the
-SCSI card in slot 7. Click a drive to choose an image, drop an image on a row, or drop it anywhere on the emulator and
+hard disk card in slot 7. Click a drive to choose an image, drop an image on a row, or drop it anywhere on the emulator and
 EmuBuddy picks the right drive from its size and type. Each row has a **Lock** box (write protect) and **Eject**.
 Ejecting waits if the disk is busy, so you cannot pull a disk out in the middle of a write.
 
@@ -159,7 +159,14 @@ The same convention is used everywhere, so a file can travel in both directions 
 | 3 | Empty, Video Overlay Card, Uthernet II |
 | 4 | Empty, Mockingboard, Uthernet II |
 | 5, 6 | The built-in disk drives (see Drives) |
-| 7 | Empty, SCSI card (seven hard disks) |
+| 7 | Empty, Hard Disk Card (seven hard disks), High-Speed SCSI Card |
+
+**Slot 7** has two cards for hard disks. The Hard Disk Card is the default and needs nothing else. The High-Speed SCSI
+Card is Apple's Apple II High-Speed SCSI Card with a real SCSI bus: choose it for a CD-ROM drive (hard disk 7; drop a
+`.iso`, `.cdr` or `.toast` image on the window) or for software that talks to the card itself. It needs the card's ROM,
+which EmuBuddy does not ship: `341-0803.bin` or MAME's `a2hsscsi.zip`, next to your IIgs ROM file or picked with
+**SCSI ROM...** in the Slots window. With this card, a
+hard disk has to be in its drive when the IIgs starts; a CD can go in at any time.
 
 The defaults are the Uthernet II in slot 4 and a PostScript printer on port 1, because that is what internet access and
 printing need. As on the real machine, a card also needs "Your Card" selected for its slot in the IIgs Control

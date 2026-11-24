@@ -167,6 +167,7 @@ static const struct { const char *en, *de; } g_text[] = {
 	{ "Hard disk 5", "Festplatte 5" },
 	{ "Hard disk 6", "Festplatte 6" },
 	{ "Hard disk 7", "Festplatte 7" },
+	{ "CD-ROM", "CD-ROM" },
 	{ "3.5\" drive 1", "3,5\"-Laufwerk 1" },
 	{ "3.5\" drive 2", "3,5\"-Laufwerk 2" },
 	{ "5.25\" drive 1", "5,25\"-Laufwerk 1" },

@@ -37,6 +37,24 @@ main(void)
 	CHECK(strstr(line, "-hard1 \"/disks/My System.hdv\""));
 	CHECK(strstr(line, "-scale 3"));
 	CHECK(strstr(line, "-crt"));
+	CHECK(!strstr(line, "-cdrom"));
+	{
+		Profile	cd = p;			/* the High-Speed SCSI Card with a CD */
+		char	line3[2000];
+
+		profile_set(&cd, "sl7", "hsscsi");
+		profile_set(&cd, "cdrom", "/disks/My CD.iso");
+		profile_set(&cd, "hsscsirom", "/roms/a2hsscsi.zip");
+		n = profile_build_args(&cd, "EmuBuddy", "/data/Games", buf, sizeof(buf),
+					argv, PROFILE_MAX_ARGS, err, sizeof(err));
+		CHECK(n > 0);
+		profile_cmdline(argv, n, line3, sizeof(line3));
+		CHECK(strstr(line3, "-sl7 hsscsi"));
+		CHECK(strstr(line3, "-cdrom \"/disks/My CD.iso\""));
+		CHECK(strstr(line3, "-hsscsirom /roms/a2hsscsi.zip"));
+		n = profile_build_args(&p, "EmuBuddy", "/data/Games", buf, sizeof(buf),
+					argv, PROFILE_MAX_ARGS, err, sizeof(err));
+	}
 	CHECK(strstr(line, "-profile Games"));
 	CHECK(strstr(line, "-cfg /data/Games/emubuddy.config"));
 	CHECK(strstr(line, "-quitshot /data/Games/snap.png"));

@@ -864,7 +864,7 @@ static Choice g_ch[] = {
 	{ "sl2", { "none", "modem", "imagewriter" }, 3, 0 },
 	{ "sl3", { "none", "uthernet2", "voc" }, 3, 0 },
 	{ "sl4", { "none", "mockingboard", "uthernet2" }, 3, 0 },
-	{ "sl7", { "none", "scsi" }, 2, 1 },
+	{ "sl7", { "none", "scsi", "hsscsi" }, 3, 1 },	/* scsi: the hard disk card */
 	{ "scale", { "1", "2", "3", "4" }, 4, -1 },
 };
 #define NCH	((int)(sizeof(g_ch) / sizeof(g_ch[0])))
@@ -889,6 +889,7 @@ static PathField g_pf[] = {
 	{ "hard5", "Hard disk 5", "", 0 },
 	{ "hard6", "Hard disk 6", "", 0 },
 	{ "hard7", "Hard disk 7", "", 0 },
+	{ "cdrom", "CD-ROM", "", 0 },		/* with sl7 = hsscsi */
 	{ "flop4", "3.5\" drive 2", "", 0 },
 	{ "flop2", "5.25\" drive 2", "", 0 },
 	{ "screen", "Screenshot", "", 0 },	/* shown when the Launcher shows screenshots */
@@ -2147,7 +2148,7 @@ lib_draw(UiWindow *win, int cx, int cy)
 		{ "sl4", "Slot 4" }, { "sl7", "Slot 7" }, { "hard1", "Hard disk 1" },
 		{ "hard2", "Hard disk 2" }, { "hard3", "Hard disk 3" }, { "hard4", "Hard disk 4" },
 		{ "hard5", "Hard disk 5" }, { "hard6", "Hard disk 6" }, { "hard7", "Hard disk 7" },
-		{ "flop3", "3.5\" drive 1" }, { "flop4", "3.5\" drive 2" },
+		{ "cdrom", "CD-ROM" }, { "flop3", "3.5\" drive 1" }, { "flop4", "3.5\" drive 2" },
 		{ "flop1", "5.25\" drive 1" }, { "flop2", "5.25\" drive 2" }, { "share", "Shared folder" }, { "scale", "Window size" },
 		{ NULL, NULL } };
 	int	i, y = 10, r;
@@ -2193,7 +2194,8 @@ lib_draw(UiWindow *win, int cx, int cy)
 					t++;
 				}
 				int	is_path = !strcmp(keys[i][0], "rom") || !strncmp(keys[i][0], "hard", 4) ||
-						!strncmp(keys[i][0], "flop", 4) || !strcmp(keys[i][0], "share");
+						!strncmp(keys[i][0], "flop", 4) || !strcmp(keys[i][0], "share") ||
+						!strcmp(keys[i][0], "cdrom");
 				int	missing = 0;
 
 				if(is_path) {
@@ -2372,7 +2374,7 @@ static void
 used_by(const char *path, char *out, size_t n)
 {
 	static const char *keys[] = { "rom", "hard1", "hard2", "hard3", "hard4", "hard5",
-		"hard6", "hard7", "flop1", "flop2", "flop3", "flop4", NULL };
+		"hard6", "hard7", "cdrom", "flop1", "flop2", "flop3", "flop4", NULL };
 	char	full[1200];
 
 	out[0] = 0;

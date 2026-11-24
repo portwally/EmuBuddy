@@ -90,6 +90,9 @@ usage(void)
 "  -flop1 <img>   -flop2 <img>    5.25\" drives (slot 6, drive 1/2)\n"
 "  -flop3 <img>   -flop4 <img>    3.5\" drives (slot 5, drive 1/2)\n"
 "  -hard1 <img> ... -hard7 <img>  SCSI hard disks (slot 7, drive 1-7)\n"
+"  -cdrom <img>                   CD image (.iso, .cdr, .toast) in hard disk drive 7,\n"
+"                                 the CD-ROM drive of the High-Speed SCSI Card\n"
+"  -hsscsirom <file>              ROM of the High-Speed SCSI Card (341-0803.bin or a zip)\n"
 "  -share <folder>                Mac/PC folder as a ProDOS volume\n"
 "  -bridge <folder>               folder IIgs programs may read/write (host bridge)\n"
 "  -webgate <port> | off          web gateway for IIgs browsers (proxy 192.168.64.254,\n"
@@ -108,9 +111,10 @@ usage(void)
 "  -sl2  modem | imagewriter | none   modem port\n"
 "  -sl3  uthernet2 | voc | none\n"
 "  -sl4  mockingboard | uthernet2 | none\n"
-"  -sl7  scsi | hsscsi | none         scsi: the hard disk card (cffa2 means the same)\n"
+"  -sl7  hd | hsscsi | none           hd: the hard disk card (scsi and cffa2 mean the same)\n"
 "                                     hsscsi: Apple II High-Speed SCSI Card; needs its ROM\n"
-"                                     341-0803.bin next to the IIgs ROM, or -g_hsscsi_rom <file>\n"
+"                                     341-0803.bin or a2hsscsi.zip next to the IIgs ROM,\n"
+"                                     or -hsscsirom <file>\n"
 "\n"
 "Machine:\n"
 "  -rom <file>          IIgs ROM file (ROM 01 or ROM 03)\n"
@@ -247,7 +251,7 @@ slot_option(int slot, const char *card)
 	case 7:
 		if(is(card, "hsscsi")) {
 			emit2("-g_slot7_scsi", "2");
-		} else if(is(card, "scsi") || is(card, "cffa2") ||
+		} else if(is(card, "hd") || is(card, "scsi") || is(card, "cffa2") ||
 						is(card, "a2scsi")) {
 			emit2("-g_slot7_scsi", "1");
 		} else if(is(card, "none") || is(card, "")) {
@@ -419,6 +423,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 				is(o, "-mhz") || is(o, "-ramsize") ||
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines") ||
+				is(o, "-cdrom") || is(o, "-hsscsirom") ||
 				is(o, "-title") || is(o, "-profile") || is(o, "-quitshot") || is(o, "-screen"))) {
 			fprintf(stderr, "EmuBuddy: %s needs a value (see -help)\n", a);
 			return -1;
@@ -443,6 +448,12 @@ emubuddy_cli(int *pargc, char ***pargv)
 			if(slot_option(o[3] - '0', v) != 0) {
 				return -1;
 			}
+		} else if(is(o, "-cdrom")) {
+			emit2("-s7d7", v);	/* the CD-ROM drive (hsscsi.c) */
+			check("disk", v);
+		} else if(is(o, "-hsscsirom")) {
+			emit2("-g_hsscsi_rom", v);
+			check("ROM", v);
 		} else if(is(o, "-share")) {
 			later(v);
 			check("folder", v);
