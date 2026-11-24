@@ -621,7 +621,32 @@ smartport_read_block(int unit_num, word32 blk, byte *local_buf)
 
 	g_io_amt += 0x200;
 
+	if(blk == 64 && dimage_start == 0) {
+		smartport_fix_iso_name(dsk, local_buf);
+	}
 	return 0;
+}
+
+/* EmuBuddy: macOS (hdiutil makehybrid -iso) fills the volume name of an
+ *  ISO 9660 CD image with zero bytes; the standard says spaces. GS/OS mounts
+ *  such a disc, but the Finder shows no icon for it. So the name is handed
+ *  to the IIgs filled with spaces. buf is block 64 of the image: the first
+ *  512 bytes of sector 16, the primary volume descriptor, with the name at
+ *  bytes 40-71. The image file is not changed. */
+void
+smartport_fix_iso_name(Disk *dsk, byte *buf)
+{
+	int	i;
+
+	if(!hsscsi_is_cd_image(dsk->name_ptr) || buf[0] != 1 ||
+						memcmp(&buf[1], "CD001", 5)) {
+		return;
+	}
+	for(i = 40; i < 72; i++) {
+		if(buf[i] == 0) {
+			buf[i] = ' ';
+		}
+	}
 }
 
 int

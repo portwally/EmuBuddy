@@ -170,7 +170,7 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
   shows up without a restart? Check first that the firmware and ProDOS 8 cope with a drive that has no disk.
 - Goal: GS/OS mounts an HFS CD and an ISO 9660 CD, and files copy from them.
 
-**Done (2026-11-24), except plain ISO 9660 (see below).**
+**Done (2026-11-24).**
 - `scsi_cd.c`: the drive says it is a Sony CDU-8002 (the AppleCD SC). 2048-byte blocks, or 512 after MODE SELECT, which
   is what GS/OS's driver asks for. It answers READ(6)/(10), READ CAPACITY, MODE SENSE/SELECT, READ TOC, eject (START STOP
   and Apple's `0xC0`) and Apple's own commands `0xC1`, `0xC2`, `0xCC` for a disc with one data track.
@@ -198,9 +198,12 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
   - A CD dropped on EmuBuddy while GS/OS runs goes into S7D7 and shows up in the Finder without a restart.
   - The firmware and GS/OS start normally with an empty CD-ROM drive on the bus.
   - With the Hard Disk Card, Total Replay and GS/OS start as before.
-- **Open: plain ISO 9660.** With a test CD made by macOS (`hdiutil makehybrid -iso`), GS/OS reads the volume
-  descriptor and the path table without an error, but no icon appears. It is not clear whether `HS.FST` dislikes
-  this image or something is still wrong in the drive. Needs a CD image that is known to work on a real IIgs.
+- **Plain ISO 9660 works; the test CD was at fault.** macOS (`hdiutil makehybrid -iso`) fills the volume name in
+  the volume descriptor with zero bytes, not with spaces as ISO 9660 says. GS/OS's `HS.FST` mounts such a disc, but
+  the Finder shows no icon for it, with the Hard Disk Card as well. With the name filled with spaces, the same CD
+  shows up as TESTISO on both cards (on the SCSI card with a CD icon). So EmuBuddy hands the name to the IIgs filled
+  with spaces (`smartport_fix_iso_name` in `smartport.c`, for `.iso`, `.cdr` and `.toast` images on both cards). The
+  image file is not changed. Tested with the unchanged macOS image on both cards.
 - How the driver problem was found: a memory dump of the working and the failing case, a small 65816 disassembler,
   and temporary breakpoint output at the driver's error exits. `SCSICD.Driver` loads at `$03/0000` on the test system;
   its read routine is at `$14AF`.

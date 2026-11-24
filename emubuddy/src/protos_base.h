@@ -591,6 +591,8 @@ void do_c70a(word32 arg0);
 int do_read_c7(int unit_num, word32 buf, word32 blk);
 int do_write_c7(int unit_num, word32 buf, word32 blk);
 int smartport_read_block(int unit_num, word32 blk, byte *local_buf);
+void smartport_fix_iso_name(Disk *dsk, byte *buf);
+int hsscsi_is_cd_image(const char *name);
 int smartport_write_block(int unit_num, word32 blk, byte *local_buf);
 int smartport_memory_write(Disk *dsk, byte *bufptr, dword64 doffset, word32 size);
 int do_format_c7(int unit_num);
