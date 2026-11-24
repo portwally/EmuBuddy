@@ -93,6 +93,27 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
 - Test: `tests/test_scsi.c`, built like `test_uthernet2`. It drives the chip registers the way the card ROM does, with no
   IIgs.
 
+**Done (2026-11-24).**
+- `scsi.h`: the interface between card, chip and devices. None of it knows about the IIgs.
+- `ncr5380.c`: the chip and the bus. The targets answer at once. It handles:
+  - arbitration and selection
+  - IDENTIFY and the LUN
+  - REQ/ACK by programmed I/O and by pseudo-DMA
+  - the interrupt on a phase change in DMA mode, and the bus reset
+- `scsi_disk.c`: the hard disk with the commands listed above, plus REQUEST SENSE data and LUNs other than 0.
+- `smartport_read_block`/`smartport_write_block` in `smartport.c` work on a plain buffer. The SmartPort card uses them
+  too.
+- A drive without a disk does not answer selection, so it looks like an unplugged device. Whether GS/OS then notices a
+  disk put in later is left for phase 3.
+- `tests/test_scsi.c` covers:
+  - selection of empty IDs
+  - INQUIRY, READ CAPACITY and MODE SENSE
+  - READ(6)/(10) and WRITE(10) by DMA
+  - reading past the end, with REQUEST SENSE afterwards
+  - write protection, an unknown command, and a bus reset
+  All tests pass. They drive the chip the way MAME's card does, not yet with the real ROM; phase 3 shows whether
+  Apple's firmware agrees.
+
 ### Phase 3: the card (medium)
 - `hsscsi.c`:
   - Registers `$C0n0–$C0nF`: 53C80, pseudo-DMA port, DMA control (`$C0nC`), resume and reset (`$C0nD`).

@@ -90,6 +90,8 @@ set(GSPLUS_CORE_SOURCES
     paddles.c
     mockingboard.c
     hsscsi.c
+    ncr5380.c
+    scsi_disk.c
     sim65816.c
     smartport.c
     doc.c
@@ -203,6 +205,11 @@ add_executable(test_uthernet2 EXCLUDE_FROM_ALL tests/test_uthernet2.c
 if(SLIRP_FOUND)
     target_link_libraries(test_uthernet2 PRIVATE PkgConfig::SLIRP)
 endif()
+
+# Host test for the SCSI controller and hard disk (ncr5380.c, scsi_disk.c),
+# not built by default:
+#   cmake --build build --target test_scsi && build/test_scsi
+add_executable(test_scsi EXCLUDE_FROM_ALL tests/test_scsi.c ncr5380.c scsi_disk.c)
 
 # Host test for AppleTalk (localtalk.c), not built by default:
 #   cmake --build build --target test_localtalk && build/test_localtalk

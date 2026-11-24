@@ -530,15 +530,42 @@ int
 do_read_c7(int unit_num, word32 buf, word32 blk)
 {
 	byte	local_buf[0x200];
-	Disk	*dsk;
-	byte	*bptr;
-	dword64	dimage_start, dimage_size, dret;
 	word32	val;
-	int	len, fd;
+	int	ret;
 	int	i;
 
 	dbg_log_info(g_cur_dfcyc, (buf << 8) | (unit_num & 0xff), blk, 0xc701);
-	if((unit_num < 0) || (unit_num > MAX_C7_DISKS)) {
+	ret = smartport_read_block(unit_num, blk, &local_buf[0]);
+	if(ret) {
+		return ret;
+	}
+
+	if(buf >= 0xfc0000) {
+		disk_printf("reading into ROM, just returning\n");
+		return 0;
+	}
+
+	for(i = 0; i < 0x200; i += 2) {
+		val = (local_buf[i+1] << 8) + local_buf[i];
+		set_memory16_c(buf + i, val, 0);
+	}
+
+	return 0;
+}
+
+/* EmuBuddy: reads block blk of drive unit_num (0-based) into local_buf (512
+ *  bytes). Returns 0 or a ProDOS error. Used by the SmartPort card and by the
+ *  SCSI hard disks (scsi_disk.c). */
+int
+smartport_read_block(int unit_num, word32 blk, byte *local_buf)
+{
+	Disk	*dsk;
+	byte	*bptr;
+	dword64	dimage_start, dimage_size, dret;
+	int	len, fd;
+	int	i;
+
+	if((unit_num < 0) || (unit_num >= MAX_C7_DISKS)) {
 		halt_printf("do_read_c7: unit_num: %d\n", unit_num);
 		smartport_error();
 		return 0x28;
@@ -594,16 +621,6 @@ do_read_c7(int unit_num, word32 buf, word32 blk)
 
 	g_io_amt += 0x200;
 
-	if(buf >= 0xfc0000) {
-		disk_printf("reading into ROM, just returning\n");
-		return 0;
-	}
-
-	for(i = 0; i < 0x200; i += 2) {
-		val = (local_buf[i+1] << 8) + local_buf[i];
-		set_memory16_c(buf + i, val, 0);
-	}
-
 	return 0;
 }
 
@@ -611,14 +628,25 @@ int
 do_write_c7(int unit_num, word32 buf, word32 blk)
 {
 	byte	local_buf[0x200];
-	Disk	*dsk;
-	dword64	dret, dimage_start, dimage_size;
-	int	len, fd, ret;
 	int	i;
 
 	dbg_log_info(g_cur_dfcyc, (buf << 16) | (unit_num & 0xff), blk, 0xc702);
+	for(i = 0; i < 0x200; i++) {
+		local_buf[i] = get_memory_c(buf + i);
+	}
+	return smartport_write_block(unit_num, blk, &local_buf[0]);
+}
 
-	if(unit_num < 0 || unit_num > MAX_C7_DISKS) {
+/* EmuBuddy: writes local_buf (512 bytes) to block blk of drive unit_num
+ *  (0-based). Returns 0 or a ProDOS error. */
+int
+smartport_write_block(int unit_num, word32 blk, byte *local_buf)
+{
+	Disk	*dsk;
+	dword64	dret, dimage_start, dimage_size;
+	int	len, fd, ret;
+
+	if(unit_num < 0 || unit_num >= MAX_C7_DISKS) {
 		halt_printf("do_write_c7: unit_num: %d\n", unit_num);
 		smartport_error();
 		return 0x28;
@@ -633,10 +661,6 @@ do_write_c7(int unit_num, word32 buf, word32 blk)
 		halt_printf("c7_fd == %d!\n", fd);
 		smartport_error();
 		return 0x28;
-	}
-
-	for(i = 0; i < 0x200; i++) {
-		local_buf[i] = get_memory_c(buf + i);
 	}
 
 	if(dsk->write_prot) {
