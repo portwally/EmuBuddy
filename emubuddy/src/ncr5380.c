@@ -19,7 +19,10 @@
  * message in 7. */
 
 #include "scsi.h"
+#include <stdio.h>
 #include <string.h>
+
+int	g_scsi_trace = 0;	/* 1: print every command and its result */
 
 /* initiator command register */
 #define ICR_RST		0x80
@@ -220,6 +223,23 @@ run_command(void)
 	d->xfer_chunk = 512;
 	d->status = SCSI_GOOD;
 	d->start(d, g_ncr.cdb, g_ncr.lun);
+	if(g_scsi_trace) {
+		int	i;
+
+		printf("scsi: id %d lun %d cmd", g_ncr.id, g_ncr.lun);
+		for(i = 0; i < g_ncr.cdb_len; i++) {
+			printf(" %02x", g_ncr.cdb[i]);
+		}
+		printf(" -> %s %u bytes, status %02x",
+			d->xfer_dir == SCSI_DIR_IN ? "in" :
+			d->xfer_dir == SCSI_DIR_OUT ? "out" : "no data",
+			d->xfer_len, d->status);
+		if(d->status) {
+			printf(" (sense %x/%02x/%02x)", d->sense_key, d->asc,
+								d->ascq);
+		}
+		printf("\n");
+	}
 	g_ncr.pos = 0;
 	g_ncr.chunk_pos = 0;
 	g_ncr.chunk_len = 0;
@@ -473,8 +493,9 @@ ncr5380_write(int reg, unsigned val)
 			g_ncr.irq = 1;
 			return;
 		}
-		if((val & ICR_ACK) && !(old & ICR_ACK) && g_ncr.req &&
-							!(g_ncr.mr & MR_DMA)) {
+		/* Also with the DMA mode bit set: Apple's firmware leaves it
+		 * on while it takes the status byte by hand */
+		if((val & ICR_ACK) && !(old & ICR_ACK) && g_ncr.req) {
 			g_ncr.req = 0;		/* target: byte taken */
 			g_ncr.ack_pending = 1;
 			if(!(g_ncr.phase & 1)) {

@@ -31,7 +31,7 @@ Images: `.po .hdv .2mg .dsk .do .woz .dc .shk .sdk` and more.
 | `-sl2 <card>` | `modem`, `imagewriter`, `postscript`, `none` (modem port) |
 | `-sl3 <card>` | `uthernet2`, `voc`, `none` |
 | `-sl4 <card>` | `mockingboard`, `uthernet2`, `none` |
-| `-sl7 <card>` | `scsi`, `none` (`cffa2`, `hsscsi` also mean `scsi`) |
+| `-sl7 <card>` | `scsi` (the hard disk card; `cffa2` means the same), `hsscsi` (Apple II High-Speed SCSI Card), `none`. `hsscsi` needs the card's ROM: `341-0803.bin` next to the IIgs ROM, or `-g_hsscsi_rom <file>`. Without it, slot 7 keeps the hard disk card. |
 
 Slots 5 and 6 hold the built-in drives. As on a real IIgs, a card is only
 used when its slot is set to "Your Card" in the IIgs Control Panel.

@@ -108,7 +108,9 @@ usage(void)
 "  -sl2  modem | imagewriter | none   modem port\n"
 "  -sl3  uthernet2 | voc | none\n"
 "  -sl4  mockingboard | uthernet2 | none\n"
-"  -sl7  scsi | none                  (cffa2 and hsscsi also mean scsi)\n"
+"  -sl7  scsi | hsscsi | none         scsi: the hard disk card (cffa2 means the same)\n"
+"                                     hsscsi: Apple II High-Speed SCSI Card; needs its ROM\n"
+"                                     341-0803.bin next to the IIgs ROM, or -g_hsscsi_rom <file>\n"
 "\n"
 "Machine:\n"
 "  -rom <file>          IIgs ROM file (ROM 01 or ROM 03)\n"
@@ -243,7 +245,9 @@ slot_option(int slot, const char *card)
 								slot);
 		return 0;
 	case 7:
-		if(is(card, "scsi") || is(card, "hsscsi") || is(card, "cffa2") ||
+		if(is(card, "hsscsi")) {
+			emit2("-g_slot7_scsi", "2");
+		} else if(is(card, "scsi") || is(card, "cffa2") ||
 						is(card, "a2scsi")) {
 			emit2("-g_slot7_scsi", "1");
 		} else if(is(card, "none") || is(card, "")) {

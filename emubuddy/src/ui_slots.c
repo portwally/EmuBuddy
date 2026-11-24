@@ -102,7 +102,11 @@ apply(void)
 	g_voc_enable = g_pend[2] == 1;
 	g_slot4_mockingboard = g_pend[3] == 1;
 	g_uthernet2_slot = (g_pend[2] == 2) ? 3 : (g_pend[3] == 2) ? 4 : 0;
-	g_slot7_scsi = g_pend[6] > 0;
+	if(g_pend[6] != slot_current(6)) {
+		/* only when changed here: a High-Speed SCSI Card (2), set
+		 * elsewhere, stays what it is */
+		g_slot7_scsi = g_pend[6] > 0;
+	}
 	g_config_kegs_update_needed = 1;
 	if(restart) {
 		load_roms_init_memory();	/* new slot 7 card ROM */

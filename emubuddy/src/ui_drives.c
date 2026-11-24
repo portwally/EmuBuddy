@@ -26,6 +26,7 @@ int		cfg_ui_partition_choose(int pos, int slot, int drive,
 extern int	g_cfg_select_partition;
 extern int	g_cfg_slotdrive;
 extern int	g_slot7_scsi;
+int		hsscsi_scanned(void);	/* hsscsi.c */
 extern int	g_cur_a2_stat;
 extern int	g_bridge_off;
 
@@ -245,6 +246,15 @@ hd_mark_new(int slot, int drive)
 	}
 }
 
+/* With the High-Speed SCSI Card, a disk put into a hard disk drive while the
+ * IIgs runs is found at the next restart only: the card's firmware and GS/OS
+ * look for SCSI devices once, at startup, as on a real SCSI bus. */
+static int
+scsi_needs_restart(int slot)
+{
+	return slot == 7 && g_slot7_scsi == 2 && hsscsi_scanned();
+}
+
 static void
 folder_mount(int slot, int drive, const char *path)
 {
@@ -264,7 +274,10 @@ folder_mount(int slot, int drive, const char *path)
 	insert_disk(slot, drive, clean, 0, 0, -1, folder_blocks(slot));
 	if(dsk->fd >= 0) {
 		hd_mark_new(slot, drive);
-		ui_message("Shared folder %s is in S%dD%d", base_name(clean),
+		/* the status bar is short: what to do comes first */
+		ui_message(scsi_needs_restart(slot) ?
+			"Restart the IIgs to see folder %s (S%dD%d)" :
+			"Shared folder %s is in S%dD%d", base_name(clean),
 							slot, drive + 1);
 	} else {
 		ui_message("Can't share %s (too big for a %s volume?)",
@@ -451,7 +464,9 @@ drive_insert(int slot, int drive, const char *path)
 	if(cfg_maybe_insert_disk(slot, drive, path)) {
 		hd_mark_new(slot, drive);
 		recent_add(path);
-		ui_message("Inserted %s in S%dD%d", base_name(path), slot,
+		ui_message(scsi_needs_restart(slot) ?
+			"Restart the IIgs to see %s (S%dD%d)" :
+			"Inserted %s in S%dD%d", base_name(path), slot,
 								drive + 1);
 		if(waiting && drive == 0) {
 			/* the IIgs was waiting for a startup disk: start from this one */

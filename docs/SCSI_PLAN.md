@@ -48,8 +48,9 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
 **Done (2026-11-24).** Findings:
 - MAME runs headless with `SDL_VIDEODRIVER=dummy`, `-video none`, `-sound none` and the input providers set to
   `none`. It then opens no window and doesn't take focus.
-- **Startup ID:** the card starts up from the lowest SCSI ID that has a disk. IDs 0, 2 and 5 started Total Replay; a disk
-  at ID 6 gave "Check startup device". So S7D1 = ID 0, S7D2 = ID 1, and so on.
+- **Startup ID:** with one disk at a time, IDs 0, 2 and 5 started Total Replay in MAME, and a disk at ID 6 gave "Check
+  startup device". From this I took "the lowest ID". **That was wrong** (corrected in phase 3): the firmware looks for
+  devices from ID 6 downwards and starts up from the first one, so from the highest ID that has a disk.
 - **MAME is not a GS/OS reference:**
   - ProDOS 8 starts fine.
   - GS/OS starts from the card, then loses its disk. The GTA disk asked for "System"; `system.hdv` said "may be damaged".
@@ -128,6 +129,35 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
   - A shared folder shows up.
   - Writing and reading back a large file gives the same file.
 
+**Done (2026-11-24).** With Apple's ROM `341-0803`:
+- `hsscsi.c` passes the registers to the 53C80, with the pseudo-DMA port, the watchdog bit and the chip reset.
+  `-sl7 hsscsi` picks the card.
+- **Drive order:** S7D1 = ID 6, S7D2 = ID 5, down to S7D7 = ID 0. The firmware starts up from the highest ID with a
+  disk, and it numbers the drives in the same order. With three drives it started from S7D1.
+- **One fault found in the chip:** the firmware leaves the DMA mode bit on while it takes the status byte by hand. The
+  chip ignored that ACK, so the second command (INQUIRY) never ended. Fixed in `ncr5380.c`; `test_scsi` has a test for it
+  that fails with the old code.
+- The ROM loads from `341-0803.bin` or from a zip with that file in it (MAME's `a2hsscsi.zip`, stored or deflated).
+  EmuBuddy's zip reader for disks leaves out files under 140 KB, so `hsscsi.c` reads the zip directory itself.
+- Results:
+  - ProDOS 8: Total Replay starts.
+  - GS/OS 6.0.x: `system.hdv` starts to the Finder, and Grand Theft Apple starts. About 1,300 commands each, none
+    failed. GS/OS uses its own SCSI driver (READ(10)/WRITE(10)) and wrote to the disk. MAME loses the disk here.
+  - Three drives: the Finder shows the startup disk, a second hard disk and a shared folder.
+  - Apple's High-Speed SCSI Utilities v2.0 (from floppy) list both drives with size, name and SCSI ID, in "HD SC
+    Partition" and in "SCSI Verify".
+  - Writing: a BASIC program wrote 40 blocks through the firmware and read them back with no difference. On the Mac
+    the 40 blocks hold the pattern and no other block of the image changed.
+  - With the Hard Disk Card, Total Replay, GS/OS and GTA start as before.
+- **A disk put in while the IIgs runs** is not seen: GS/OS sent no command at all to the new ID. The firmware and GS/OS
+  look for devices once, at startup, as on a real SCSI bus. (The Hard Disk Card shows the new disk in the Finder at
+  once.) EmuBuddy now says "Restart the IIgs to see …" in that case. A drive that says it is removable could change
+  this; that belongs to phase 4, where the CD-ROM needs the same parts.
+- `EMUBUDDY_SCSI_TRACE=1` prints every SCSI command, `=2` also every register access.
+- Not done here, left for phase 6: the third choice in the Slots window (it keeps a High-Speed SCSI Card that was set
+  elsewhere, but cannot pick one), the message when the ROM is missing, and the Launcher.
+- Not tested: a large file copied in the Finder, a disk taken out while GS/OS uses it, and ROM 01.
+
 ### Phase 4: CD-ROM (medium)
 - `scsi_cd.c`: a read-only device with 2048-byte blocks. It answers:
   - INQUIRY with an Apple CD drive's name (to be checked: which names GS/OS's SCSICD driver accepts; MAME's `aplcdsc`
@@ -136,6 +166,8 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
   - eject
 - Drives: a CD row with an eject button. Drop a `.iso` on it or anywhere on the emulator.
 - GS/OS sees the disk change through the unit attention after a CD is swapped.
+- To decide here: should hard disk drives also say they are removable, so that a disk put in or swapped while GS/OS runs
+  shows up without a restart? Check first that the firmware and ProDOS 8 cope with a drive that has no disk.
 - Goal: GS/OS mounts an HFS CD and an ISO 9660 CD, and files copy from them.
 
 ### Phase 5: true DMA (small to medium, optional)
@@ -175,10 +207,9 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
   is the reference to compare against.
 - **Phase 1 touches the core memory map.** A mistake can break other slots or the slot 3 ROM. Test old software before
   moving on.
-- **Startup ID.** Which SCSI ID the card starts from decides how S7D1–S7D7 map to IDs (phase 0).
-- **Disks put in while running.** Today EmuBuddy tells GS/OS about a new disk itself (`ui_drives.c`). On SCSI that has
-  to happen through the unit attention of the device, and GS/OS may only notice it on removable devices. The drives may
-  need to say they are removable.
+- **Startup ID.** Settled in phase 3: the highest ID with a disk, so S7D1 = ID 6.
+- **Disks put in while running.** Settled in part in phase 3: GS/OS does not notice a new hard disk, and EmuBuddy tells
+  the user to restart. Whether the drives should say they are removable is open (phase 4).
 - **The ROM is Apple's code.** EmuBuddy does not ship it. The Settings text and the manual say where it comes from (a
   real card, or MAME's `a2hsscsi.zip`).
 - **The Hard Disk Card stays the default.** Profiles and configs written today must start the same as before.

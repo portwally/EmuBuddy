@@ -342,6 +342,33 @@ main(void)
 	WR(1, 0);
 	RD(7);
 
+	/* 10. The firmware of Apple's High-Speed SCSI Card leaves the DMA mode
+	 * bit on after the data and takes status and message by hand */
+	memset(cdb, 0, sizeof(cdb));
+	cdb[0] = 0x08;
+	cdb[3] = 5;
+	cdb[4] = 1;
+	CHECK(command(0, cdb, 6) == 0, "READ(6) not taken");
+	n = dma_in(buf, sizeof(buf));
+	CHECK(n == 512 && !memcmp(buf, &g_img[0][5 * 512], 512),
+						"READ(6) moved %d bytes", n);
+	WR(2, 0);
+	WR(2, 0x02);			/* DMA mode, no transfer started */
+	WR(3, 3);
+	CHECK((RD(4) & 0x7c) == 0x6c, "no status phase: %02x", RD(4));
+	st = (int)RD(0);
+	WR(1, 0x11);			/* ACK */
+	CHECK(!(RD(4) & 0x20), "REQ stays up: ACK ignored in DMA mode");
+	WR(1, 0x01);
+	WR(3, 7);
+	CHECK((RD(4) & 0x7c) == 0x7c, "no message in phase: %02x", RD(4));
+	WR(1, 0x11);
+	WR(1, 0x01);
+	WR(1, 0);
+	WR(2, 0);
+	CHECK(st == 0 && !(RD(4) & 0x40), "status %d, bus %02x", st, RD(4));
+	RD(7);
+
 	if(g_fails) {
 		printf("%d SCSI tests FAILED\n", g_fails);
 		return 1;

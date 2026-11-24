@@ -57,6 +57,7 @@ int	scsi_sense(Scsi_dev *d, int key, int asc, int ascq);
 int	scsi_cdb_len(unsigned char op);
 
 /* ---- NCR 5380 / 53C80 with its bus ---- */
+extern int g_scsi_trace;	/* 1: print every command and its result */
 void	ncr5380_init(int own_id);
 void	ncr5380_reset(void);
 /* Attaches device d at SCSI ID id (NULL removes it). */
