@@ -176,7 +176,9 @@ int	g_webgate_port = 6502;		/* web gateway for IIgs browsers: its port, 0 = off 
 int	g_auto_share = 1;			/* make and mount a shared folder when none is */
 int	g_skin = 0;				/* 0 = IIgs look, 1 = System (macOS menu bar, native choosers) */
 int	g_window_scale = 1;		/* EmuBuddy window size: 1x..4x */
-int	g_slot7_scsi = 1;		/* slot 7: 1 SCSI card (7 hard drives), 0 empty */
+int	g_slot7_scsi = 1;		/* slot 7: 1 hard disk card (7 drives), 2 High-Speed SCSI card, 0 empty */
+extern char *g_hsscsi_rom;		/* hsscsi.c: the card ROM */
+int	hsscsi_attach(int on, const char *iigs_rom);
 int	g_uthernet2_slot = 4;		/* slot of the Uthernet II card, 0 = none */
 
 int	g_fullscreen = 0;	/* fullscreen state; applied live, F11 also toggles it */
@@ -447,7 +449,8 @@ Cfg_menu g_cfg_main_menu[] = {
 		KNMP(g_config_kegs_auto_update), CFGTYPE_INT },
 { "Slot 4 Mockingboard,0,Empty,1,Mockingboard",
 		KNMP(g_slot4_mockingboard), CFGTYPE_INT },
-{ "Slot 7 SCSI card,0,Empty,1,SCSI card", KNMP(g_slot7_scsi), CFGTYPE_INT },
+{ "Slot 7 SCSI card,0,Empty,1,SCSI card,2,High-Speed SCSI card", KNMP(g_slot7_scsi), CFGTYPE_INT },
+{ "High-Speed SCSI card ROM", KNMP(g_hsscsi_rom), CFGTYPE_STR },
 { "Window size,1,1x,2,2x,3,3x,4,4x", KNMP(g_window_scale), CFGTYPE_INT },
 { "Bridge folder", KNMP(g_bridge_root), CFGTYPE_STR },
 { "Skin,0,IIgs,1,System", KNMP(g_skin), CFGTYPE_INT },
@@ -1405,7 +1408,12 @@ config_load_roms()
 
 	memset(&g_rom_cards_ptr[0], 0, 256*16);
 
-	for(i = 0; g_slot7_scsi && i < 256; i++) {
+	/* EmuBuddy: the High-Speed SCSI card brings its own firmware; without
+	 *  its ROM, slot 7 falls back to the hard disk card */
+	if(hsscsi_attach(g_slot7_scsi == 2, &g_cfg_tmp_path[0]) != 0) {
+		g_slot7_scsi = 1;
+	}
+	for(i = 0; (g_slot7_scsi == 1) && i < 256; i++) {
 		// Place HD PROM in slot 7 (only if the SCSI card is plugged in)
 		g_rom_cards_ptr[0x700 + i] = g_rom_c700[i];
 		// g_rom_cards_ptr[0x500 + i] = g_rom_c700[i];

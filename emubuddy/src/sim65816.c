@@ -12,6 +12,7 @@
 
 #define INCLUDE_RCSID_C
 #include "defc.h"
+#include "slotcard.h"
 #include "bridge.h"
 #undef INCLUDE_RCSID_C
 
@@ -415,6 +416,7 @@ do_reset()
 	iwm_reset();
 	scc_reset();
 	sound_reset(g_cur_dfcyc);
+	slot_cards_reset();		// EmuBuddy: cards with firmware (slotcard.h)
 	setup_pageinfo();
 	change_display_mode(g_cur_dfcyc);
 

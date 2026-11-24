@@ -9,6 +9,7 @@
 /**********************************************************************/
 
 #include "defc.h"
+#include "slotcard.h"
 
 extern char g_kegs_version_str[];
 
@@ -70,6 +71,77 @@ extern int g_slot4_mockingboard;
 extern int g_uthernet2_slot;
 int uthernet2_read(int reg);
 void uthernet2_write(int reg, int val);
+
+/* EmuBuddy: slot cards with their own firmware (slotcard.h) */
+static Slot_card *g_slot_card[8];
+static int	g_c800_slot = 0;	/* slot that owns $C800-$CFFF, 0 = none */
+
+void
+slot_card_set(int slot, Slot_card *card)
+{
+	if(slot < 1 || slot > 7) {
+		return;
+	}
+	g_slot_card[slot] = card;
+	if(g_c800_slot == slot) {
+		g_c800_slot = 0;
+	}
+	if(card && card->reset) {
+		card->reset();
+	}
+	fixup_intcx();		/* the slot ROM page now goes to the card */
+}
+
+Slot_card *
+slot_card_get(int slot)
+{
+	return (slot >= 1 && slot <= 7) ? g_slot_card[slot] : 0;
+}
+
+int
+slot_card_c800_owner(void)
+{
+	return g_c800_slot;
+}
+
+void
+slot_cards_reset(void)
+{
+	int	i;
+
+	g_c800_slot = 0;
+	for(i = 1; i < 8; i++) {
+		if(g_slot_card[i] && g_slot_card[i]->reset) {
+			g_slot_card[i]->reset();
+		}
+	}
+}
+
+/* The card in slot s, if its $Cs00 page is visible: slot set to "Your Card"
+ *  in $C02D and INTCXROM off */
+static Slot_card *
+slot_card_visible(int slot)
+{
+	Slot_card *card;
+
+	card = g_slot_card[slot & 7];
+	if(!card || ((g_c02d_int_crom & (1 << (slot & 7))) == 0) ||
+						(g_c068_statereg & 1)) {
+		return 0;
+	}
+	return card;
+}
+
+/* $C800-$CFFF goes to the owning card unless INTCXROM or INTC8ROM is set */
+static Slot_card *
+slot_card_c800(void)
+{
+	if(!g_c800_slot || (g_c068_statereg & 0x401)) {
+		return 0;
+	}
+	return g_slot_card[g_c800_slot];
+}
+
 word32	g_zipgs_unlock = 0;
 word32	g_zipgs_reg_c059 = 0x5f;
 	// 7=LC cache dis, 6==5ms paddle del en, 5==5ms ext del en,
@@ -333,6 +405,11 @@ fixup_intcx()
 				rom_inc = &(g_rom_cards_ptr[0]) +
 							((j - 0xc0) << 8);
 				if(j == 0xc4) {		// Mockingboard
+					rom_inc = SET_BANK_IO;
+				}
+				if(g_slot_card[j & 7]) {
+					// Card with firmware: reading its page
+					//  also hands it $C800-$CFFF
 					rom_inc = SET_BANK_IO;
 				}
 			}
@@ -1018,6 +1095,14 @@ io_read(word32 loc, dword64 *cyc_ptr)
 
 	dfcyc = *cyc_ptr;
 
+	if(((loc & 0xf80) == 0x080) && (loc & 0x70) &&
+				g_slot_card[(loc >> 4) & 7] &&
+				g_slot_card[(loc >> 4) & 7]->io_read) {
+		// $C090-$C0FF: registers of a slot card with firmware
+		return g_slot_card[(loc >> 4) & 7]->io_read(loc & 0xf, dfcyc)
+									& 0xff;
+	}
+
 /* IO space */
 	switch((loc >> 8) & 0xf) {
 	case 0: /* 0xc000 - 0xc0ff */
@@ -1440,6 +1525,12 @@ io_read(word32 loc, dword64 *cyc_ptr)
 		}
 	case 1: case 2: case 5: case 6: case 7:
 		/* c100 - c7ff, (except c3xx, c4xx) */
+		if(slot_card_visible((loc >> 8) & 7)) {
+			// The card's firmware page; it now owns $C800
+			g_c800_slot = (loc >> 8) & 7;
+			return g_slot_card[g_c800_slot]->rom_read(loc & 0xff,
+								dfcyc) & 0xff;
+		}
 		return float_bus(dfcyc);
 	case 3:	// c300
 		return c3xx_read(dfcyc, loc);
@@ -1449,11 +1540,18 @@ io_read(word32 loc, dword64 *cyc_ptr)
 		}
 		return mockingboard_read(loc, dfcyc);
 	case 8: case 9: case 0xa: case 0xb: case 0xc: case 0xd: case 0xe:
+		if(slot_card_c800() && slot_card_c800()->exp_read) {
+			return slot_card_c800()->exp_read(loc & 0x7ff, dfcyc) &
+									0xff;
+		}
 		return float_bus(dfcyc);
 		// UNIMPL_READ;
 	case 0xf:	// $CFxx
 		if(g_c068_statereg & 0x401) {		// INTC8ROM or INTCX
 			val = g_rom_fc_ff_ptr[0x3cf00 + (loc & 0xff)];
+		} else if(slot_card_c800() && slot_card_c800()->exp_read) {
+			val = slot_card_c800()->exp_read(loc & 0x7ff, dfcyc) &
+									0xff;
 		} else {
 			val = float_bus(dfcyc);
 		}
@@ -1461,6 +1559,7 @@ io_read(word32 loc, dword64 *cyc_ptr)
 			if(g_c068_statereg & 0x400) {
 				set_statereg(dfcyc, g_c068_statereg & (~0x400));
 			}
+			g_c800_slot = 0;	// every card lets go of $C800
 		}
 		return val;
 		// UNIMPL_READ;
@@ -1488,6 +1587,13 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 	dfcyc = *cyc_ptr;
 
 	val = val & 0xff;
+	if(((loc & 0xf80) == 0x080) && (loc & 0x70) &&
+				g_slot_card[(loc >> 4) & 7] &&
+				g_slot_card[(loc >> 4) & 7]->io_write) {
+		// $C090-$C0FF: registers of a slot card with firmware
+		g_slot_card[(loc >> 4) & 7]->io_write(loc & 0xf, val, dfcyc);
+		return;
+	}
 	switch((loc >> 8) & 0xf) {
 	case 0: /* 0xc000 - 0xc0ff */
 		switch(loc & 0xff) {
@@ -2095,6 +2201,11 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 		break;
 	case 1: case 2: case 5: case 6: case 7:
 		/* c1000 - c7ff (but not c3xx,c4xx) */
+		if(slot_card_visible((loc >> 8) & 7)) {
+			// A write to the card's page selects it too ($C800)
+			g_c800_slot = (loc >> 8) & 7;
+			return;
+		}
 		if((loc & 0xff) == 0) {		// Frogger writes $ff to $Cx00
 			return;
 		}
@@ -2115,6 +2226,9 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 		}
 		return;
 	case 8: case 9: case 0xa: case 0xb: case 0xc: case 0xd: case 0xe:
+		if(slot_card_c800() && slot_card_c800()->exp_write) {
+			slot_card_c800()->exp_write(loc & 0x7ff, val, dfcyc);
+		}
 		// UNIMPL_WRITE;
 		return;
 	case 0xf:
@@ -2123,6 +2237,11 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 			if(g_c068_statereg & 0x400) {
 				set_statereg(dfcyc, g_c068_statereg & (~0x400));
 			}
+			g_c800_slot = 0;	// every card lets go of $C800
+			return;
+		}
+		if(slot_card_c800() && slot_card_c800()->exp_write) {
+			slot_card_c800()->exp_write(loc & 0x7ff, val, dfcyc);
 			return;
 		}
 		// UNIMPL_WRITE;

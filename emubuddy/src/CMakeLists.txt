@@ -89,6 +89,7 @@ set(GSPLUS_CORE_SOURCES
     moremem.c
     paddles.c
     mockingboard.c
+    hsscsi.c
     sim65816.c
     smartport.c
     doc.c
