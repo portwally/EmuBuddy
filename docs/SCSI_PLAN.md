@@ -266,8 +266,41 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
   - The picture of the Slots window with AppleTalk in the manual still shows the window without the ROM line.
   - When the ROM is missing, the saved setting becomes Hard Disk Card.
 
-### Phase 7 (later): CD audio
+### Phase 7: CD audio
 - PLAY AUDIO, PAUSE and stop for `.cue`/`.bin` images, mixed into EmuBuddy's sound.
+
+**Done (2026-11-24).**
+- `cdimage.c`: reads a `.cue` sheet and its files. Track kinds MODE1/2048, MODE1/2352, MODE2/2352 and AUDIO; files
+  BINARY and WAVE; several files in one sheet. It knows nothing about the IIgs.
+- `scsi_cd.c`: the table of contents with tracks, and the Apple CD SC's audio commands as in MAME's `nscsi/cd.cpp`:
+  AUDIO TRACK SEARCH, PLAY, PAUSE, STOP, STATUS, SCAN (only moves the position) and CONTROL (the volume), plus READ
+  TOC and READ Q SUBCODE. Reading an audio track as data gives "illegal mode for this track" (`0x64`): GS/OS's driver
+  takes that for "no data disc" and stays quiet. With zeroes for data, GS/OS offered to initialize an audio CD.
+- `hsscsi.c` opens the CD of a `.cue` in a drive and hands the audio to `sound.c` (`hsscsi_audio_mix`), which adds it
+  to the output. 44,100 Hz is brought to the output rate by taking the nearest sample.
+- A `.cue` needs the High-Speed SCSI Card; with the Hard Disk Card EmuBuddy says so.
+- **Two faults found on the way, both outside audio:**
+  - **The list of commands in the INQUIRY data had no end mark.** `SCSICD.Driver` reads from bytes 38 on which
+    commands the drive knows (records of a number and two words, ended by `0xFF`; at `$1322` in the driver). Without
+    the end mark it fell back to a list of its own, with no audio commands and with READ(10) only for discs over 32 MB.
+    With the list complete, the driver allows READ(10) by itself; the size the drive reports (phase 4) is kept anyway.
+  - **The chip mixed its output register into the status byte.** Apple's firmware reads the status with "assert data
+    bus" still on. For a command whose last byte is not zero (the audio commands end in `0x80`), the status came out as
+    nonsense, the driver reported an error and CD Remote gave up. `ncr5380.c` no longer drives the bus in an input
+    phase; `test_scsi` has a test for it.
+- Tested:
+  - `test_scsi`: a test CD written by the test itself (a data track, an audio track in the same file, an audio track
+    in a WAVE file): tracks, table of contents, play, pause, the end of a track, the volume.
+  - GS/OS with **CD Remote** (from the System 6.0.4 disks, added to a copy of the test system): it shows the tracks,
+    PLAY starts track 1 of an audio CD, its window says PLAY and the time runs.
+  - The sound output was recorded (`EMUBUDDY_SOUNDFILE=<file.wav>`, a new test aid): the 440 Hz tone of the test CD is
+    there at its full level.
+  - A CD with a data track and audio tracks mounts its data track (TESTISO) as before.
+  - Total Replay, GS/OS with the System 7 CD, Grand Theft Apple, a CD dropped in while GS/OS runs, and both start-ups
+    with the Hard Disk Card work as before.
+- Not tested: the other buttons of CD Remote on screen (pause, next track, scan, eject), games that play CD audio, a
+  real CD image from the net (only CDs made here), ProDOS 8 software, and how the nearest-sample conversion sounds.
+- Not built: AUDIO SCAN as fast play, index marks and gaps before tracks (INDEX 00, PREGAP), and subchannel data.
 
 ## 4. Size
 

@@ -90,7 +90,7 @@ usage(void)
 "  -flop1 <img>   -flop2 <img>    5.25\" drives (slot 6, drive 1/2)\n"
 "  -flop3 <img>   -flop4 <img>    3.5\" drives (slot 5, drive 1/2)\n"
 "  -hard1 <img> ... -hard7 <img>  SCSI hard disks (slot 7, drive 1-7)\n"
-"  -cdrom <img>                   CD image (.iso, .cdr, .toast) in hard disk drive 7,\n"
+"  -cdrom <img>                   CD image (.iso, .cdr, .toast, .cue) in hard disk drive 7,\n"
 "                                 the CD-ROM drive of the High-Speed SCSI Card\n"
 "  -hsscsirom <file>              ROM of the High-Speed SCSI Card (341-0803.bin or a zip)\n"
 "  -share <folder>                Mac/PC folder as a ProDOS volume\n"

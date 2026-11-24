@@ -165,6 +165,11 @@ byte g_wav_hdr[44] = {
 void
 sound_init()
 {
+	// EmuBuddy test aid: EMUBUDDY_SOUNDFILE=<file.wav> records the sound
+	if(getenv("EMUBUDDY_SOUNDFILE")) {
+		sound_file_start(strdup(getenv("EMUBUDDY_SOUNDFILE")));
+	}
+
 	doc_init();
 	snddrv_init();
 }
@@ -646,6 +651,12 @@ sound_play(dword64 dfcyc)
 				&(g_mock_env_vol[0]), &(g_mock_noise_bytes[0]),
 				&(g_mock_volume[0]), num_samps);
 		}
+	}
+
+	// EmuBuddy: the audio of a CD in the SCSI CD-ROM drive (hsscsi.c)
+	if(hsscsi_audio_mix(outptr_start, num_samps, g_audio_rate,
+							snd_buf_init == 0)) {
+		snd_buf_init++;
 	}
 
 	g_last_sound_play_dsamp = dsamp_now;

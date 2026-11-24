@@ -29,6 +29,7 @@
 #include "defc.h"
 #include "slotcard.h"
 #include "scsi.h"
+#include "cdimage.h"
 #include <ctype.h>
 #include <string.h>
 
@@ -58,6 +59,10 @@ static Scsi_disk g_hs_disk[HSSCSI_DISKS];
 static Scsi_cd	g_hs_cd[HSSCSI_DISKS];
 static int	g_hs_is_cd[HSSCSI_DISKS];	/* the drive is a CD-ROM drive */
 #define HSSCSI_CD_UNIT	(HSSCSI_DISKS - 1)	/* S7D7: a CD drive when empty */
+/* a .cue sheet in a drive: the CD image it describes */
+static Cd_image	g_hs_cue[HSSCSI_DISKS];
+static int	g_hs_cue_open[HSSCSI_DISKS];
+static char	g_hs_cue_path[HSSCSI_DISKS][1024];
 static unsigned g_hs_inserts[HSSCSI_DISKS];	/* discs put in, counted */
 static int	g_hs_had_disk[HSSCSI_DISKS];
 static Slot_card g_hs_card;
@@ -108,9 +113,51 @@ hs_be_present(int unit)
 	return hs_drive(unit)->fd >= 0;
 }
 
+static int
+has_ext(const char *name, const char *ext)
+{
+	size_t	len = name ? strlen(name) : 0, elen = strlen(ext);
+
+	return len > elen && !cfgcasecmp(name + len - elen, ext);
+}
+
+/* Opens or closes the CD image of a .cue sheet, to match what is in the
+ * drive. Returns 1 while the drive holds an open .cue image. */
+static int
+hs_cue_sync(int unit)
+{
+	Disk	*dsk = hs_drive(unit);
+	int	want = dsk->fd >= 0 && has_ext(dsk->name_ptr, ".cue");
+
+	if(g_hs_cue_open[unit] && (!want ||
+				strcmp(g_hs_cue_path[unit], dsk->name_ptr))) {
+		cdimage_close(&g_hs_cue[unit]);
+		g_hs_cue_open[unit] = 0;
+	}
+	if(want && !g_hs_cue_open[unit]) {
+		snprintf(g_hs_cue_path[unit], sizeof(g_hs_cue_path[unit]),
+							"%s", dsk->name_ptr);
+		if(cdimage_open_cue(&g_hs_cue[unit], dsk->name_ptr) == 0) {
+			g_hs_cue_open[unit] = 1;
+			printf("hsscsi: S7D%d: CD with %d tracks, %u "
+				"sectors\n", unit + 1, g_hs_cue[unit].ntracks,
+				g_hs_cue[unit].total);
+		} else {
+			printf("hsscsi: S7D%d: cannot read the CD of %s\n",
+						unit + 1, dsk->name_ptr);
+			g_hs_cue_path[unit][0] = 0;
+			return 0;
+		}
+	}
+	return g_hs_cue_open[unit];
+}
+
 static unsigned
 hs_be_blocks(int unit)
 {
+	if(g_hs_cue_open[unit]) {
+		return g_hs_cue[unit].total * 4;
+	}
 	return (unsigned)(hs_drive(unit)->dimage_size >> 9);
 }
 
@@ -123,7 +170,55 @@ hs_be_write_prot(int unit)
 static int
 hs_be_read(int unit, unsigned blk, unsigned char *buf)
 {
+	static unsigned char sec[2048];
+	static unsigned sec_lba = ~0U;
+	static int sec_unit = -1;
+
+	if(g_hs_cue_open[unit]) {		/* a quarter of a sector */
+		if(sec_unit != unit || sec_lba != blk / 4) {
+			sec_unit = -1;
+			if(cdimage_read_data(&g_hs_cue[unit], blk / 4, sec)
+									!= 0) {
+				return 0x27;
+			}
+			sec_unit = unit;
+			sec_lba = blk / 4;
+		}
+		memcpy(buf, sec + (blk & 3) * 512, 512);
+		hs_drive(unit)->dfcyc_last_read = g_cur_dfcyc;
+		return 0;
+	}
 	return smartport_read_block(unit, blk, buf);
+}
+
+static int
+hs_be_tracks(int unit)
+{
+	return g_hs_cue_open[unit] ? g_hs_cue[unit].ntracks : 0;
+}
+
+static void
+hs_be_track(int unit, int n, unsigned *start, int *audio)
+{
+	Cd_image *cd = &g_hs_cue[unit];
+
+	if(n >= 0 && n < cd->ntracks) {
+		*start = cd->t[n].start;
+		*audio = cd->t[n].audio;
+	} else {
+		*start = cd->total;
+		*audio = 0;
+	}
+}
+
+static int
+hs_be_read_audio(int unit, unsigned lba, unsigned char *buf)
+{
+	if(!g_hs_cue_open[unit]) {
+		return -1;
+	}
+	hs_drive(unit)->dfcyc_last_read = g_cur_dfcyc;	/* activity light */
+	return cdimage_read_audio(&g_hs_cue[unit], lba, buf);
 }
 
 static int
@@ -154,14 +249,14 @@ hs_be_eject(int unit)
 
 static const Scsi_block_backend g_hs_backend = {
 	hs_be_present, hs_be_blocks, hs_be_write_prot, hs_be_read, hs_be_write,
-	hs_be_media, hs_be_eject
+	hs_be_media, hs_be_eject, hs_be_tracks, hs_be_track, hs_be_read_audio
 };
 
 /* 1 if the file name is that of a CD image */
 int
 hsscsi_is_cd_image(const char *name)
 {
-	static const char *ext[] = { ".iso", ".cdr", ".toast", 0 };
+	static const char *ext[] = { ".iso", ".cdr", ".toast", ".cue", 0 };
 	size_t	len, elen;
 	int	i;
 
@@ -190,6 +285,7 @@ hs_update_devices(int at_reset)
 	for(i = 0; i < HSSCSI_DISKS; i++) {
 		dsk = hs_drive(i);
 		cd = g_hs_is_cd[i];
+		hs_cue_sync(i);
 		if(dsk->fd >= 0) {
 			cd = !dsk->dynapro_info_ptr &&
 					hsscsi_is_cd_image(dsk->name_ptr);
@@ -209,6 +305,58 @@ hs_update_devices(int at_reset)
 				&g_hs_cd[i].dev : &g_hs_disk[i].dev);
 		}
 	}
+}
+
+/* Adds the audio of the CD-ROM drives to num_samps stereo samples at
+ * out (left, right; rate samples a second). zero_first: out holds nothing
+ * yet. Returns 1 if a CD plays. Called by sound.c. */
+int
+hsscsi_audio_mix(int *out, int num_samps, int rate, int zero_first)
+{
+	static short buf[2 * 2048];
+	static unsigned frac[HSSCSI_DISKS];	/* 16.16 position in buf */
+	static short last[HSSCSI_DISKS][2];
+	Scsi_cd	*k;
+	unsigned step, pos;
+	int	unit, i, need, any = 0;
+
+	if(slot_card_get(7) != &g_hs_card || rate < 8000) {
+		return 0;
+	}
+	step = (unsigned)((44100.0 / rate) * 65536.0);
+	for(unit = 0; unit < HSSCSI_DISKS; unit++) {
+		k = &g_hs_cd[unit];
+		if(!g_hs_is_cd[unit] || !k->playing || k->paused) {
+			continue;
+		}
+		if(!any && zero_first) {
+			memset(out, 0, (size_t)num_samps * 2 * sizeof(int));
+		}
+		any = 1;
+		/* the 44100 Hz samples this stretch of output takes */
+		pos = frac[unit];
+		need = (int)((pos + (unsigned)num_samps * step) >> 16);
+		if(need > 2047) {
+			need = 2047;
+		}
+		buf[0] = last[unit][0];
+		buf[1] = last[unit][1];
+		scsi_cd_audio(k, buf + 2, need);
+		for(i = 0; i < num_samps; i++) {
+			int	j = (int)(pos >> 16);
+
+			if(j > need) {
+				j = need;
+			}
+			out[2 * i] += buf[2 * j];
+			out[2 * i + 1] += buf[2 * j + 1];
+			pos += step;
+		}
+		last[unit][0] = buf[2 * need];
+		last[unit][1] = buf[2 * need + 1];
+		frac[unit] = pos - ((unsigned)need << 16);
+	}
+	return any;
 }
 
 /* 1 when drive unit (0 = S7D1) is a CD-ROM drive on the card: a disc put in

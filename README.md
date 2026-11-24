@@ -163,7 +163,8 @@ The same convention is used everywhere, so a file can travel in both directions 
 
 **Slot 7** has two cards for hard disks. The Hard Disk Card is the default and needs nothing else. The High-Speed SCSI
 Card is Apple's Apple II High-Speed SCSI Card with a real SCSI bus: choose it for a CD-ROM drive (hard disk 7; drop a
-`.iso`, `.cdr` or `.toast` image on the window) or for software that talks to the card itself. It needs the card's ROM,
+`.iso`, `.cdr`, `.toast` or `.cue` image on the window; audio tracks of a `.cue`/`.bin` image play, for example
+with GS/OS's CD Remote) or for software that talks to the card itself. It needs the card's ROM,
 which EmuBuddy does not ship: `341-0803.bin` or MAME's `a2hsscsi.zip`, next to your IIgs ROM file or picked with
 **SCSI ROM...** in the Slots window. With this card, a
 hard disk has to be in its drive when the IIgs starts; a CD can go in at any time.

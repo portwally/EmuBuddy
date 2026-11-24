@@ -10,7 +10,9 @@
  * end with NOT READY, and after a new disc went in the first command ends
  * with UNIT ATTENTION, so the computer looks at the disc again.
  *
- * Audio is not played: a disc is one data track. */
+ * A .cue image has tracks, and its audio tracks play: the Apple CD SC's own
+ * audio commands (0xC8-0xCE) start, pause and stop them, and scsi_cd_audio()
+ * hands the samples to the emulator's sound. */
 
 #include "scsi.h"
 #include <string.h>
@@ -99,6 +101,257 @@ cd_sectors(Scsi_cd *k)
 	return cd_size512(k) / 4;
 }
 
+static void answer(Scsi_cd *k, unsigned len, unsigned alloc);
+
+/* ---- tracks ---- */
+static int
+cd_ntracks(Scsi_cd *k)
+{
+	int	n = k->be->tracks ? k->be->tracks(k->unit) : 0;
+
+	return n > 0 ? n : 1;
+}
+
+/* Start (in sectors) and kind of track n, 0-based; n = cd_ntracks(): the
+ * lead-out. Returns the ADR/control byte: 0x14 data, 0x10 audio. */
+static int
+cd_track(Scsi_cd *k, int n, unsigned *start)
+{
+	int	audio = 0;
+
+	if(k->be->tracks && k->be->tracks(k->unit) > 0 && k->be->track) {
+		k->be->track(k->unit, n, start, &audio);
+	} else {
+		*start = (n == 0) ? 0 : cd_sectors(k);
+	}
+	return audio ? 0x10 : 0x14;
+}
+
+/* The track a sector is in, 0-based */
+static int
+cd_track_of(Scsi_cd *k, unsigned lba)
+{
+	unsigned start;
+	int	i, n = cd_ntracks(k);
+
+	for(i = n - 1; i > 0; i--) {
+		cd_track(k, i, &start);
+		if(lba >= start) {
+			return i;
+		}
+	}
+	return 0;
+}
+
+static unsigned
+unbcd(unsigned v)
+{
+	return ((v >> 4) & 15) * 10 + (v & 15);
+}
+
+/* minutes, seconds, frames as the Apple commands count them: sector 0 is
+ * 0:00:00 (no 2-second lead-in), all in BCD */
+static void
+put_amsf(unsigned char *p, unsigned lba)
+{
+	p[0] = bcd(lba / (75 * 60));
+	p[1] = bcd((lba / 75) % 60);
+	p[2] = bcd(lba % 75);
+}
+
+static unsigned
+get_amsf(const unsigned char *p)
+{
+	return (unbcd(p[0]) * 60 + unbcd(p[1])) * 75 + unbcd(p[2]);
+}
+
+/* ---- audio ---- */
+static void
+audio_stop(Scsi_cd *k)
+{
+	k->playing = 0;
+	k->paused = 0;
+	k->ended = 0;
+}
+
+static void
+audio_start(Scsi_cd *k, unsigned lba, unsigned stop)
+{
+	k->play_lba = lba;
+	k->stop_lba = stop;
+	k->samp_pos = 0;
+	k->have_sector = 0;
+	k->playing = (stop > lba);
+	k->ended = !k->playing;
+	k->paused = 0;
+}
+
+int
+scsi_cd_audio(Scsi_cd *k, short *out, int frames)
+{
+	const unsigned char *p;
+	int	i;
+
+	if(!k->playing || k->paused || !k->be->read_audio ||
+						!k->be->present(k->unit)) {
+		memset(out, 0, (size_t)frames * 2 * sizeof(short));
+		return 0;
+	}
+	for(i = 0; i < frames; i++) {
+		if(k->playing && !k->have_sector) {
+			if(k->play_lba >= k->stop_lba) {
+				k->playing = 0;		/* ran to its end */
+				k->ended = 1;
+			} else {
+				if(k->be->read_audio(k->unit, k->play_lba,
+							k->audio_buf) != 0) {
+					memset(k->audio_buf, 0, 2352);
+				}
+				k->have_sector = 1;
+			}
+		}
+		if(!k->playing) {
+			out[2 * i] = out[2 * i + 1] = 0;
+			continue;
+		}
+		p = k->audio_buf + 4 * k->samp_pos;
+		out[2 * i] = (short)(((short)(p[0] | (p[1] << 8)) *
+							k->vol[0]) / 255);
+		out[2 * i + 1] = (short)(((short)(p[2] | (p[3] << 8)) *
+							k->vol[1]) / 255);
+		if(++k->samp_pos >= 588) {
+			k->samp_pos = 0;
+			k->play_lba++;
+			k->have_sector = 0;
+		}
+	}
+	return 1;
+}
+
+/* The address of an Apple audio command: in the form the top bits of CDB
+ * byte 9 say. *track gets the track number (1-based) or 0. */
+static unsigned
+audio_addr(Scsi_cd *k, const unsigned char *cdb, int msf_at, int *track)
+{
+	unsigned start;
+
+	*track = 0;
+	switch(cdb[9] & 0xc0) {
+	case 0x40:			/* minutes, seconds, frames */
+		return get_amsf(cdb + msf_at);
+	case 0x80:			/* track number */
+		*track = (int)unbcd(cdb[5]);
+		if(*track < 1) {
+			return 0;
+		}
+		if(*track > cd_ntracks(k)) {
+			*track = cd_ntracks(k);
+		}
+		cd_track(k, *track - 1, &start);
+		return start;
+	}
+	return be32(cdb + 2);		/* sector number */
+}
+
+/* The Apple CD SC's audio commands (0xC8-0xCE), as in MAME's nscsi/cd.cpp,
+ * which follows "Apple CD-ROM SCSI Command Set" 1.4. Returns 0 if cdb is not
+ * one of them. */
+static int
+audio_command(Scsi_cd *k, const unsigned char *cdb)
+{
+	unsigned char *r = k->resp;
+	unsigned addr, start;
+	int	track;
+
+	switch(cdb[0]) {
+	case 0xc8:			/* AUDIO TRACK SEARCH: go there */
+		addr = audio_addr(k, cdb, 5, &track);
+		if((cdb[9] & 0xc0) == 0x80) {
+			if(track == 0) {
+				audio_stop(k);
+				return 1;
+			}
+			cd_track(k, track, &k->stop_lba);	/* its end */
+		}
+		audio_start(k, addr, k->stop_lba);
+		if(!(cdb[1] & 0x10)) {
+			k->paused = 1;		/* stay there, paused */
+		}
+		k->stopped = 0;
+		return 1;
+	case 0xc9:			/* AUDIO PLAY */
+		addr = audio_addr(k, cdb, 3, &track);
+		if((cdb[9] & 0xc0) == 0x80 && track == 0) {
+			audio_stop(k);		/* "play track 0" stops */
+			k->stopped = 1;
+			return 1;
+		}
+		if(cdb[1] & 0x10) {
+			/* programs search a track and then play "to" the
+			 * same one: they mean all of that track */
+			if(k->stop_lba == addr) {
+				cd_track(k, track >= cd_ntracks(k) ?
+					cd_ntracks(k) : track, &k->stop_lba);
+			}
+		} else {
+			k->stopped = 0;
+		}
+		audio_start(k, addr, k->stop_lba);
+		return 1;
+	case 0xca:			/* AUDIO PAUSE: on, or off */
+		k->paused = (cdb[1] == 0x10) && k->playing;
+		return 1;
+	case 0xcb:			/* AUDIO STOP: where play is to end */
+		addr = audio_addr(k, cdb, 5, &track);
+		if((cdb[9] & 0xc0) == 0x80) {	/* at the end of that track */
+			cd_track(k, track >= cd_ntracks(k) ? cd_ntracks(k) :
+								track, &addr);
+			if(addr) {
+				addr--;
+			}
+		}
+		k->stop_lba = addr;
+		if(!k->stopped && k->play_lba >= k->stop_lba) {
+			k->stopped = 1;
+			audio_stop(k);
+		}
+		return 1;
+	case 0xcc:			/* AUDIO STATUS */
+		memset(r, 0, 6);
+		if(cdb[3] == 1) {		/* the volume */
+			r[0] = k->vol[0];
+			r[1] = k->vol[1];
+		} else if(k->stopped) {
+			r[0] = 5;		/* idle */
+		} else if(k->ended) {
+			r[0] = 3;		/* reached the end */
+		} else if(k->playing) {
+			r[0] = k->paused ? 1 : 0;
+		} else {
+			r[0] = 5;
+		}
+		r[2] = (unsigned char)cd_track(k, cd_track_of(k, k->play_lba),
+								&start);
+		put_amsf(r + 3, k->play_lba);
+		answer(k, 6, 6);
+		return 1;
+	case 0xcd:			/* AUDIO SCAN: go on from there */
+		if(!k->stopped) {
+			addr = audio_addr(k, cdb, 5, &track);
+			k->play_lba = addr;
+			k->samp_pos = 0;
+			k->have_sector = 0;
+		}
+		return 1;
+	case 0xce:			/* AUDIO CONTROL: the volume follows */
+		k->dev.xfer_dir = SCSI_DIR_OUT;
+		k->dev.xfer_len = cdb[8];
+		k->dev.xfer_chunk = sizeof(k->resp);
+		return 1;
+	}
+	return 0;
+}
+
 static void
 answer(Scsi_cd *k, unsigned len, unsigned alloc)
 {
@@ -171,7 +424,7 @@ cd_start(Scsi_dev *d, const unsigned char *cdb, int lun)
 	Scsi_cd *k = d->ctx;
 	unsigned char *r = k->resp;
 	unsigned lba, count, n, media, alloc;
-	int	msf;
+	int	msf, nt, i;
 
 	k->op = cdb[0];
 	if(cdb[0] != 0x03) {
@@ -191,6 +444,9 @@ cd_start(Scsi_dev *d, const unsigned char *cdb, int lun)
 	if(media != k->media) {			/* disc changed */
 		k->media = media;
 		k->bs = 2048;
+		audio_stop(k);
+		k->stopped = 1;
+		k->play_lba = k->stop_lba = 0;
 		k->ua = (media != 0);
 	}
 	switch(cdb[0]) {
@@ -223,13 +479,17 @@ cd_start(Scsi_dev *d, const unsigned char *cdb, int lun)
 		r[3] = 0x01;
 		r[4] = 0x31;
 		memcpy(r + 8, "SONY    CD-ROM CDU-8002 1.8g", 28);
-		/* The rest is the drive's own data (from an AppleCD's ROM,
-		 * as in MAME's nscsi/cd.cpp). GS/OS's CD driver takes from
-		 * it which commands the drive knows: without it the driver
-		 * refuses to send READ(10) for a disc that has no Apple
-		 * partition map, or that went in while GS/OS runs. */
-		memcpy(r + 39, "\xd0\x90\x27\x3e\x01\x04\x91\x00\x18\x06"
-							"\xf0\xfe", 12);
+		/* The rest is the drive's list of the commands it knows, as
+		 * GS/OS's SCSICD.Driver reads it (at $1322 in the driver):
+		 * records of a number n and two words, the bit masks for the
+		 * commands 0x(2n)0-0x(2n)F and 0x(2n+1)0-0x(2n+1)F, ended by
+		 * 0xFF. The values are those of an AppleCD's ROM (from
+		 * MAME's nscsi/cd.cpp): n = 0, 1 and 6, so the usual
+		 * commands, READ(10), and Apple's own 0xC0-0xCE for audio.
+		 * Without the list, or without its end mark, the driver
+		 * uses a list of its own that has no audio commands. */
+		memcpy(r + 38, "\x00\xd0\x90\x27\x3e" "\x01\x04\x91\x00\x18"
+				"\x06\xf0\xfe\x00\x00" "\xff", 16);
 		answer(k, 54, cdb[4]);
 		return;
 	}
@@ -302,6 +562,17 @@ cd_start(Scsi_dev *d, const unsigned char *cdb, int lun)
 			scsi_sense(d, SENSE_ILLEGAL_REQUEST, 0x21, 0);
 			break;
 		}
+		/* An audio track cannot be read as data: "illegal mode for
+		 * this track" (0x64). GS/OS's driver takes that code for "no
+		 * data disc here" and stays quiet; with zeroes for data,
+		 * GS/OS offers to initialize an audio CD. */
+		if(cd_track(k, cd_track_of(k, (unsigned)(((unsigned long long)
+				lba * k->bs) / 2048)), &n) == 0x10) {
+			scsi_sense(d, SENSE_ILLEGAL_REQUEST, 0x64, 0);
+			break;
+		}
+		audio_stop(k);			/* reading ends the music */
+		k->stopped = 1;
 		k->lba = lba;
 		d->xfer_dir = SCSI_DIR_IN;
 		d->xfer_len = count * k->bs;
@@ -311,36 +582,38 @@ cd_start(Scsi_dev *d, const unsigned char *cdb, int lun)
 	case 0x2a:			/* WRITE(10) */
 		scsi_sense(d, SENSE_DATA_PROTECT, 0x27, 0);
 		break;
-	case 0x43:			/* READ TOC: one data track */
+	case 0x43:			/* READ TOC */
 		msf = cdb[1] & 2;
 		alloc = be16(cdb + 7);
-		memset(r, 0, 20);
-		r[1] = 18;
+		nt = cd_ntracks(k);
+		memset(r, 0, sizeof(k->resp));
 		r[2] = 1;		/* first track */
-		r[3] = 1;		/* last track */
+		r[3] = (unsigned char)nt;
 		n = 4;
-		if(cdb[6] <= 1) {
-			r[n + 1] = 0x14;	/* data track */
-			r[n + 2] = 1;
-			put_addr(r + n + 4, 0, msf);
+		for(i = (cdb[6] > 1) ? cdb[6] - 1 : 0; i <= nt &&
+					n + 8 <= sizeof(k->resp); i++) {
+			r[n + 1] = (unsigned char)cd_track(k, i, &lba);
+			r[n + 2] = (i == nt) ? 0xaa : (unsigned char)(i + 1);
+			put_addr(r + n + 4, lba, msf);
 			n += 8;
 		}
-		r[n + 1] = 0x14;
-		r[n + 2] = 0xaa;		/* lead-out */
-		put_addr(r + n + 4, cd_sectors(k), msf);
-		n += 8;
-		r[1] = n - 2;
+		r[0] = (n - 2) >> 8;
+		r[1] = (n - 2) & 0xff;
 		answer(k, n, alloc);
 		break;
-	case 0x42:			/* READ SUB-CHANNEL: no audio playing */
+	case 0x42:			/* READ SUB-CHANNEL: where play is */
 		alloc = be16(cdb + 7);
 		memset(r, 0, 16);
-		r[1] = 0x15;		/* no audio status */
+		r[1] = k->playing ? (k->paused ? 0x12 : 0x11) :
+						(k->ended ? 0x13 : 0x15);
 		r[3] = 12;
 		r[4] = 0x01;
-		r[5] = 0x14;
-		r[6] = 1;
+		i = cd_track_of(k, k->play_lba);
+		r[5] = (unsigned char)cd_track(k, i, &lba);
+		r[6] = (unsigned char)(i + 1);
 		r[7] = 1;
+		put_addr(r + 8, k->play_lba, cdb[1] & 2);
+		put_addr(r + 12, k->play_lba - lba, cdb[1] & 2);
 		answer(k, 16, alloc);
 		break;
 	case 0x44:			/* READ HEADER */
@@ -352,41 +625,50 @@ cd_start(Scsi_dev *d, const unsigned char *cdb, int lun)
 		break;
 	case 0xc1:			/* Apple: READ TOC */
 		alloc = be16(cdb + 7);
-		memset(r, 0, 8);
-		switch(cdb[9] >> 6) {
-		case 0:			/* first and last track */
-			r[0] = bcd(1);
-			r[1] = bcd(1);
+		nt = cd_ntracks(k);
+		memset(r, 0, sizeof(k->resp));
+		switch(cdb[9] & 0xc0) {
+		case 0x00:		/* first and last track */
+			r[0] = 1;
+			r[1] = bcd((unsigned)nt);
+			answer(k, 4, alloc);
 			break;
-		case 1:			/* lead-out */
-			put_msf(r + 4, cd_sectors(k), 1);
-			memcpy(r, r + 5, 3);
+		case 0x40:		/* where the lead-out starts */
+			cd_track(k, nt, &lba);
+			put_amsf(r, lba);
+			answer(k, 4, alloc);
 			break;
-		default:		/* start of a track */
-			r[0] = 0x14;
-			put_msf(r, 0, 1);
+		default:		/* the tracks from track cdb[5] on: as
+					 * many as fit; past the last track
+					 * the lead-out, again and again */
+			i = (int)unbcd(cdb[5]) - 1;
+			if(i < 0) {
+				i = 0;
+			}
+			for(n = 0; n + 4 <= alloc && n + 4 <= sizeof(k->resp);
+								n += 4, i++) {
+				r[n] = (unsigned char)cd_track(k,
+						i < nt ? i : nt, &lba);
+				put_amsf(r + n + 1, lba);
+			}
+			answer(k, n, alloc);
 			break;
 		}
-		answer(k, 4, alloc);
 		break;
-	case 0xc2:			/* Apple: READ Q SUBCODE */
+	case 0xc2:			/* Apple: READ Q SUBCODE: where play is */
 		memset(r, 0, 9);
-		r[1] = bcd(1);		/* track 1, index 1, at its start */
+		i = cd_track_of(k, k->play_lba);
+		r[0] = (unsigned char)cd_track(k, i, &lba);
+		r[1] = bcd((unsigned)i + 1);
 		r[2] = 1;
-		put_msf(r + 5, 0, 1);
+		put_amsf(r + 3, k->play_lba > lba ? k->play_lba - lba : 0);
+		put_amsf(r + 6, k->play_lba > lba ? k->play_lba : lba);
 		answer(k, 9, 9);
 		break;
-	case 0xcc:			/* Apple: AUDIO STATUS: nothing plays */
-		memset(r, 0, 6);
-		r[0] = 5;		/* idle */
-		r[2] = 0x14;
-		put_msf(r + 2, 0, 1);
-		answer(k, 6, 6);
-		break;
-	case 0xca:			/* Apple: AUDIO PAUSE */
-	case 0xcb:			/* Apple: AUDIO STOP */
-		break;
 	default:
+		if(audio_command(k, cdb)) {
+			break;
+		}
 		scsi_sense(d, SENSE_ILLEGAL_REQUEST, 0x20, 0);
 		break;
 	}
@@ -422,6 +704,15 @@ cd_data_out(Scsi_dev *d, unsigned off, const unsigned char *buf, unsigned n)
 	Scsi_cd *k = d->ctx;
 	unsigned bs;
 
+	if(k->op == 0xce && off == 0) {		/* AUDIO CONTROL: the volume */
+		if(n >= 1) {
+			k->vol[0] = buf[0];
+		}
+		if(n >= 2) {
+			k->vol[1] = buf[1];
+		}
+		return 0;
+	}
 	/* MODE SELECT: the block length in the block descriptor */
 	if(k->op == 0x15 && off == 0 && n >= 12 && buf[3] >= 8) {
 		bs = (buf[9] << 16) | (buf[10] << 8) | buf[11];
@@ -441,6 +732,8 @@ scsi_cd_init(Scsi_cd *k, int unit, const Scsi_block_backend *be)
 	k->unit = unit;
 	k->be = be;
 	k->bs = 2048;
+	k->stopped = 1;
+	k->vol[0] = k->vol[1] = 255;
 	k->dev.ctx = k;
 	k->dev.present = cd_present;
 	k->dev.start = cd_start;

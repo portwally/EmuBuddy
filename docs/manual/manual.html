@@ -335,10 +335,11 @@
     <p>The seven hard disk drives stay as they are. Hard disk 1 is still the startup disk. Two things are different with this card:</p>
     <ul>
       <li><b>A hard disk has to be there when the IIgs starts.</b> Like a real SCSI bus, the card and GS/OS look for hard disks once, at startup. If you put a hard disk image into an empty drive later, the status bar asks you to restart the IIgs.</li>
-      <li><b>Hard disk 7 is a CD-ROM drive.</b> Drop a CD image (<code>.iso</code>, <code>.cdr</code> or <code>.toast</code>) on the window at any time and it shows up in the Finder with a CD icon. A CD image is never written to.</li>
+      <li><b>Hard disk 7 is a CD-ROM drive.</b> Drop a CD image (<code>.iso</code>, <code>.cdr</code>, <code>.toast</code> or <code>.cue</code>) on the window at any time and it shows up in the Finder with a CD icon. A CD image is never written to.</li>
     </ul>
     <p>GS/OS reads CDs in the ProDOS, HFS and ISO 9660 formats when its files <i>SCSI.Manager</i>, <i>SCSICD.Driver</i>, <i>HFS.FST</i> and <i>HS.FST</i> are in the System folder. If a CD does not show up, check that these files are there.</p>
-    <div class="note"><span class="nt">By the way</span>The High-Speed SCSI Card is new and was tested with a ROM 03 and System 6. Audio CDs do not play.</div>
+    <p><b>Audio CDs</b> play too. They need an image with tracks: a <code>.cue</code> file with its <code>.bin</code> file next to it (audio tracks may also be <code>.wav</code> files: 16 bits, stereo, 44,100 Hz). Drop the <code>.cue</code> file on the window. In GS/OS, the desk accessory <i>CD Remote</i> from the System 6 disks plays the tracks; you hear them with the other sounds of the IIgs. A CD with a data track and music plays its music the same way.</p>
+    <div class="note"><span class="nt">By the way</span>The High-Speed SCSI Card is new and was tested with a ROM 03 and System 6.</div>
 
     <h2>Telling the IIgs about a card</h2>
     <p>On a real Apple IIgs, plugging a card in is half of the job. Each slot has a setting in the Control Panel of the IIgs: either the port built into the IIgs for that slot, or <i>Your Card</i>. A program that looks for a card by its slot finds it only when the slot says Your Card.</p>

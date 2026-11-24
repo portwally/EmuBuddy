@@ -260,6 +260,26 @@ scsi_needs_restart(int slot, int drive)
 						!hsscsi_drive_is_cd(drive);
 }
 
+static int
+is_cue(const char *path)
+{
+	size_t	n = strlen(path);
+
+	return n > 4 && !strcasecmp(path + n - 4, ".cue");
+}
+
+/* A .cue sheet is a CD with tracks: only the CD-ROM drive of the High-Speed
+ * SCSI Card can take it. Says so and returns 1 when that card is not in. */
+static int
+cue_needs_card(const char *path)
+{
+	if(!is_cue(path) || g_slot7_scsi == 2) {
+		return 0;
+	}
+	ui_message("A .cue CD needs the HS SCSI Card (Slots)");
+	return 1;
+}
+
 static void
 folder_mount(int slot, int drive, const char *path)
 {
@@ -450,6 +470,9 @@ drive_insert(int slot, int drive, const char *path)
 		ui_message("No hard disk card - plug one in under Machine > Slots");
 		return 1;
 	}
+	if(cue_needs_card(path)) {
+		return 1;
+	}
 	if(S_ISDIR(sb.st_mode)) {
 		folder_mount(slot, drive, path);
 		return 1;
@@ -511,6 +534,12 @@ ui_insert_auto(const char *path)
 		return;
 	}
 	slot = cfg_guess_slot(path);
+	if(cue_needs_card(path)) {
+		return;
+	}
+	if(is_cue(path)) {
+		slot = 7;
+	}
 
 	if(slot == 0) {
 		ui_message("Not a disk image: %s", base_name(path));

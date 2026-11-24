@@ -84,6 +84,13 @@ typedef struct {
 	/* for removable media (the CD-ROM); both may be 0 */
 	unsigned (*media)(int unit);	/* a number that changes with the disc */
 	void	(*eject)(int unit);	/* the computer asks for the disc */
+	/* for a CD with tracks (a .cue image); all three may be 0: the disc
+	 * is then one data track. Sectors count from 0, in 2048-byte units. */
+	int	(*tracks)(int unit);	/* number of tracks, 0 = not known */
+	/* start and kind of track n (0-based); n = tracks(): the lead-out */
+	void	(*track)(int unit, int n, unsigned *start, int *audio);
+	/* the 2352 bytes of an audio sector; 0 ok */
+	int	(*read_audio)(int unit, unsigned lba, unsigned char *buf);
 } Scsi_block_backend;
 
 typedef struct {
@@ -107,9 +114,23 @@ typedef struct {
 	unsigned	media;		/* the disc the computer knows; 0 none */
 	int		ua;		/* a new disc went in: unit attention */
 	unsigned char	op;
-	unsigned char	resp[256];
+	unsigned char	resp[512];
+	/* audio: sectors are 588 stereo samples at 44100 Hz */
+	int		playing;	/* a play command runs (also when paused) */
+	int		paused;
+	int		stopped;	/* nothing was started since the last stop */
+	int		ended;		/* play ran to its stop position */
+	unsigned	play_lba;	/* the sector being played */
+	unsigned	stop_lba;	/* play ends before this sector */
+	unsigned	samp_pos;	/* sample within the sector, 0-587 */
+	int		have_sector;	/* audio_buf holds sector play_lba */
+	unsigned char	vol[2];		/* left, right: 0-255 */
+	unsigned char	audio_buf[2352];
 } Scsi_cd;
 
 void	scsi_cd_init(Scsi_cd *cd, int unit, const Scsi_block_backend *be);
+/* Gives the next frames of the audio that plays: 16-bit samples, left then
+ * right, 44100 Hz; silence when nothing plays. Returns 1 if it plays. */
+int	scsi_cd_audio(Scsi_cd *cd, short *out, int frames);
 
 #endif

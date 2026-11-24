@@ -5,6 +5,7 @@
  *   cmake --build build --target test_scsi && build/test_scsi */
 
 #include "../scsi.h"
+#include "../cdimage.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -48,6 +49,100 @@ static const Scsi_block_backend g_cd_be = {
 	cd_be_present, be_blocks, be_wp, be_read, be_write, cd_be_media,
 	cd_be_eject
 };
+
+/* a CD with tracks, from a .cue sheet this test writes: unit 0 of g_cue_be */
+static Cd_image	g_cue;
+static int cue_present(int u) { (void)u; return 1; }
+static unsigned cue_blocks(int u) { (void)u; return g_cue.total * 4; }
+static int cue_wp(int u) { (void)u; return 1; }
+static int
+cue_read(int u, unsigned blk, unsigned char *buf)
+{
+	unsigned char sec[2048];
+
+	(void)u;
+	if(cdimage_read_data(&g_cue, blk / 4, sec) != 0) {
+		return 1;
+	}
+	memcpy(buf, sec + (blk & 3) * 512, 512);
+	return 0;
+}
+static int cue_tracks(int u) { (void)u; return g_cue.ntracks; }
+static void
+cue_track(int u, int n, unsigned *start, int *audio)
+{
+	(void)u;
+	*start = n < g_cue.ntracks ? g_cue.t[n].start : g_cue.total;
+	*audio = n < g_cue.ntracks ? g_cue.t[n].audio : 0;
+}
+static int
+cue_read_audio(int u, unsigned lba, unsigned char *buf)
+{
+	(void)u;
+	return cdimage_read_audio(&g_cue, lba, buf);
+}
+static const Scsi_block_backend g_cue_be = {
+	cue_present, cue_blocks, cue_wp, cue_read, 0, 0, 0,
+	cue_tracks, cue_track, cue_read_audio
+};
+
+/* The audio sample at place n (0 left, 1 right, 2 left ...) of track t */
+static short
+tone(int t, unsigned n)
+{
+	return (short)((n * 7 + (unsigned)t * 1000) & 0x7fff);
+}
+
+/* Writes a CD for the test into the current folder: a data track of 40
+ * sectors (2352 bytes each, Mode 1), an audio track of 30 sectors in the
+ * same file, and an audio track of 20 sectors in a WAVE file. */
+static void
+make_test_cd(void)
+{
+	static unsigned char sec[2352], hdr[44];
+	FILE	*f;
+	unsigned i, j, n;
+	short	v;
+
+	f = fopen("test_scsi_cd.bin", "wb");
+	for(i = 0; i < 40; i++) {
+		memset(sec, 0xaa, sizeof(sec));
+		for(j = 0; j < 2048; j++) {
+			sec[16 + j] = (unsigned char)(i * 3 + j);
+		}
+		fwrite(sec, 1, sizeof(sec), f);
+	}
+	for(n = 0; n < 30 * 1176; n++) {
+		v = tone(2, n);
+		fputc(v & 0xff, f);
+		fputc((v >> 8) & 0xff, f);
+	}
+	fclose(f);
+	f = fopen("test_scsi_cd.wav", "wb");
+	memset(hdr, 0, sizeof(hdr));
+	memcpy(hdr, "RIFF", 4);
+	memcpy(hdr + 8, "WAVEfmt ", 8);
+	hdr[16] = 16;
+	memcpy(hdr + 36, "data", 4);
+	n = 20 * 2352;
+	hdr[40] = n & 0xff;
+	hdr[41] = (n >> 8) & 0xff;
+	hdr[42] = (n >> 16) & 0xff;
+	fwrite(hdr, 1, sizeof(hdr), f);
+	for(n = 0; n < 20 * 1176; n++) {
+		v = tone(3, n);
+		fputc(v & 0xff, f);
+		fputc((v >> 8) & 0xff, f);
+	}
+	fclose(f);
+	f = fopen("test_scsi_cd.cue", "w");
+	fputs("FILE \"test_scsi_cd.bin\" BINARY\n  TRACK 01 MODE1/2352\n"
+		"    INDEX 01 00:00:00\n  TRACK 02 AUDIO\n"
+		"    INDEX 00 00:00:38\n    INDEX 01 00:00:40\n"
+		"FILE \"test_scsi_cd.wav\" WAVE\n  TRACK 03 AUDIO\n"
+		"    INDEX 01 00:00:00\n", f);
+	fclose(f);
+}
 
 /* ---- initiator, as card firmware does it ---- */
 #define RD(r)		ncr5380_read(r)
@@ -379,6 +474,18 @@ main(void)
 	CHECK(st == 0 && !(RD(4) & 0x40), "status %d, bus %02x", st, RD(4));
 	RD(7);
 
+	/* 10a. The status byte is read with "assert data bus" still on and
+	 * a non-zero byte in the output register, as Apple's firmware does
+	 * after a command whose last byte is not zero */
+	memset(cdb, 0, sizeof(cdb));		/* TEST UNIT READY */
+	cdb[5] = 0x80;
+	CHECK(command(0, cdb, 6) == 0, "TUR not taken");
+	WR(3, 3);
+	WR(1, 0x01);				/* DBUS on, 0x80 in the ODR */
+	CHECK(RD(0) == 0, "status read as %02x with DBUS on", RD(0));
+	WR(1, 0);
+	CHECK(finish() == 0, "TUR status");
+
 	/* 10b. The card's DMA counter runs out (EOP) in the middle of the
 	 * data: the chip stops asking for bytes and says "end of DMA" */
 	memset(cdb, 0, sizeof(cdb));
@@ -512,6 +619,130 @@ main(void)
 		CHECK(command(4, cdb, 6) == 0 && finish() == 0 &&
 			g_cd_ejects == 1 && !g_cd_in, "CD not ejected");
 		ncr5380_attach(4, 0);
+	}
+
+	/* 12. A CD with tracks (.cue): the image, the table of contents, and
+	 * playing audio with the Apple CD SC's commands */
+	{
+		static Scsi_cd cd;
+		static short pcm[2 * 588 * 4];
+		int	bad;
+
+		make_test_cd();
+		CHECK(cdimage_open_cue(&g_cue, "test_scsi_cd.cue") == 0,
+							"cue sheet not read");
+		CHECK(g_cue.ntracks == 3 && g_cue.total == 90 &&
+			!g_cue.t[0].audio && g_cue.t[1].audio &&
+			g_cue.t[1].start == 40 && g_cue.t[1].frames == 30 &&
+			g_cue.t[2].start == 70 && g_cue.t[2].frames == 20,
+			"tracks: %d, %u sectors, track 2 at %u, track 3 at %u",
+			g_cue.ntracks, g_cue.total, g_cue.t[1].start,
+			g_cue.t[2].start);
+		scsi_cd_init(&cd, 0, &g_cue_be);
+		ncr5380_attach(4, &cd.dev);
+		memset(cdb, 0, sizeof(cdb));		/* takes the new disc */
+		CHECK(command(4, cdb, 6) == 0 &&
+			finish() == SCSI_CHECK_CONDITION, "no unit attention");
+		cdb[0] = 0x28;				/* data sector 7 */
+		cdb[5] = 7;
+		cdb[8] = 1;
+		CHECK(command(4, cdb, 10) == 0, "cue READ(10)");
+		n = dma_in(buf, sizeof(buf));
+		dma_end();
+		CHECK(n == 2048 && buf[0] == 21 && buf[2047] == (unsigned char)
+					(21 + 2047), "cue data sector: %d", n);
+		CHECK(finish() == 0, "cue READ(10) status");
+		memset(cdb, 0, sizeof(cdb));		/* Apple READ TOC */
+		cdb[0] = 0xc1;
+		cdb[8] = 4;
+		CHECK(command(4, cdb, 10) == 0, "READ TOC 0");
+		for(i = 0; i < 4; i++) {
+			buf[i] = (unsigned char)pio_in(1);
+		}
+		CHECK(finish() == 0 && buf[0] == 1 && buf[1] == 3,
+				"TOC: tracks %x to %x", buf[0], buf[1]);
+		cdb[5] = 1;				/* 4 entries from 1 */
+		cdb[8] = 16;
+		cdb[9] = 0x80;
+		CHECK(command(4, cdb, 10) == 0, "READ TOC tracks");
+		for(i = 0; i < 16; i++) {
+			buf[i] = (unsigned char)pio_in(1);
+		}
+		CHECK(finish() == 0 && buf[0] == 0x14 && buf[3] == 0 &&
+			buf[4] == 0x10 && buf[7] == 0x40 &&	/* 40 in BCD */
+			buf[8] == 0x10 && buf[11] == 0x70 &&
+			buf[14] == 0x01 && buf[15] == 0x15,	/* 90 = 1:15 */
+			"TOC entries %02x..%02x %02x..%02x %02x..%02x "
+			"..%02x:%02x", buf[0], buf[3], buf[4], buf[7], buf[8],
+			buf[11], buf[14], buf[15]);
+
+		CHECK(!scsi_cd_audio(&cd, pcm, 100), "plays before any command");
+		memset(cdb, 0, sizeof(cdb));		/* play track 3 */
+		cdb[0] = 0xc8;
+		cdb[1] = 0x10;
+		cdb[5] = 3;
+		cdb[9] = 0x80;
+		CHECK(command(4, cdb, 10) == 0 && finish() == 0, "TRACK SEARCH");
+		memset(cdb, 0, sizeof(cdb));
+		cdb[0] = 0xcc;				/* status: playing */
+		CHECK(command(4, cdb, 10) == 0, "AUDIO STATUS");
+		for(i = 0; i < 6; i++) {
+			buf[i] = (unsigned char)pio_in(1);
+		}
+		CHECK(finish() == 0 && buf[0] == 0 && buf[2] == 0x10 &&
+			buf[5] == 0x70, "status %d at frame %02x", buf[0],
+			buf[5]);
+		CHECK(scsi_cd_audio(&cd, pcm, 588 + 100), "track 3 is silent");
+		bad = 0;
+		for(i = 0; i < 2 * (588 + 100); i++) {
+			bad += pcm[i] != tone(3, (unsigned)i);
+		}
+		CHECK(bad == 0, "%d wrong samples in track 3", bad);
+		cdb[0] = 0xca;				/* pause */
+		cdb[1] = 0x10;
+		CHECK(command(4, cdb, 10) == 0 && finish() == 0, "PAUSE");
+		CHECK(!scsi_cd_audio(&cd, pcm, 50) && pcm[0] == 0,
+							"plays while paused");
+		cdb[1] = 0;				/* and on */
+		CHECK(command(4, cdb, 10) == 0 && finish() == 0, "PAUSE off");
+		CHECK(scsi_cd_audio(&cd, pcm, 10) && pcm[0] ==
+			tone(3, 2 * 688), "does not go on where it paused");
+		for(i = 0; i < 25; i++) {		/* to the end of it */
+			scsi_cd_audio(&cd, pcm, 588 * 4);
+		}
+		cdb[0] = 0xcc;
+		CHECK(command(4, cdb, 10) == 0, "AUDIO STATUS at the end");
+		for(i = 0; i < 6; i++) {
+			buf[i] = (unsigned char)pio_in(1);
+		}
+		CHECK(finish() == 0 && buf[0] == 3, "status at the end: %d",
+								buf[0]);
+		memset(cdb, 0, sizeof(cdb));		/* half volume, left */
+		cdb[0] = 0xce;
+		cdb[8] = 2;
+		CHECK(command(4, cdb, 10) == 0, "AUDIO CONTROL");
+		CHECK(pio_out(0, 128, 0) == 0 && pio_out(0, 255, 0) == 0,
+								"volume bytes");
+		CHECK(finish() == 0, "AUDIO CONTROL status");
+		cdb[0] = 0xc8;				/* track 2 */
+		cdb[1] = 0x10;
+		cdb[5] = 2;
+		cdb[8] = 0;
+		cdb[9] = 0x80;
+		CHECK(command(4, cdb, 10) == 0 && finish() == 0, "search 2");
+		scsi_cd_audio(&cd, pcm, 8);
+		CHECK(pcm[4] == (tone(2, 4) * 128) / 255 && pcm[5] == tone(2, 5),
+			"track 2 with volume: %d %d", pcm[4], pcm[5]);
+		for(i = 0; i < 40; i++) {	/* it ends where track 3 starts */
+			scsi_cd_audio(&cd, pcm, 588 * 4);
+		}
+		CHECK(!cd.playing && cd.play_lba == 70, "track 2 ran to %u",
+								cd.play_lba);
+		ncr5380_attach(4, 0);
+		cdimage_close(&g_cue);
+		remove("test_scsi_cd.cue");
+		remove("test_scsi_cd.bin");
+		remove("test_scsi_cd.wav");
 	}
 
 	if(g_fails) {

@@ -18,7 +18,7 @@ config file, so your normal setup stays as it was. Add `-save` to keep them.
 | `-flop1 <img>`, `-flop2 <img>` | 5.25" drives (slot 6, drive 1/2) |
 | `-flop3 <img>`, `-flop4 <img>` | 3.5" drives (slot 5, drive 1/2) |
 | `-hard1 <img>` … `-hard7 <img>` | SCSI hard disks (slot 7, drive 1–7) |
-| `-cdrom <img>` | a CD image (`.iso`, `.cdr`, `.toast`) in hard disk drive 7, the CD-ROM drive of the High-Speed SCSI Card (`-sl7 hsscsi`) |
+| `-cdrom <img>` | a CD image (`.iso`, `.cdr`, `.toast`, or a `.cue` sheet with its `.bin`; audio tracks play) in hard disk drive 7, the CD-ROM drive of the High-Speed SCSI Card (`-sl7 hsscsi`) |
 | `-share <folder>` | a Mac/PC folder as a live ProDOS volume |
 | `<img or folder>` | goes into the first free drive that fits |
 

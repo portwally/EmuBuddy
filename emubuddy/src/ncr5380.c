@@ -416,12 +416,18 @@ ncr5380_read(int reg)
 
 	switch(reg & 7) {
 	case 0:		/* current SCSI data */
+		/* In an input phase the target drives the bus, and the chip
+		 * does not, even with "assert data bus" set: Apple's firmware
+		 * leaves that bit on and reads the status byte here. (Mixing
+		 * the output register in turned the status of a command that
+		 * ends in a non-zero byte into nonsense.) */
+		if(g_ncr.state != T_FREE && g_ncr.state != T_SELECTED &&
+							(g_ncr.phase & 1)) {
+			return g_ncr.data & 0xff;
+		}
 		v = 0;
 		if((g_ncr.icr & ICR_DBUS) || (g_ncr.mr & MR_ARB)) {
 			v |= g_ncr.odr;
-		}
-		if(g_ncr.state != T_FREE && (g_ncr.phase & 1)) {
-			v |= g_ncr.data;	/* input phase */
 		}
 		return v & 0xff;
 	case 1:
