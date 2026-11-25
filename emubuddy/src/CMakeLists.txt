@@ -94,6 +94,7 @@ set(GSPLUS_CORE_SOURCES
     scsi_disk.c
     scsi_cd.c
     cdimage.c
+    fujinet.c
     sim65816.c
     smartport.c
     doc.c
@@ -206,6 +207,14 @@ add_executable(test_uthernet2 EXCLUDE_FROM_ALL tests/test_uthernet2.c
     ${EMUBUDDY_NET_SOURCES})
 if(SLIRP_FOUND)
     target_link_libraries(test_uthernet2 PRIVATE PkgConfig::SLIRP)
+endif()
+
+# Host test for the FujiNet connection (fujinet.c):
+#   cmake --build build --target test_fujinet && build/test_fujinet
+if(NOT WIN32)
+    add_executable(test_fujinet EXCLUDE_FROM_ALL tests/test_fujinet.c fujinet.c)
+    find_package(Threads REQUIRED)
+    target_link_libraries(test_fujinet PRIVATE Threads::Threads)
 endif()
 
 # Host test for the SCSI controller and hard disk (ncr5380.c, scsi_disk.c),

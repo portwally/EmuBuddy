@@ -9,6 +9,7 @@
 /**********************************************************************/
 
 #include "defc.h"
+#include "fujinet.h"
 
 extern int Verbose;
 extern int Halt_on;
@@ -94,6 +95,129 @@ smartport_log(word32 start_addr, word32 cmd, word32 rts_addr, word32 cmd_list)
 	g_smpt_log_pos = pos;
 }
 
+/* ---- EmuBuddy: FujiNet (fujinet.c, docs/FUJINET_PLAN.md) ----
+ * The units of a FujiNet-PC that is connected follow the seven hard disks:
+ * SmartPort unit 8 is FujiNet's unit 1. Their calls are passed on. */
+int	g_fujinet = 0;			/* config: 0 off, 1 on */
+int	g_fujinet_port = FUJINET_PORT;	/* config */
+#define FUJINET_FIRST_UNIT	8
+
+/* Once a frame: starts or stops listening as the setting says, takes a
+ * connection and notices when it is gone. */
+void
+smartport_fujinet_tick(void)
+{
+	static int started, port;
+
+	if(started && (!g_fujinet || port != g_fujinet_port)) {
+		fujinet_stop();
+		started = 0;
+	}
+	if(g_fujinet && !started) {
+		port = g_fujinet_port;
+		started = 1;		/* tried: not again with this port */
+		fujinet_start(port);
+	}
+	if(started) {
+		fujinet_poll();
+	}
+}
+
+/* The number of FujiNet units the IIgs sees now */
+static int
+smartport_fujinet_units(void)
+{
+	return g_fujinet ? fujinet_units() : 0;
+}
+
+/* One SmartPort call for FujiNet's unit fn_unit (1-based). cmd_list is the
+ * parameter list, ext is 2 for the long calls (4-byte pointers). Sets X and
+ * Y to the bytes that came back, and returns the SmartPort error. */
+static int
+smartport_fujinet_call(word32 cmd, word32 cmd_list, word32 mask, int ext,
+						int fn_unit, int param_cnt)
+{
+	static byte out[FUJINET_MAX_DATA], in[FUJINET_MAX_DATA];
+	byte	params[5];
+	word32	ptr, base;
+	int	c = cmd & 0x3f, out_len = 0, in_len = 0, want_in = 0, err;
+	int	i;
+
+	ptr = get_memory_c((cmd_list + 2) & mask) |
+				(get_memory_c((cmd_list + 3) & mask) << 8);
+	if(ext) {
+		ptr |= get_memory_c((cmd_list + 4) & mask) << 16;
+	}
+	base = cmd_list + 4 + ext;	/* what follows the pointer */
+	memset(params, 0, sizeof(params));
+	switch(c) {
+	case FUJINET_STATUS:
+		params[0] = get_memory_c(base & mask);
+		/* programs for FujiNet add the network unit as a 4th
+		 * parameter */
+		params[1] = (param_cnt > 3) ? get_memory_c((base + 1) & mask) :
+									0;
+		want_in = 1;
+		break;
+	case FUJINET_CONTROL:
+		params[0] = get_memory_c(base & mask);
+		params[1] = (param_cnt > 3) ? get_memory_c((base + 1) & mask) :
+									0;
+		/* the control list goes with its two length bytes */
+		out_len = (get_memory_c(ptr) | (get_memory_c(ptr + 1) << 8))
+									+ 2;
+		break;
+	case FUJINET_READ_BLOCK:
+	case FUJINET_WRITE_BLOCK:
+		for(i = 0; i < 3; i++) {
+			params[i] = get_memory_c((base + i) & mask);
+		}
+		if(c == FUJINET_WRITE_BLOCK) {
+			out_len = 512;
+		} else {
+			want_in = 1;
+		}
+		break;
+	case FUJINET_READ:
+	case FUJINET_WRITE:
+		for(i = 0; i < 5; i++) {	/* byte count, then address */
+			params[i] = get_memory_c((base + i) & mask);
+		}
+		if(c == FUJINET_WRITE) {
+			out_len = params[0] | (params[1] << 8);
+		} else {
+			want_in = 1;
+		}
+		break;
+	case FUJINET_INIT:
+		/* FujiNet-PC numbered its units when it connected and
+		 * answers no INIT after that */
+		engine.xreg = 0;
+		engine.yreg = 0;
+		return 0;
+	case FUJINET_FORMAT:
+	case FUJINET_OPEN:
+	case FUJINET_CLOSE:
+		break;
+	default:
+		return 0x01;			/* BADCMD */
+	}
+	if(out_len > FUJINET_MAX_DATA) {
+		return 0x22;			/* BADCTLPARM: too long */
+	}
+	for(i = 0; i < out_len; i++) {
+		out[i] = get_memory_c(ptr + i);
+	}
+	err = fujinet_call(c, fn_unit, params, param_cnt, out, out_len, in,
+				want_in ? (int)sizeof(in) : 0, &in_len);
+	for(i = 0; i < in_len; i++) {
+		set_memory_c(ptr + i, in[i], 1);
+	}
+	engine.xreg = in_len & 0xff;
+	engine.yreg = (in_len >> 8) & 0xff;
+	return err;
+}
+
 void
 do_c70d(word32 arg0)
 {
@@ -154,6 +278,12 @@ do_c70d(word32 arg0)
 	}
 #endif
 	ret = 0;
+	if(smartport_fujinet_units() && unit >= FUJINET_FIRST_UNIT) {
+		/* EmuBuddy: a unit of the FujiNet, or past its last one */
+		ret = smartport_fujinet_call(cmd, cmd_list, mask, ext,
+				(int)unit - (FUJINET_FIRST_UNIT - 1), param_cnt);
+		goto done;
+	}
 	if((unit >= 1) && (unit <= MAX_C7_DISKS) && ext) {
 		if(g_iwm.smartport[unit-1].just_ejected) {
 			ret = 0x2e;		// DISKSW error
@@ -187,7 +317,10 @@ do_c70d(word32 arg0)
 		if((unit == 0) && (ctl_code == 0)) {
 			/* Smartport driver status */
 			/* see technotes/smpt/tn-smpt-002 */
-			set_memory_c(status_ptr, MAX_C7_DISKS, 1);
+			// EmuBuddy: with a FujiNet, its units follow the 7 disks
+			set_memory_c(status_ptr, smartport_fujinet_units() ?
+				(FUJINET_FIRST_UNIT - 1 +
+				smartport_fujinet_units()) : MAX_C7_DISKS, 1);
 			set_memory_c(status_ptr+1, 0xff, 1);	// intrpt stat
 			set_memory16_c(status_ptr+2, 0x004b, 1); // vendor id
 			set_memory16_c(status_ptr+4, 0x1000, 1); // version
@@ -443,6 +576,7 @@ do_c70d(word32 arg0)
 		}
 	}
 
+done:
 	engine.acc = (engine.acc & 0xff00) | (ret & 0xff);
 	engine.psr &= ~1;
 	if(ret) {

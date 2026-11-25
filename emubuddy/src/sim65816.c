@@ -1466,6 +1466,8 @@ update_60hz(dword64 dfcyc, double dtime_now)
 	/* It's actually happening at the start of the border for line (-1) */
 	/* All other timings should be adjusted for this */
 
+	smartport_fujinet_tick();	// EmuBuddy: FujiNet-PC connecting or gone
+
 	irq_printf("vbl_60hz: vbl: %d, dfcyc:%016llx, last_vbl_dfcyc:%016llx\n",
 		g_vbl_count, dfcyc, g_last_vbl_dfcyc);
 

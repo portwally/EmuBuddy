@@ -179,6 +179,7 @@ int	g_window_scale = 1;		/* EmuBuddy window size: 1x..4x */
 int	g_slot7_scsi = 1;		/* slot 7: 1 hard disk card (7 drives), 2 High-Speed SCSI card, 0 empty */
 extern char *g_hsscsi_rom;		/* hsscsi.c: the card ROM */
 extern int g_hsscsi_dma;		/* hsscsi.c: switch SW4, true DMA */
+extern int g_fujinet, g_fujinet_port;	/* smartport.c: FujiNet-PC */
 int	hsscsi_attach(int on, const char *iigs_rom);
 int	hsscsi_is_cd_image(const char *name);
 int	g_uthernet2_slot = 4;		/* slot of the Uthernet II card, 0 = none */
@@ -454,6 +455,8 @@ Cfg_menu g_cfg_main_menu[] = {
 { "Slot 7 SCSI card,0,Empty,1,SCSI card,2,High-Speed SCSI card", KNMP(g_slot7_scsi), CFGTYPE_INT },
 { "High-Speed SCSI card ROM", KNMP(g_hsscsi_rom), CFGTYPE_STR },
 { "High-Speed SCSI card DMA,0,Pseudo-DMA,1,True DMA", KNMP(g_hsscsi_dma), CFGTYPE_INT },
+{ "FujiNet (needs FujiNet-PC),0,Off,1,On", KNMP(g_fujinet), CFGTYPE_INT },
+{ "FujiNet port,1985,1985", KNMP(g_fujinet_port), CFGTYPE_INT },
 { "Window size,1,1x,2,2x,3,3x,4,4x", KNMP(g_window_scale), CFGTYPE_INT },
 { "Bridge folder", KNMP(g_bridge_root), CFGTYPE_STR },
 { "Skin,0,IIgs,1,System", KNMP(g_skin), CFGTYPE_INT },
