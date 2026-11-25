@@ -42,7 +42,7 @@ endif()
 # Declare the project: a name, a version, and which languages are used.
 # (We'll add Swift here in the next milestone; C is all the core needs.)
 project(gsplus
-    VERSION 1.2.0
+    VERSION 1.3.0
     DESCRIPTION "GSplus - cross-platform Apple IIgs emulator (KEGS-based)"
     LANGUAGES C)
 
