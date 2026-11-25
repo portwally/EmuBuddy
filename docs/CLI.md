@@ -21,6 +21,7 @@ config file, so your normal setup stays as it was. Add `-save` to keep them.
 | `-cdrom <img>` | a CD image (`.iso`, `.cdr`, `.toast`, or a `.cue` sheet with its `.bin`; audio tracks play) in hard disk drive 7, the CD-ROM drive of the High-Speed SCSI Card (`-sl7 hsscsi`) |
 | `-fujinet on\|off` | FujiNet: its devices follow the hard disks of the Hard Disk Card. Needs FujiNet-PC running on this computer. |
 | `-fujinetport <n>` | the port FujiNet-PC connects to (default 1985) |
+| `-fujinetpc <folder>` | the folder of FujiNet-PC: EmuBuddy starts it when FujiNet is on and stops it at the end |
 | `-share <folder>` | a Mac/PC folder as a live ProDOS volume |
 | `<img or folder>` | goes into the first free drive that fits |
 
@@ -31,7 +32,7 @@ Images: `.po .hdv .2mg .dsk .do .woz .dc .shk .sdk` and more.
 | Option | Cards |
 |---|---|
 | `-sl1 <card>` | `imagewriter`, `postscript` (also `laserwriter`), `modem`, `none` (printer port) |
-| `-sl2 <card>` | `modem`, `imagewriter`, `postscript`, `none` (modem port) |
+| `-sl2 <card>` | `modem`, `imagewriter`, `postscript`, `fujinet` (the FujiNet as a card of its own: the IIgs can start up from it, and it works next to the High-Speed SCSI Card), `none` (modem port) |
 | `-sl3 <card>` | `uthernet2`, `voc`, `none` |
 | `-sl4 <card>` | `mockingboard`, `uthernet2`, `none` |
 | `-sl7 <card>` | `hd` (the Hard Disk Card; `scsi` and `cffa2` mean the same), `hsscsi` (Apple II High-Speed SCSI Card), `none` |

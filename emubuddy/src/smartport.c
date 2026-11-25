@@ -101,7 +101,80 @@ smartport_log(word32 start_addr, word32 cmd, word32 rts_addr, word32 cmd_list)
 int	g_fujinet = 0;			/* config: 0 off, 1 on */
 int	g_fujinet_port = FUJINET_PORT;	/* config */
 extern int g_slot7_scsi;		/* config.c: 1 = the hard disk card */
+/* Where the FujiNet is: 0 = its units follow the hard disks of the hard disk
+ * card (slot 7); 1-6 = a card of its own in that slot. The card uses the
+ * same little ROM as the hard disk card (g_rom_c700 in config.c: it only
+ * traps into this file, and the slot is read from the program counter), and
+ * all its units are FujiNet's: unit 1 is FujiNet's first disk. So the IIgs
+ * can start up from a FujiNet disk, and FujiNet works next to the High-Speed
+ * SCSI Card. */
+int	g_fujinet_slot = 0;		/* config */
 #define FUJINET_FIRST_UNIT	8
+
+/* 1 if slot holds the FujiNet card */
+int
+smartport_fujinet_card(int slot)
+{
+	return g_fujinet && slot >= 1 && slot <= 6 && slot == g_fujinet_slot;
+}
+
+/* A block of FujiNet's unit fn_unit, to or from IIgs memory at buf */
+static int
+smartport_fujinet_block(int write, int fn_unit, word32 buf, word32 blk)
+{
+	byte	data[512], params[5];
+	int	i, n = 0, err;
+
+	memset(params, 0, sizeof(params));
+	params[0] = blk & 0xff;
+	params[1] = (blk >> 8) & 0xff;
+	params[2] = (blk >> 16) & 0xff;
+	if(write) {
+		for(i = 0; i < 512; i++) {
+			data[i] = get_memory_c(buf + i);
+		}
+		return fujinet_call(FUJINET_WRITE_BLOCK, fn_unit, params, 3,
+							data, 512, 0, 0, 0);
+	}
+	err = fujinet_call(FUJINET_READ_BLOCK, fn_unit, params, 3, 0, 0, data,
+							sizeof(data), &n);
+	if(err == 0 && n != 512) {
+		err = 0x27;
+	}
+	for(i = 0; err == 0 && i < 512; i++) {
+		set_memory_c(buf + i, data[i], 1);
+	}
+	return err;
+}
+
+/* The ProDOS block call ($Cn0A) of the FujiNet card: drives 1 and 2 are
+ * FujiNet's first two disks. Returns the ProDOS error. */
+static int
+smartport_fujinet_prodos(int cmd, int fn_unit, word32 buf, word32 blk)
+{
+	byte	st[8], params[5];
+	int	n = 0, err;
+
+	switch(cmd) {
+	case 0:				/* status: the size in X and Y */
+		memset(params, 0, sizeof(params));
+		err = fujinet_call(FUJINET_STATUS, fn_unit, params, 3, 0, 0, st,
+							sizeof(st), &n);
+		if(err == 0 && (n < 4 || !(st[0] & 0x10))) {
+			err = 0x2f;		/* no disk in the drive */
+		}
+		if(err == 0) {
+			engine.xreg = st[1];
+			engine.yreg = st[2];
+		}
+		return err;
+	case 1:
+		return smartport_fujinet_block(0, fn_unit, buf, blk);
+	case 2:
+		return smartport_fujinet_block(1, fn_unit, buf, blk);
+	}
+	return 0x27;			/* format: not through this call */
+}
 
 /* Once a frame: starts or stops listening as the setting says, takes a
  * connection and notices when it is gone. */
@@ -133,10 +206,14 @@ smartport_fujinet_status(void)
 	if(!g_fujinet) {
 		return "FujiNet: off";
 	}
-	if(g_slot7_scsi != 1) {
-		return "FujiNet: needs the Hard Disk Card in slot 7";
+	if(g_fujinet_slot == 0 && g_slot7_scsi != 1) {
+		return "FujiNet: needs the Hard Disk Card, or its own slot";
 	}
-	if(fujinet_units()) {
+	if(fujinet_units() && g_fujinet_slot) {
+		snprintf(buf, sizeof(buf), "FujiNet: card in slot %d, "
+			"connected, %d devices", g_fujinet_slot,
+							fujinet_units());
+	} else if(fujinet_units()) {
 		snprintf(buf, sizeof(buf), "FujiNet: connected, %d devices, "
 			"after the hard disks", fujinet_units());
 	} else {
@@ -150,7 +227,7 @@ smartport_fujinet_status(void)
 static int
 smartport_fujinet_units(void)
 {
-	return g_fujinet ? fujinet_units() : 0;
+	return (g_fujinet && g_fujinet_slot == 0) ? fujinet_units() : 0;
 }
 
 /* One SmartPort call for FujiNet's unit fn_unit (1-based). cmd_list is the
@@ -301,6 +378,30 @@ do_c70d(word32 arg0)
 	}
 #endif
 	ret = 0;
+	if(smartport_fujinet_card(slot)) {
+		/* EmuBuddy: the FujiNet card: all its units are FujiNet's */
+		if(unit == 0 && (cmd & 0x3f) == 0 && ctl_code == 0) {
+			status_ptr = get_memory_c((cmd_list + 2) & mask) |
+				(get_memory_c((cmd_list + 3) & mask) << 8);
+			if(ext) {
+				status_ptr |= get_memory_c((cmd_list + 4) &
+								mask) << 16;
+			}
+			set_memory_c(status_ptr, fujinet_units(), 1);
+			set_memory_c(status_ptr + 1, 0xff, 1);
+			set_memory16_c(status_ptr + 2, 0x004b, 1);
+			set_memory16_c(status_ptr + 4, 0x1000, 1);
+			set_memory16_c(status_ptr + 6, 0x0000, 1);
+			engine.xreg = 8;
+			engine.yreg = 0;
+		} else if(unit < 1 || (int)unit > fujinet_units()) {
+			ret = 0x28;		/* no such device */
+		} else {
+			ret = smartport_fujinet_call(cmd, cmd_list, mask, ext,
+							(int)unit, param_cnt);
+		}
+		goto done;
+	}
 	if(smartport_fujinet_units() && unit >= FUJINET_FIRST_UNIT) {
 		/* EmuBuddy: a unit of the FujiNet, or past its last one */
 		ret = smartport_fujinet_call(cmd, cmd_list, mask, ext,
@@ -653,6 +754,15 @@ do_c70a(word32 arg0)
 #endif
 	engine.psr &= ~1;	/* clear carry */
 
+	if(smartport_fujinet_card(slot)) {	/* EmuBuddy: the FujiNet card */
+		ret = smartport_fujinet_prodos((int)cmd,
+					1 + (int)(prodos_unit >> 7), buf, blk);
+		engine.acc = (engine.acc & 0xff00) | (ret & 0xff);
+		if(ret != 0) {
+			engine.psr |= 1;
+		}
+		return;
+	}
 	ret = 0x27;	/* I/O error */
 	if(cmd == 0x00) {
 		dsize = g_iwm.smartport[unit].dimage_size;
@@ -1006,6 +1116,33 @@ do_c700(word32 ret)
 	dbg_log_info(g_cur_dfcyc, 0, 0, 0xc700);
 
 	slot = (engine.kpc >> 8) & 7;
+	if(smartport_fujinet_card(slot)) {
+		/* EmuBuddy: start up from FujiNet's first disk. Without one
+		 * (or without FujiNet-PC) the IIgs goes on with the next slot,
+		 * through the monitor's slot search loop. */
+		printf("fujinet: start-up from the card in slot %d\n", slot);
+		/* The IIgs gets here a moment after it was switched on:
+		 * give FujiNet-PC up to 2 seconds to connect */
+		smartport_fujinet_tick();
+		for(ret = 0; ret < 40 && !fujinet_units(); ret++) {
+			micro_sleep(0.05);
+			smartport_fujinet_tick();
+		}
+		ret = smartport_fujinet_block(0, 1, 0x800, 0);
+		if(ret != 0 || get_memory_c(0x800) != 1) {
+			set_memory_c(0x00, 0x00, 1);
+			set_memory_c(0x01, 0xc0 | slot, 1);
+			engine.kpc = 0xfaba;	/* SLOOP */
+			return;
+		}
+		set_memory_c(0x7f8, slot, 1);
+		set_memory16_c(0x42, (slot << 12) | 1, 1);
+		set_memory16_c(0x44, 0x0800, 1);
+		set_memory16_c(0x46, 0x0000, 1);
+		engine.xreg = slot << 4;
+		engine.kpc = 0x801;
+		return;
+	}
 	ret = do_read_c7(0, 0x800, 0);		// Always read unit 0, block 0
 
 	set_memory_c(0x7f8, slot, 1);
@@ -1016,6 +1153,17 @@ do_c700(word32 ret)
 	engine.kpc = 0x801;
 
 	if(ret != 0) {
+		// EmuBuddy: no disk in hard disk 1. With a FujiNet card in a
+		//  lower slot, go on through the monitor's slot search loop,
+		//  which looks at every slot below this one in turn. Without
+		//  one, as KEGS always did: try slot 5 (and slot 6 on a //e).
+		if(g_fujinet && g_fujinet_slot >= 1 && g_fujinet_slot < slot &&
+							(g_rom_version != 0)) {
+			set_memory_c(0x00, 0x00, 1);
+			set_memory_c(0x01, 0xc0 | slot, 1);
+			engine.kpc = 0xfaba;	// SLOOP
+			return;
+		}
 		printf("Failure reading boot disk in s7d1, trying slot 5!\n");
 		engine.kpc = 0xc500;		// Try to boot slot 5
 		if((slot == 5) || (g_rom_version == 0)) {

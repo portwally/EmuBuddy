@@ -259,6 +259,7 @@ add_executable(gsplus-sdl
     prodos_img.c
     bridge.c
     webgate.c
+    fujinet_run.c
     ${EMUBUDDY_NET_SOURCES}
     ${EMUBUDDY_PRINTER_SOURCES}
 )

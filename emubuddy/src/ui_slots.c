@@ -22,6 +22,7 @@ void		scc_config_changed(int port, int cfg_changed, int remote_changed,
 #define ROW_H	34
 
 extern int	g_fujinet;		/* smartport.c: FujiNet on or off */
+extern int	g_fujinet_slot;		/* 0 with the hard disks, 2 slot 2 */
 extern char	*g_hsscsi_rom;		/* hsscsi.c */
 int		hsscsi_rom_found(void);
 int		hsscsi_rom_file_ok(const char *path);
@@ -37,7 +38,7 @@ typedef struct {
 
 static const SlotDef g_slots[7] = {
 	{ "Printer Port", { "Idle", "Modem", "ImageWriter", "PostScript" }, 4, 15, NULL },
-	{ "Modem Port", { "Idle", "Modem", NULL, NULL }, 2, 3, NULL },
+	{ "Modem Port", { "Idle", "Modem", "FujiNet", NULL }, 3, 7, NULL },
 	{ "Network", { "Empty", "Video Overlay", "Uthernet II", NULL }, 3, 7, NULL },
 	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II", NULL }, 3, 7, NULL },
 	{ "3.5\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
@@ -57,7 +58,11 @@ slot_current(int i)
 	case 0: return g_serial_cfg[0] == 5 ? 3 : g_serial_cfg[0] == 4 ? 2 :
 						g_serial_cfg[0] == 1 ? 1 :
 						(g_serial_cfg[0] == 0 ? 0 : -1);
-	case 1: return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
+	case 1:		/* 2: the FujiNet card sits in slot 2 (smartport.c) */
+		if(g_fujinet && g_fujinet_slot == 2) {
+			return 2;
+		}
+		return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
 	case 2: return g_uthernet2_slot == 3 ? 2 : (g_voc_enable ? 1 : 0);
 	case 3: return g_uthernet2_slot == 4 ? 2 : (g_slot4_mockingboard ? 1 : 0);
 	case 6: return (g_slot7_scsi >= 0 && g_slot7_scsi <= 2) ? g_slot7_scsi : 1;
@@ -93,7 +98,24 @@ apply(void)
 {
 	int	restart = (g_pend[6] != slot_current(6)), p;
 
+	/* the FujiNet card goes into slot 2 or leaves it: a card ROM comes
+	 * or goes, so the machine restarts; the modem port is idle with it */
+	if((g_pend[1] == 2) != (slot_current(1) == 2)) {
+		restart = 1;
+		if(g_pend[1] == 2) {
+			g_fujinet = 1;
+			g_fujinet_slot = 2;
+			g_serial_cfg[1] = 0;
+			scc_config_changed(1, 1, 0, 0);
+		} else {
+			g_fujinet_slot = 0;	/* back with the hard disks */
+			g_fujinet = 0;
+		}
+	}
 	for(p = 0; p < 2; p++) {
+		if(p == 1 && g_pend[1] == 2) {
+			continue;		/* FujiNet: done above */
+		}
 		if(g_pend[p] != slot_current(p) && g_pend[p] >= 0) {
 			/* choice 2 = ImageWriter (mode 4), 3 = PostScript (mode 5) */
 			g_serial_cfg[p] = (g_pend[p] == 2) ? 4 :
@@ -191,6 +213,13 @@ slots_draw(UiWindow *win, int cx, int cy)
 	if(ui_button(win, cx, cy, 10 + 110 + 8, by, 110, 24,
 				g_fujinet ? "FujiNet Off" : "FujiNet On", 1)) {
 		g_fujinet = !g_fujinet;
+		if(!g_fujinet && g_fujinet_slot) {
+			/* its card leaves slot 2: as with Apply */
+			g_fujinet_slot = 0;
+			load_roms_init_memory();
+			do_reset();
+			load_pending();
+		}
 		g_config_kegs_update_needed = 1;
 		ui_message(g_fujinet ? "FujiNet on - start FujiNet-PC" :
 							"FujiNet off");

@@ -1764,6 +1764,14 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 			if((val & 0x9) != 0) {
 				halt_printf("Illegal c02d write: %02x!\n", val);
 			}
+			/* EmuBuddy: the FujiNet card is seen in its slot
+			 *  whatever the IIgs Control Panel says for it, so
+			 *  that it works as it comes (smartport.c) */
+			for(tmp = 1; tmp <= 6; tmp++) {
+				if(smartport_fujinet_card((int)tmp)) {
+					val |= 1 << tmp;
+				}
+			}
 			fixup = (val != g_c02d_int_crom);
 			g_c02d_int_crom = val;
 			if(fixup) {

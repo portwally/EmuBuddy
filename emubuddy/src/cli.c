@@ -96,6 +96,7 @@ usage(void)
 "  -fujinet on | off              FujiNet: its devices follow the hard disks of the hard disk\n"
 "                                 card; needs FujiNet-PC running on this computer\n"
 "  -fujinetport <n>               the port FujiNet-PC connects to (default 1985)\n"
+"  -fujinetpc <folder>            the folder of FujiNet-PC: EmuBuddy starts and stops it\n"
 "  -share <folder>                Mac/PC folder as a ProDOS volume\n"
 "  -bridge <folder>               folder IIgs programs may read/write (host bridge)\n"
 "  -webgate <port> | off          web gateway for IIgs browsers (proxy 192.168.64.254,\n"
@@ -111,7 +112,8 @@ usage(void)
 "\n"
 "Slots (-slN <card>):\n"
 "  -sl1  imagewriter | postscript | modem | none   printer port\n"
-"  -sl2  modem | imagewriter | none   modem port\n"
+"  -sl2  modem | imagewriter | fujinet | none   modem port; fujinet: the FujiNet as a card\n"
+"                                     of its own (the IIgs can start up from its disks)\n"
 "  -sl3  uthernet2 | voc | none\n"
 "  -sl4  mockingboard | uthernet2 | none\n"
 "  -sl7  hd | hsscsi | none           hd: the hard disk card (scsi and cffa2 mean the same)\n"
@@ -212,6 +214,10 @@ slot_option(int slot, const char *card)
 		} else if(is(card, "postscript") || is(card, "laserwriter") ||
 						is(card, "ps")) {
 			emit2(name, "5");
+		} else if(slot == 2 && is(card, "fujinet")) {
+			emit2(name, "0");	/* the FujiNet card in slot 2 */
+			emit2("-g_fujinet", "1");
+			emit2("-g_fujinet_slot", "2");
 		} else if(is(card, "modem") || is(card, "null_modem")) {
 			emit2(name, "1");
 		} else if(is(card, "none") || is(card, "")) {
@@ -428,6 +434,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 				is(o, "-rompath") || is(o, "-scanlines") ||
 				is(o, "-cdrom") || is(o, "-hsscsirom") ||
 				is(o, "-fujinet") || is(o, "-fujinetport") ||
+				is(o, "-fujinetpc") ||
 				is(o, "-title") || is(o, "-profile") || is(o, "-quitshot") || is(o, "-screen"))) {
 			fprintf(stderr, "EmuBuddy: %s needs a value (see -help)\n", a);
 			return -1;
@@ -462,6 +469,9 @@ emubuddy_cli(int *pargc, char ***pargv)
 				fprintf(stderr, "EmuBuddy: -fujinet on or off\n");
 				return -1;
 			}
+		} else if(is(o, "-fujinetpc")) {
+			emit2("-g_fujinet_program", v);
+			check("folder", v);
 		} else if(is(o, "-fujinetport")) {
 			if(atoi(v) < 1024 || atoi(v) > 65535) {
 				fprintf(stderr, "EmuBuddy: -fujinetport 1024 to 65535\n");

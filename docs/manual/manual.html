@@ -346,12 +346,14 @@
     <p>EmuBuddy does not contain a FujiNet. It works with <b>FujiNet-PC</b>, the FujiNet as a program for macOS, Windows and Linux, made by the FujiNet project. You find it among the downloads of the FujiNet firmware on GitHub, as <code>fujinet-pc-APPLE</code>.</p>
     <ol>
       <li>Start FujiNet-PC: open its folder in a terminal and type <code>./run-fujinet -u http://127.0.0.1:8000</code>. Leave it running.</li>
-      <li>In EmuBuddy, open the Slots window and click FujiNet On. Slot 7 must hold the Hard Disk Card.</li>
+      <li>In EmuBuddy, open the Slots window and click FujiNet On. Slot 7 must hold the Hard Disk Card for this; see below for a card of its own.</li>
       <li>The line above the button says <i>connected</i> and how many devices the FujiNet has. It makes no difference which of the two you start first.</li>
     </ol>
-    <p>The FujiNet&rsquo;s devices come after the seven hard disks of the card. Its disk drives are set up on FujiNet-PC&rsquo;s own page: open <code>http://127.0.0.1:8000</code> in a web browser on your computer, name the hosts and put disk images into the drives. In GS/OS, a FujiNet drive with a disk in it shows up in the Finder.</p>
+    <p><b>A card of its own.</b> The FujiNet can also be a card in slot 2: click FujiNet in the Modem Port row of the Slots window and click Apply. The IIgs then starts up from the FujiNet&rsquo;s first drive when hard disk 1 and the floppy drives are empty; as on a real FujiNet, that brings up its configuration program. As a card of its own the FujiNet also works next to the High-Speed SCSI Card. You need not change the Slots setting in the Control Panel of the IIgs for it.</p>
+    <p><b>Letting EmuBuddy start FujiNet-PC.</b> Start EmuBuddy with <code>-fujinetpc</code> and the folder of FujiNet-PC, and EmuBuddy starts FujiNet-PC when FujiNet is on and stops it when you quit.</p>
+    <p>Without a card of its own, the FujiNet&rsquo;s devices come after the seven hard disks of the Hard Disk Card. Its disk drives are set up on FujiNet-PC&rsquo;s own page: open <code>http://127.0.0.1:8000</code> in a web browser on your computer, name the hosts and put disk images into the drives. In GS/OS, a FujiNet drive with a disk in it shows up in the Finder.</p>
     <div class="important"><span class="nt">Important</span>While the IIgs waits for an answer from FujiNet-PC it stands still. With a slow or dead server that can take up to 25 seconds.</div>
-    <div class="note"><span class="nt">By the way</span>FujiNet in EmuBuddy is new. FujiNet&rsquo;s configuration program, its disk drives and its network device were tried with a ROM 03, ProDOS 8 and System 6. The IIgs cannot start up from a FujiNet drive, ProDOS 8 may not show FujiNet&rsquo;s drives under a drive number, and FujiNet does not work together with the High-Speed SCSI Card.</div>
+    <div class="note"><span class="nt">By the way</span>FujiNet in EmuBuddy is new. FujiNet&rsquo;s configuration program, its disk drives and its network device were tried with a ROM 03, ProDOS 8 and System 6. After the hard disks, the IIgs cannot start up from a FujiNet drive, ProDOS 8 may not show FujiNet&rsquo;s drives under a drive number, and FujiNet does not work together with the High-Speed SCSI Card; as a card in slot 2 it does all three.</div>
 
     <h2>Telling the IIgs about a card</h2>
     <p>On a real Apple IIgs, plugging a card in is half of the job. Each slot has a setting in the Control Panel of the IIgs: either the port built into the IIgs for that slot, or <i>Your Card</i>. A program that looks for a card by its slot finds it only when the slot says Your Card.</p>
@@ -722,7 +724,7 @@
     <h2>Slots</h2>
     <table class="keys opts">
       <tr><td><code>-sl1</code> <i>card</i></td><td><code>imagewriter</code>, <code>postscript</code>, <code>modem</code> or <code>none</code></td></tr>
-      <tr><td><code>-sl2</code> <i>card</i></td><td><code>modem</code>, <code>imagewriter</code>, <code>postscript</code> or <code>none</code></td></tr>
+      <tr><td><code>-sl2</code> <i>card</i></td><td><code>modem</code>, <code>imagewriter</code>, <code>postscript</code>, <code>fujinet</code> (the FujiNet as a card of its own) or <code>none</code></td></tr>
       <tr><td><code>-sl3</code> <i>card</i></td><td><code>uthernet2</code>, <code>voc</code> (the Video Overlay Card) or <code>none</code></td></tr>
       <tr><td><code>-sl4</code> <i>card</i></td><td><code>mockingboard</code>, <code>uthernet2</code> or <code>none</code></td></tr>
       <tr><td><code>-sl7</code> <i>card</i></td><td><code>hd</code> (the Hard Disk Card; <code>scsi</code> means the same), <code>hsscsi</code> (the High-Speed SCSI Card) or <code>none</code></td></tr>
@@ -730,6 +732,7 @@
       <tr><td><code>-hsscsirom</code> <i>file</i></td><td>The ROM file of the High-Speed SCSI Card</td></tr>
       <tr><td><code>-fujinet</code> <code>on</code> or <code>off</code></td><td>FujiNet, with FujiNet-PC running on this computer</td></tr>
       <tr><td><code>-fujinetport</code> <i>number</i></td><td>The port FujiNet-PC connects to (1985 if not given)</td></tr>
+      <tr><td><code>-fujinetpc</code> <i>folder</i></td><td>The folder of FujiNet-PC: EmuBuddy starts and stops it</td></tr>
     </table>
 
     <h2>The machine</h2>

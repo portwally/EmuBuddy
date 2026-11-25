@@ -227,11 +227,41 @@ network device has run yet.**
 - Not tried: mounting a disk on FujiNet-PC's web page by hand. The page has Browse, Mount, Eject and Mount All
   buttons; the test in phase 3 mounted through `fnconfig.ini` instead.
 
-### Phase 6 (later, optional)
-- EmuBuddy starts FujiNet-PC itself and stops it at the end, as it does with the web gateway. FujiNet-PC is GPL-3.0,
-  so it may be shipped with EmuBuddy; it is a second program to build for three systems.
-- A FujiNet card of its own in another slot, with a small ROM written for EmuBuddy: FujiNet together with the
-  High-Speed SCSI Card, and starting up from a FujiNet disk.
+### Phase 6: a card of its own, and starting FujiNet-PC
+- EmuBuddy starts FujiNet-PC itself and stops it at the end, as it does with the web gateway.
+- A FujiNet card of its own in another slot: FujiNet together with the High-Speed SCSI Card, and starting up from a
+  FujiNet disk.
+
+**Done (2026-11-25).**
+- **The card.** Setting `g_fujinet_slot`: 0 with the hard disks (as before), 2 a card in slot 2. No new ROM was
+  needed: the Hard Disk Card's own little ROM (`g_rom_c700`) only traps into `smartport.c`, which reads the slot from
+  the program counter, so the same bytes go into slot 2. On that card every unit is FujiNet's: unit 1 is its first
+  disk, the ProDOS block call gives drives 1 and 2, and the start-up entry reads block 0 of disk 1.
+- **No Control Panel change:** EmuBuddy keeps the slot of the FujiNet card set to "your card" in the slot register
+  (`$C02D`) whatever the IIgs wrote there. Other cards in EmuBuddy still need the Control Panel; this one would
+  otherwise never start up.
+- **Starting up.** The IIgs looks at the slots a few milliseconds after it is switched on, so the start-up entry waits
+  up to 2 seconds for FujiNet-PC to connect. Without a disk there, the search goes on through the monitor's slot
+  search loop (`$FABA`). The Hard Disk Card does the same now when it has no disk and a FujiNet card sits in a lower
+  slot; without a FujiNet card it behaves as before (it tries slot 5).
+- **Slots window:** the Modem Port row has a third choice, FujiNet (Apply restarts the IIgs). CLI: `-sl2 fujinet`.
+  Launcher: `sl2` can be `fujinet`.
+- **Starting FujiNet-PC** (`fujinet_run.c`): the setting `g_fujinet_program` (`-fujinetpc <folder>`) names its
+  folder. With FujiNet on, EmuBuddy runs `fujinet -u http://127.0.0.1:8000` there, starts it again when it asks for
+  that (exit code 75), and stops it at the end and when FujiNet is turned off. There is no button for the folder
+  yet, and EmuBuddy does not ship FujiNet-PC.
+- Tested, with ROM 03:
+  - The IIgs starts up from the card in slot 2 into FujiNet's configuration program (74 blocks read), with slot 7
+    empty and with an empty Hard Disk Card.
+  - A 3.5" and a 5.25" disk still start before the card; with nothing at all, "Check startup device!" appears.
+  - GS/OS from the High-Speed SCSI Card with the FujiNet card in slot 2: no SCSI command failed, and FujiNet's disks
+    show up in the Finder.
+  - EmuBuddy started FujiNet-PC, connected, started up from it, and stopped it at the end (no process left). A wrong
+    folder gives a message.
+  - Total Replay and GS/OS with the Hard Disk Card, Total Replay with the SCSI card, and a 3.5" start work as before.
+- Not tested: the card in a slot other than 2 (the code allows 1 to 6), ROM 01, Windows and Linux for the process
+  start, a FujiNet-PC that keeps restarting, and the Apply button with the FujiNet choice (the setting was given on
+  the command line).
 
 ## 5. Size
 

@@ -28,6 +28,7 @@ extern int	g_cfg_slotdrive;
 extern int	g_slot7_scsi;
 int		hsscsi_scanned(void);	/* hsscsi.c */
 extern int	g_hsscsi_rom_missing;
+void		fujinet_run_poll(void);	/* fujinet_run.c */
 int		hsscsi_is_cd_image(const char *name);
 int		hsscsi_drive_is_cd(int unit);
 extern int	g_cur_a2_stat;
@@ -833,6 +834,7 @@ ui_drives_tick(void)
 		static int secs;
 
 		poll = 0;
+		fujinet_run_poll();	/* EmuBuddy's own FujiNet-PC */
 		if(++secs == 4 && g_hsscsi_rom_missing) {
 			/* after the messages of the start; the bar is short */
 			ui_message("No SCSI card ROM: Hard Disk Card used");

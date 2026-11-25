@@ -29,6 +29,7 @@
 #include "ui.h"
 #include "uthernet2.h"
 #include "webgate.h"
+void fujinet_run_stop(void);
 #include "localtalk.h"
 #include "cli.h"
 extern int g_uthernet2_slot;
@@ -2776,6 +2777,7 @@ main(int argc, char **argv)
 		sdl_update_display(&g_mainwin_info);
 	}
 	webgate_stop();
+	fujinet_run_stop();
 	net_shutdown();
 	if(rec_active()) {
 		rec_stop();		/* finish a recording that was still running */
