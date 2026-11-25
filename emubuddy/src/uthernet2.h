@@ -5,7 +5,9 @@
  * that 16-byte register window; it has no core or SDL dependencies.
  *
  * Raw Ethernet frames (MACRAW mode on socket 0, what Marinetti's Uthernet II
- * link layer uses) go to and come from a network backend (net_slirp.c). */
+ * link layer uses) go to and come from a network backend (net_slirp.c).
+ * Sockets in TCP or UDP mode (the chip's own TCP/IP) are this computer's own
+ * sockets (uthernet2.c, "hardware sockets"). */
 #ifndef EMUBUDDY_UTHERNET2_H
 #define EMUBUDDY_UTHERNET2_H
 

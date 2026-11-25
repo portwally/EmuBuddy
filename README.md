@@ -192,6 +192,15 @@ The virtual network is 192.168.64.0/24; the IIgs gets an address from .2 on, and
 running on the computer EmuBuddy runs on, whatever address that computer has in your home network. A web server you
 test on your computer is `http://192.168.64.254/` in an IIgs browser.
 
+**The card's own sockets.** The Uthernet II's chip, the WIZnet W5100, can also do TCP and UDP itself, on four hardware
+sockets, so a program needs no TCP/IP stack of its own (and no Marinetti). EmuBuddy emulates these too, with your
+computer's own network: CONNECT, LISTEN, SEND, RECV, DISCON and CLOSE in TCP mode, SEND and RECV in UDP mode. As above,
+192.168.64.254 is your own computer (127.0.0.1); every other address is reached as your computer reaches it. A socket
+that LISTENs takes calls from your own computer only (from another EmuBuddy, say: it connects to 192.168.64.254 and
+the port). A UDP socket opened with a port of its own receives on that port on every network interface of your
+computer. A program must still set the chip's own addresses (IP, gateway, mask) as on a real card; EmuBuddy does not
+need them.
+
 #### Web gateway
 
 IIgs browsers such as Webber can't open HTTPS sites and choke on modern pages. When the IIgs goes online, EmuBuddy
@@ -402,7 +411,6 @@ reports are welcome. Known gaps and plans, in
 
 - Disk sets (named groups of disks and a speed that open together).
 - Writing files into a disk image from the Disk Browser, and dragging files out on Windows and Linux.
-- The Uthernet II's hardware sockets (today the card works in the raw packet mode that Marinetti uses).
 - Resource forks and more commands in the host bridge, and a matching "Mac folder" pane in GS Commander.
 - An AppImage for Linux. (There are no plans for signed or notarized downloads: they need a paid developer account.)
 

@@ -399,6 +399,9 @@
     <h2>Reaching your own computer</h2>
     <p>From the IIgs, your own computer always has the address <b>192.168.64.254</b>, whatever address it has in your home network. A web server you run on your computer, for example, is <code>http://192.168.64.254/</code> in a browser on the IIgs. Other computers in your home network are reached by their usual addresses.</p>
 
+    <h2>Programs that use the card&rsquo;s own sockets</h2>
+    <p>The chip on the Uthernet II can also make TCP and UDP connections by itself, without Marinetti. Some programs and games use it that way. EmuBuddy does these connections with your computer&rsquo;s own network, so they work with nothing to set up. Here too <b>192.168.64.254</b> is your own computer. A program that waits for calls (a server) can be called from your own computer only, for example from a second EmuBuddy window, which connects to 192.168.64.254 and the program&rsquo;s port.</p>
+
     <h2>The web gateway</h2>
     <p>Browsers for the Apple IIgs, such as Webber, were written for the web of their time. They cannot open the secure (HTTPS) sites that nearly every site is today, and the pages are too big and too full of scripts for them. EmuBuddy&rsquo;s <b>web gateway</b> stands between the browser and the web. It fetches the page for the IIgs, from secure sites too, takes out the scripts, the styles and everything else an old browser cannot use, and hands over a small, plain page.</p>
     <p>The gateway starts by itself when the IIgs goes online. To use it, tell the browser to use it as its <b>proxy</b>:</p>

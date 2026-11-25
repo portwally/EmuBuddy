@@ -9,6 +9,10 @@
  *   5b. the host computer at its fixed address 192.168.64.254: ARP reply, and a
  *       TCP connection to it arrives at this computer's own 127.0.0.1
  *   6. 300 ARP round trips, so TX and RX buffer pointers wrap many times
+ *   7. the hardware sockets (sockets 1-3, the host's own sockets): a TCP
+ *      connection out to 192.168.64.254 (this computer's 127.0.0.1) both
+ *      ways and its closing, LISTEN with a caller from this computer,
+ *      DISCON, UDP both ways (the 8-byte header), a refused CONNECT
  * Exit code 0 when everything passes. */
 #include "../uthernet2.h"
 #include <stdio.h>
@@ -214,6 +218,96 @@ tcp_syn(uint8_t *f, const uint8_t *dmac, const uint8_t *dst, int sport, int dpor
 	return n + 20;
 }
 
+/* ---- hardware sockets (2 KB each after RMSR/TMSR = 0x55) ---- */
+static int sr(int s) { return rd(0x0403 + s * 0x100); }
+static int ir(int s) { return rd(0x0402 + s * 0x100); }
+
+static void
+hw_send(int s, const char *p, int n)
+{
+	int	w = rd16(0x0424 + s * 0x100), i;
+
+	for(i = 0; i < n; i++) wr(0x4000 + s * 0x800 + ((w + i) & 0x7ff), p[i]);
+	wr16(0x0424 + s * 0x100, (w + n) & 0xffff);
+	wr(0x0401 + s * 0x100, 0x20);			/* SEND */
+}
+
+/* up to ms for n bytes in socket s; copies them, RECV; returns the count */
+static int
+hw_recv(int s, uint8_t *p, int n, int ms)
+{
+	int	t, rsr = 0, r, i;
+
+	for(t = 0; t < ms; t += 5) {
+		uthernet2_poll();
+		rsr = rd16(0x0426 + s * 0x100);
+		if(rsr >= n) break;
+		usleep(5000);
+	}
+	if(rsr < n) return rsr;
+	r = rd16(0x0428 + s * 0x100);
+	for(i = 0; i < n; i++) p[i] = (uint8_t)rd(0x6000 + s * 0x800 + ((r + i) & 0x7ff));
+	wr16(0x0428 + s * 0x100, (r + n) & 0xffff);
+	wr(0x0401 + s * 0x100, 0x40);			/* RECV */
+	return n;
+}
+
+/* up to ms for socket s to reach state want */
+static int
+hw_wait(int s, int want, int ms)
+{
+	int	t;
+
+	for(t = 0; t < ms; t += 5) {
+		uthernet2_poll();
+		if(sr(s) == want) return 1;
+		usleep(5000);
+	}
+	return 0;
+}
+
+static void
+hw_dest(int s, int port)
+{
+	int	i;
+
+	for(i = 0; i < 4; i++) wr(0x040C + s * 0x100 + i, HOSTIP[i]);
+	wr16(0x0410 + s * 0x100, port);
+}
+
+/* a host socket on 127.0.0.1, any free port (its number in *port) */
+static int
+host_sock(int type, int *port)
+{
+	struct sockaddr_in sa;
+	socklen_t sl = sizeof(sa);
+	int	fd = socket(AF_INET, type, 0);
+
+	memset(&sa, 0, sizeof(sa));
+	sa.sin_family = AF_INET;
+	sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	bind(fd, (struct sockaddr *)&sa, sizeof(sa));
+	getsockname(fd, (struct sockaddr *)&sa, &sl);
+	*port = ntohs(sa.sin_port);
+	if(type == SOCK_STREAM) listen(fd, 1);
+	return fd;
+}
+
+static int
+host_recv(int fd, char *p, int max, int ms)
+{
+	int	t, n;
+
+	fcntl(fd, F_SETFL, O_NONBLOCK);
+	for(t = 0; t < ms; t += 5) {
+		uthernet2_poll();
+		n = (int)recv(fd, p, (size_t)max, 0);
+		if(n >= 0) return n;
+		usleep(5000);
+	}
+	return -1;
+}
+
 int
 main(void)
 {
@@ -343,6 +437,144 @@ main(void)
 	}
 	CHECK(ok == 300, "300 ARP round trips (buffers wrapped)");
 	printf("       TX_WR=%04x RX_RD=%04x\n", rd16(0x0424), rd16(0x0428));
+
+	/* 7. hardware sockets: the chip's own TCP/IP, on this computer's sockets */
+	printf("hardware sockets\n");
+	uthernet2_write(4, 0x80);			/* software reset */
+	uthernet2_write(4, 0x03);
+	wr(0x001A, 0x55);				/* 2 KB per socket */
+	wr(0x001B, 0x55);
+	{
+		char	b[64];
+		uint8_t	u[64];
+		int	ls, cs = -1, port, t;
+		struct sockaddr_in sa;
+		socklen_t sl;
+
+		/* TCP out */
+		ls = host_sock(SOCK_STREAM, &port);
+		fcntl(ls, F_SETFL, O_NONBLOCK);
+		wr(0x0500, 0x01);			/* socket 1: TCP */
+		wr16(0x0504, 50100);
+		wr(0x0501, 0x01);			/* OPEN */
+		CHECK(sr(1) == 0x13, "TCP socket opens: INIT");
+		hw_dest(1, port);
+		wr(0x0501, 0x04);			/* CONNECT */
+		CHECK(hw_wait(1, 0x17, 3000), "CONNECT to 192.168.64.254: ESTABLISHED");
+		CHECK(ir(1) & 0x01, "Sn_IR CON set");
+		wr(0x0502, 0x01);
+		for(t = 0; t < 100 && cs < 0; t++) {
+			cs = accept(ls, NULL, NULL);
+			if(cs < 0) usleep(10000);
+		}
+		CHECK(cs >= 0, "the connection arrived at this computer's 127.0.0.1");
+		hw_send(1, "PING", 4);
+		n = host_recv(cs, b, sizeof(b), 2000);
+		CHECK(n == 4 && !memcmp(b, "PING", 4), "SEND: the bytes arrived");
+		uthernet2_poll();
+		CHECK(ir(1) & 0x10, "Sn_IR SEND_OK set");
+		CHECK(rd16(0x0520) == 2048, "TX_FSR: all free again");
+		send(cs, "PONG!", 5, 0);
+		n = hw_recv(1, u, 5, 2000);
+		CHECK(n == 5 && !memcmp(u, "PONG!", 5), "RECV: the answer in the receive buffer");
+		CHECK(ir(1) & 0x04, "Sn_IR RECV set");
+		CHECK(rd16(0x0526) == 0, "RX_RSR 0 after RECV");
+		for(i = 0; i < 20; i++) {		/* many round trips: pointers wrap */
+			char	m[200];
+
+			memset(m, 'a' + i, sizeof(m));
+			hw_send(1, m, sizeof(m));
+			n = host_recv(cs, b, 1, 1000);
+			ok = 0;
+			while(n > 0 && ok < (int)sizeof(m)) {
+				ok += n;
+				if(ok < (int)sizeof(m)) n = host_recv(cs, b, sizeof(b) < sizeof(m) - ok ? sizeof(b) : sizeof(m) - ok, 1000);
+			}
+			send(cs, m, sizeof(m), 0);
+			if(hw_recv(1, d, sizeof(m), 2000) != sizeof(m) || d[0] != 'a' + i || d[199] != 'a' + i) break;
+		}
+		CHECK(i == 20, "20 round trips of 200 bytes (buffers wrapped)");
+		close(cs);
+		CHECK(hw_wait(1, 0x1C, 2000), "the other side closes: CLOSE_WAIT");
+		CHECK(ir(1) & 0x02, "Sn_IR DISCON set");
+		wr(0x0501, 0x10);			/* CLOSE */
+		CHECK(sr(1) == 0x00, "CLOSE: CLOSED");
+		close(ls);
+
+		/* LISTEN */
+		ls = host_sock(SOCK_STREAM, &port);	/* (a free port: found, let go) */
+		close(ls);
+		wr(0x0600, 0x01);			/* socket 2: TCP */
+		wr16(0x0604, port);
+		wr(0x0601, 0x01);
+		wr(0x0601, 0x02);			/* LISTEN */
+		CHECK(sr(2) == 0x14, "LISTEN");
+		cs = socket(AF_INET, SOCK_STREAM, 0);
+		memset(&sa, 0, sizeof(sa));
+		sa.sin_family = AF_INET;
+		sa.sin_port = htons(port);
+		sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+		CHECK(connect(cs, (struct sockaddr *)&sa, sizeof(sa)) == 0,
+					"a program on this computer connects to it");
+		CHECK(hw_wait(2, 0x17, 2000), "the listening socket: ESTABLISHED");
+		CHECK(rd(0x060C) == 192 && rd(0x060F) == 254,
+					"Sn_DIPR: the caller, 192.168.64.254");
+		send(cs, "HELLO", 5, 0);
+		n = hw_recv(2, u, 5, 2000);
+		CHECK(n == 5 && !memcmp(u, "HELLO", 5), "RECV from the caller");
+		hw_send(2, "OK", 2);
+		n = host_recv(cs, b, sizeof(b), 2000);
+		CHECK(n == 2 && !memcmp(b, "OK", 2), "SEND to the caller");
+		wr(0x0601, 0x08);			/* DISCON */
+		CHECK(sr(2) == 0x18, "DISCON: FIN_WAIT");
+		n = host_recv(cs, b, sizeof(b), 2000);
+		CHECK(n == 0, "the caller sees the end");
+		close(cs);
+		CHECK(hw_wait(2, 0x00, 2000), "both closed: CLOSED");
+
+		/* UDP */
+		ls = host_sock(SOCK_DGRAM, &port);
+		wr(0x0700, 0x02);			/* socket 3: UDP */
+		wr16(0x0704, 0);
+		wr(0x0701, 0x01);
+		CHECK(sr(3) == 0x22, "UDP socket opens");
+		hw_dest(3, port);
+		hw_send(3, "HI", 2);
+		sl = sizeof(sa);
+		fcntl(ls, F_SETFL, O_NONBLOCK);
+		n = -1;
+		for(t = 0; t < 200 && n < 0; t++) {
+			n = (int)recvfrom(ls, b, sizeof(b), 0, (struct sockaddr *)&sa, &sl);
+			if(n < 0) usleep(5000);
+		}
+		CHECK(n == 2 && !memcmp(b, "HI", 2), "UDP SEND: the datagram arrived");
+		CHECK(ir(3) & 0x10, "Sn_IR SEND_OK set");
+		sendto(ls, "YO!", 3, 0, (struct sockaddr *)&sa, sl);
+		n = hw_recv(3, u, 11, 2000);
+		CHECK(n == 11 && u[0] == 192 && u[3] == 254 &&
+			((u[4] << 8) | u[5]) == port && u[7] == 3 && !memcmp(u + 8, "YO!", 3),
+			"UDP RECV: header (192.168.64.254, port, 3) and the data");
+		wr(0x0701, 0x10);
+		CHECK(sr(3) == 0x00, "UDP CLOSE");
+		close(ls);
+
+		/* refused */
+		ls = host_sock(SOCK_STREAM, &port);	/* a port nobody listens on */
+		close(ls);
+		wr(0x0501, 0x01);
+		hw_dest(1, port);
+		wr(0x0502, 0xff);
+		wr(0x0501, 0x04);
+		CHECK(hw_wait(1, 0x00, 3000), "CONNECT refused: CLOSED");
+		CHECK(ir(1) & 0x08, "Sn_IR TIMEOUT set");
+
+		/* a software reset closes the host sockets */
+		wr(0x0501, 0x01);
+		wr(0x0501, 0x02);
+		uthernet2_write(4, 0x80);
+		uthernet2_write(4, 0x03);
+		CHECK(sr(1) == 0x00, "software reset: every socket CLOSED");
+	}
 
 	net_shutdown();
 	printf(g_fail ? "FAILED (%d)\n" : "ALL PASSED\n", g_fail);
