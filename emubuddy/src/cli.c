@@ -93,6 +93,9 @@ usage(void)
 "  -cdrom <img>                   CD image (.iso, .cdr, .toast, .cue) in hard disk drive 7,\n"
 "                                 the CD-ROM drive of the High-Speed SCSI Card\n"
 "  -hsscsirom <file>              ROM of the High-Speed SCSI Card (341-0803.bin or a zip)\n"
+"  -fujinet on | off              FujiNet: its devices follow the hard disks of the hard disk\n"
+"                                 card; needs FujiNet-PC running on this computer\n"
+"  -fujinetport <n>               the port FujiNet-PC connects to (default 1985)\n"
 "  -share <folder>                Mac/PC folder as a ProDOS volume\n"
 "  -bridge <folder>               folder IIgs programs may read/write (host bridge)\n"
 "  -webgate <port> | off          web gateway for IIgs browsers (proxy 192.168.64.254,\n"
@@ -424,6 +427,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines") ||
 				is(o, "-cdrom") || is(o, "-hsscsirom") ||
+				is(o, "-fujinet") || is(o, "-fujinetport") ||
 				is(o, "-title") || is(o, "-profile") || is(o, "-quitshot") || is(o, "-screen"))) {
 			fprintf(stderr, "EmuBuddy: %s needs a value (see -help)\n", a);
 			return -1;
@@ -451,6 +455,19 @@ emubuddy_cli(int *pargc, char ***pargv)
 		} else if(is(o, "-cdrom")) {
 			emit2("-s7d7", v);	/* the CD-ROM drive (hsscsi.c) */
 			check("disk", v);
+		} else if(is(o, "-fujinet")) {
+			if(is(v, "on") || is(v, "off")) {
+				emit2("-g_fujinet", is(v, "on") ? "1" : "0");
+			} else {
+				fprintf(stderr, "EmuBuddy: -fujinet on or off\n");
+				return -1;
+			}
+		} else if(is(o, "-fujinetport")) {
+			if(atoi(v) < 1024 || atoi(v) > 65535) {
+				fprintf(stderr, "EmuBuddy: -fujinetport 1024 to 65535\n");
+				return -1;
+			}
+			emit2("-g_fujinet_port", v);
 		} else if(is(o, "-hsscsirom")) {
 			emit2("-g_hsscsi_rom", v);
 			check("ROM", v);

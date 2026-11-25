@@ -56,7 +56,10 @@ static fn_sock	g_listen = FN_BAD;
 static fn_sock	g_conn = FN_BAD;
 static int	g_units = 0;
 static int	g_seq = 0;
-static int	g_timeout_ms = 10000;
+/* How long a call waits. FujiNet-PC gives a web request 20 seconds before
+ * it answers "timed out" itself; a shorter wait here would give up first,
+ * and the calls after it would time out too while FujiNet-PC is still busy. */
+static int	g_timeout_ms = 25000;
 static unsigned char g_rx[2 * FRAME_MAX + 16];	/* bytes read, not yet used */
 static int	g_rx_len = 0;
 

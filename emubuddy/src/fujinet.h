@@ -31,7 +31,7 @@ void	fujinet_stop(void);
 void	fujinet_poll(void);
 /* The number of units of the FujiNet that is connected; 0 = none */
 int	fujinet_units(void);
-/* How long a call waits for its answer (default 10 s) */
+/* How long a call waits for its answer (default 25 s) */
 void	fujinet_set_timeout_ms(int ms);
 
 /* One SmartPort call for unit (1 = FujiNet's first). params: the 5 bytes

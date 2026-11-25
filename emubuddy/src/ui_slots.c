@@ -21,6 +21,7 @@ void		scc_config_changed(int port, int cfg_changed, int remote_changed,
 
 #define ROW_H	34
 
+extern int	g_fujinet;		/* smartport.c: FujiNet on or off */
 extern char	*g_hsscsi_rom;		/* hsscsi.c */
 int		hsscsi_rom_found(void);
 int		hsscsi_rom_file_ok(const char *path);
@@ -180,9 +181,19 @@ slots_draw(UiWindow *win, int cx, int cy)
 		"HS SCSI Card: its ROM file is there" :
 		"HS SCSI Card: needs its ROM, 341-0803.bin or a2hsscsi.zip",
 		(g_pend[6] == 2 && !g_rom_found) ? UI_BLACK : UI_GREY);
-	by += 17 + 17 + 17 + 17 + 17 + 8;
+	/* FujiNet: its devices come through the Hard Disk Card (smartport.c) */
+	ui_draw_text(cx + 10, cy + by + 85, smartport_fujinet_status(), UI_GREY);
+	by += 17 + 17 + 17 + 17 + 17 + 17 + 8;
 	if(ui_button(win, cx, cy, 10, by, 110, 24, "SCSI ROM...", 1)) {
 		ui_file_browser_open("Choose the SCSI Card ROM", scsi_rom_picked);
+	}
+	/* on or off at once: no restart, the devices come and go */
+	if(ui_button(win, cx, cy, 10 + 110 + 8, by, 110, 24,
+				g_fujinet ? "FujiNet Off" : "FujiNet On", 1)) {
+		g_fujinet = !g_fujinet;
+		g_config_kegs_update_needed = 1;
+		ui_message(g_fujinet ? "FujiNet on - start FujiNet-PC" :
+							"FujiNet off");
 	}
 	if(ui_button(win, cx, cy, cw - 10 - 80, by, 80, 24, "Apply", dirty)) {
 		apply();
@@ -209,7 +220,7 @@ ui_slots_toggle(void)
 	load_pending();
 	snprintf(g_slots_win.title, sizeof(g_slots_win.title), "Slots");
 	g_slots_win.w = 580;
-	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 85 + 8 + 24 + 12;
+	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 102 + 8 + 24 + 12;
 	g_rom_found = hsscsi_rom_found();
 	g_slots_win.closable = 1;
 	g_slots_win.modal = 0;

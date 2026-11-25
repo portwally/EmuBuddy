@@ -279,6 +279,10 @@ profile_build_args(const Profile *p, const char *exe, const char *cfgdir,
 	if((v = profile_get(p, "hsscsirom"))[0]) {
 		add_path(&o, "-hsscsirom", v);
 	}
+	if((v = profile_get(p, "fujinet"))[0]) {
+		add(&o, "-fujinet");
+		add(&o, is_off(v) ? "off" : "on");
+	}
 	if((v = profile_get(p, "share"))[0]) {
 		add_path(&o, "-share", v);
 	}

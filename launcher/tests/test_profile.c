@@ -45,6 +45,7 @@ main(void)
 		profile_set(&cd, "sl7", "hsscsi");
 		profile_set(&cd, "cdrom", "/disks/My CD.iso");
 		profile_set(&cd, "hsscsirom", "/roms/a2hsscsi.zip");
+		profile_set(&cd, "fujinet", "on");
 		n = profile_build_args(&cd, "EmuBuddy", "/data/Games", buf, sizeof(buf),
 					argv, PROFILE_MAX_ARGS, err, sizeof(err));
 		CHECK(n > 0);
@@ -52,6 +53,8 @@ main(void)
 		CHECK(strstr(line3, "-sl7 hsscsi"));
 		CHECK(strstr(line3, "-cdrom \"/disks/My CD.iso\""));
 		CHECK(strstr(line3, "-hsscsirom /roms/a2hsscsi.zip"));
+		CHECK(strstr(line3, "-fujinet on"));
+		CHECK(!strstr(line, "-fujinet"));
 		n = profile_build_args(&p, "EmuBuddy", "/data/Games", buf, sizeof(buf),
 					argv, PROFILE_MAX_ARGS, err, sizeof(err));
 	}

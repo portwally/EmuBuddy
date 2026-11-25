@@ -169,6 +169,11 @@ which EmuBuddy does not ship: `341-0803.bin` or MAME's `a2hsscsi.zip`, next to y
 **SCSI ROM...** in the Slots window. With this card, a
 hard disk has to be in its drive when the IIgs starts; a CD can go in at any time.
 
+**FujiNet.** With [FujiNet-PC](https://github.com/FujiNetWIFI/fujinet-firmware) running on your computer
+(`./run-fujinet -u http://127.0.0.1:8000`), click **FujiNet On** in the Slots window: the FujiNet's eight disk drives, its
+network device and its other devices appear after the hard disks of the Hard Disk Card. New and experimental; the
+manual says what works.
+
 The defaults are the Uthernet II in slot 4 and a PostScript printer on port 1, because that is what internet access and
 printing need. As on the real machine, a card also needs "Your Card" selected for its slot in the IIgs Control
 Panel. Changing slot 7 restarts the machine.

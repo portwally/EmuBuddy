@@ -169,14 +169,63 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
   likely.
 - The clock device and the printer: only that they answer.
 
+**Done in part (2026-11-25): the calls are tested with a program of our own; no real FujiNet program for the
+network device has run yet.**
+- Test: a BASIC program on a ProDOS 8 disk (`PRODOS` and `BASIC.SYSTEM` from the test system) makes SmartPort calls
+  through a 16-byte machine routine. FujiNet-PC had a disk image `fntest.po` in its SD folder, named in `fnconfig.ini`
+  as `[Mount2]` (`hostslot=1`, `path=/fntest.po`, `mode=w`).
+  - **CONTROL to THE_FUJI** with code `$D7` (mount all): error 0, and unit 9 then reports 1600 blocks.
+  - **WRITE BLOCK and READ BLOCK** on unit 9: block 5 written with a pattern and read back with no difference. On the
+    Mac, block 5 of `fntest.po` holds the pattern and no other block changed.
+  - **The network device** (unit 18): CONTROL `O` with `N:HTTP://127.0.0.1:8765/hello.txt` (a small web server
+    started for the test), STATUS `S` (56 bytes waiting), READ of 40 bytes (the IIgs printed the start of the page)
+    and CONTROL `C`: all error 0. So CONTROL with data and the READ call work.
+  - **A reset of the IIgs while connected:** after Control-Reset the program ran again and fetched the page a second
+    time. EmuBuddy sends nothing on a reset. The write in that second run got error `$2F` from FujiNet-PC: it had
+    mounted the image again and reports "disk switched" once. EmuBuddy passes that on unchanged.
+- **Changed: a call now waits 25 seconds, not 10.** FujiNet-PC gives a web request 20 seconds before it answers "timed
+  out" itself. With 10 seconds EmuBuddy gave up first, and the next calls timed out too while FujiNet-PC was still
+  busy. (Found by letting FujiNet-PC fetch its own web page, which it cannot do: it serves that page in the same
+  loop.) The price: a dead web server freezes the IIgs for up to 20 seconds.
+- GS/OS (from phase 2): starts with the FujiNet connected and shows FujiNet's disk 1 in the Finder.
+- Not tested:
+  - a real program made with `fujinet-lib`, and FujiNet's own programs other than its configuration program;
+  - a disk from a TNFS server on the internet (only the local SD folder);
+  - the WRITE call of the network device (sending data), and the OPEN and CLOSE SmartPort calls;
+  - writing to a FujiNet disk from GS/OS, and FujiNet's clock, printer, modem and CP/M devices beyond their names;
+  - mounting through the configuration program's own screens (the keys were not driven).
+
 ### Phase 4: settings and windows (small to medium)
 - Setting "FujiNet" (off, on) and its port, in the config and in the Slots window, next to the Hard Disk Card.
 - The status bar or the Drives window says whether a FujiNet is connected and how many units it has.
 - CLI: `-fujinet on|off`, `-fujinetport <n>`. Launcher: a profile key.
 
+**Done (2026-11-25).**
+- Slots window: a line says what the FujiNet is doing ("off", "waiting for FujiNet-PC on port 1985", "connected, 14
+  devices, after the hard disks", or "needs the Hard Disk Card in slot 7"), and a button turns it on and off at once,
+  without a restart. The setting is saved.
+- CLI: `-fujinet on|off` and `-fujinetport <n>` (1024–65535); `docs/CLI.md` has them.
+- Launcher: the profile key `fujinet` (`on`, or `off`) is passed on; `test_profile` covers it. There is no field for
+  it in the editor yet.
+- Tested by picture: the three states of the line, and the button turning FujiNet off.
+- Not done: a note in the status bar or the Drives window, and a field in the Launcher's editor.
+
 ### Phase 5: documents (small)
 - README, `docs/CLI.md`, the manual: what FujiNet is, where FujiNet-PC comes from, how to start both, where its web
   page is.
+
+**Done (2026-11-25).**
+- The manual has a section "FujiNet" in the chapter on slots and cards: what it is, where FujiNet-PC comes from, the
+  three steps to connect, that the drives are set up on FujiNet-PC's web page, the 25-second wait, and what does not
+  work (starting up from a FujiNet drive, drive numbers in ProDOS 8, the High-Speed SCSI Card). The CLI table has
+  `-fujinet` and `-fujinetport`. The PDF is rebuilt (61 pages).
+- The pictures of the Slots window (plain, and with the web gateway) are retaken with the new line and button; the
+  one with AppleTalk still shows the older window.
+- README: a short paragraph with a link to the FujiNet firmware.
+- The manual tells the user to start FujiNet-PC with `-u http://127.0.0.1:8000`, so that its web page is open to this
+  computer only.
+- Not tried: mounting a disk on FujiNet-PC's web page by hand. The page has Browse, Mount, Eject and Mount All
+  buttons; the test in phase 3 mounted through `fnconfig.ini` instead.
 
 ### Phase 6 (later, optional)
 - EmuBuddy starts FujiNet-PC itself and stops it at the end, as it does with the web gateway. FujiNet-PC is GPL-3.0,
@@ -201,7 +250,8 @@ Each phase ends in something that can be tested, and the Hard Disk Card keeps wo
 - **The IIgs is untested ground.** AppleWin has no IIgs, and its card handles only the short SmartPort calls in 64 KB of
   memory. GS/OS and its long calls with FujiNet are new.
 - **The emulator waits.** A SmartPort call stops the IIgs until FujiNet-PC answers. A slow network (a web request, a
-  TNFS server far away) freezes the IIgs for that time, up to the 10-second limit. AppleWin has the same.
+  TNFS server far away) freezes the IIgs for that time, up to 25 seconds (FujiNet-PC's own limit for a web request is
+  20). AppleWin waits 10 seconds.
 - **Many units.** 21 SmartPort units on one card is more than ProDOS 8 can give drive numbers to; it only takes the
   first ones as disks. FujiNet's disks are its units 1 to 8, but behind the seven hard disks they are units 8 to 15, so
   ProDOS 8 will not see them as drives without help. FujiNet programs find their devices by name and are not affected. A setting "FujiNet

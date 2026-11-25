@@ -593,6 +593,7 @@ int do_write_c7(int unit_num, word32 buf, word32 blk);
 int smartport_read_block(int unit_num, word32 blk, byte *local_buf);
 void smartport_fix_iso_name(Disk *dsk, byte *buf);
 void smartport_fujinet_tick(void);
+const char *smartport_fujinet_status(void);
 int hsscsi_is_cd_image(const char *name);
 int hsscsi_audio_mix(int *out, int num_samps, int rate, int zero_first);
 int smartport_write_block(int unit_num, word32 blk, byte *local_buf);

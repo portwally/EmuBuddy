@@ -100,6 +100,7 @@ smartport_log(word32 start_addr, word32 cmd, word32 rts_addr, word32 cmd_list)
  * SmartPort unit 8 is FujiNet's unit 1. Their calls are passed on. */
 int	g_fujinet = 0;			/* config: 0 off, 1 on */
 int	g_fujinet_port = FUJINET_PORT;	/* config */
+extern int g_slot7_scsi;		/* config.c: 1 = the hard disk card */
 #define FUJINET_FIRST_UNIT	8
 
 /* Once a frame: starts or stops listening as the setting says, takes a
@@ -121,6 +122,28 @@ smartport_fujinet_tick(void)
 	if(started) {
 		fujinet_poll();
 	}
+}
+
+/* One line for the Slots window: what the FujiNet is doing */
+const char *
+smartport_fujinet_status(void)
+{
+	static char buf[100];
+
+	if(!g_fujinet) {
+		return "FujiNet: off";
+	}
+	if(g_slot7_scsi != 1) {
+		return "FujiNet: needs the Hard Disk Card in slot 7";
+	}
+	if(fujinet_units()) {
+		snprintf(buf, sizeof(buf), "FujiNet: connected, %d devices, "
+			"after the hard disks", fujinet_units());
+	} else {
+		snprintf(buf, sizeof(buf), "FujiNet: waiting for FujiNet-PC "
+					"on port %d", g_fujinet_port);
+	}
+	return buf;
 }
 
 /* The number of FujiNet units the IIgs sees now */

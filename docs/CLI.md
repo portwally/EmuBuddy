@@ -19,6 +19,8 @@ config file, so your normal setup stays as it was. Add `-save` to keep them.
 | `-flop3 <img>`, `-flop4 <img>` | 3.5" drives (slot 5, drive 1/2) |
 | `-hard1 <img>` … `-hard7 <img>` | SCSI hard disks (slot 7, drive 1–7) |
 | `-cdrom <img>` | a CD image (`.iso`, `.cdr`, `.toast`, or a `.cue` sheet with its `.bin`; audio tracks play) in hard disk drive 7, the CD-ROM drive of the High-Speed SCSI Card (`-sl7 hsscsi`) |
+| `-fujinet on\|off` | FujiNet: its devices follow the hard disks of the Hard Disk Card. Needs FujiNet-PC running on this computer. |
+| `-fujinetport <n>` | the port FujiNet-PC connects to (default 1985) |
 | `-share <folder>` | a Mac/PC folder as a live ProDOS volume |
 | `<img or folder>` | goes into the first free drive that fits |
 
