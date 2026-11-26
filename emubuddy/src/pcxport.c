@@ -46,6 +46,7 @@
 #include "slotcard.h"
 #include "pcxport.h"
 #include "x86emu/include/x86emu.h"
+#include "pcxport_font.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -659,6 +660,149 @@ v30_run(word32 n)
 		if(v30_mem_r8((cs << 4) + ip) == 0xf4 ||
 				v30_mem_r8((cs << 4) + ip + 1) == 0xf4) {
 			g_pcx->hlt_wait = 1;
+		}
+	}
+}
+
+/* ------------------------------------------------------------------ */
+/* The PC's picture. On a real card the ColorView daughterboard sits
+ * between the IIgs and its monitor and puts the PC Transporter's picture
+ * on the screen while the CGA sends one. Here: while the V30 runs and the
+ * CGA's mode register has "video on" (bit 3), video.c shows this picture
+ * instead of the IIgs's. AEPC.SYSTEM turns the CGA on when it starts the PC
+ * and off when the PC stops. */
+
+int
+pcxport_screen_on(void)
+{
+	return g_pcx && g_pcx_slot_in_use && !g_pcx->reset_line &&
+			!g_pcx->halt_line && (g_pcx->cga_mode & 0x08);
+}
+
+/* The CGA border (overscan) colour, 0-15 */
+int
+pcxport_screen_border(void)
+{
+	if((g_pcx->cga_mode & 0x12) == 0x12) {
+		return 0;		/* 640x200: the border is black */
+	}
+	return g_pcx->cga_color & 0x0f;
+}
+
+static void
+put2(word32 *row, int pitch, int x, word32 pix)
+{
+	/* one CGA pixel, 2 lines high (200 lines on a 400-line picture) */
+	row[x] = pix;
+	row[x + pitch] = pix;
+}
+
+/* Draw the 640x400 picture: pal[] are the 16 CGA colours as screen pixels,
+ * frame counts the frames (cursor and blinking) */
+void
+pcxport_screen_draw(word32 *wptr, int pitch, const word32 *pal, word32 frame)
+{
+	word32	start, cols, rows, mode, color, addr, ch, attr, bits, fg, bg;
+	word32	cur, cur_start, cur_end, y, x, line, i, b, scan, height;
+	word32	*row;
+	word32	gpal[4];
+	int	blink_on, cursor_on, wide;
+
+	mode = g_pcx->cga_mode;
+	color = g_pcx->cga_color;
+	start = (g_pcx->crtc[12] << 8) | g_pcx->crtc[13];
+	blink_on = (frame >> 4) & 1;
+	cursor_on = (frame >> 3) & 1;
+	if(mode & 0x02) {				/* graphics */
+		for(y = 0; y < 200; y++) {
+			row = wptr + (2 * y) * pitch;
+			addr = ((y & 1) << 13) + (y >> 1) * 80 + start * 2;
+			if(mode & 0x10) {		/* 640x200, 2 colours */
+				fg = pal[color & 0x0f];
+				for(x = 0; x < 80; x++) {
+					b = g_pcx->vram[(addr + x) & 0x3fff];
+					for(i = 0; i < 8; i++) {
+						put2(row, pitch, x * 8 + i,
+							(b & (0x80 >> i)) ?
+							fg : pal[0]);
+					}
+				}
+				continue;
+			}
+			/* 320x200, 4 colours */
+			gpal[0] = pal[color & 0x0f];
+			i = (color & 0x10) ? 8 : 0;
+			if(mode & 0x04) {		/* "black and white": red */
+				gpal[1] = pal[3 + i];	/*  cyan, red, white */
+				gpal[2] = pal[4 + i];
+				gpal[3] = pal[7 + i];
+			} else if(color & 0x20) {	/* cyan, magenta, white */
+				gpal[1] = pal[3 + i];
+				gpal[2] = pal[5 + i];
+				gpal[3] = pal[7 + i];
+			} else {			/* green, red, brown */
+				gpal[1] = pal[2 + i];
+				gpal[2] = pal[4 + i];
+				gpal[3] = pal[6 + i];
+			}
+			for(x = 0; x < 80; x++) {
+				b = g_pcx->vram[(addr + x) & 0x3fff];
+				for(i = 0; i < 4; i++) {
+					fg = gpal[(b >> (6 - 2 * i)) & 3];
+					put2(row, pitch, x * 8 + i * 2, fg);
+					put2(row, pitch, x * 8 + i * 2 + 1, fg);
+				}
+			}
+		}
+		return;
+	}
+	/* text: 40 or 80 columns of 8x8 characters, 25 rows */
+	wide = !(mode & 0x01);
+	cols = wide ? 40 : 80;
+	rows = 25;
+	height = 8;
+	cur = (g_pcx->crtc[14] << 8) | g_pcx->crtc[15];
+	cur_start = g_pcx->crtc[10] & 0x1f;
+	cur_end = g_pcx->crtc[11] & 0x1f;
+	if((g_pcx->crtc[10] & 0x60) == 0x20) {
+		cursor_on = 0;			/* the cursor is off */
+	}
+	for(line = 0; line < rows; line++) {
+		for(x = 0; x < cols; x++) {
+			addr = (start + line * cols + x) & 0x1fff;
+			ch = g_pcx->vram[(addr * 2) & 0x3fff];
+			attr = g_pcx->vram[(addr * 2 + 1) & 0x3fff];
+			fg = attr & 0x0f;
+			bg = (attr >> 4) & 0x0f;
+			if(mode & 0x20) {		/* bit 7 blinks */
+				bg &= 7;
+				if((attr & 0x80) && blink_on) {
+					fg = bg;
+				}
+			}
+			for(scan = 0; scan < height; scan++) {
+				bits = g_pcx_font[ch][scan];
+				if(cursor_on && addr == (cur & 0x1fff) &&
+						scan >= cur_start &&
+						scan <= cur_end) {
+					bits = 0xff;
+				}
+				row = wptr + (2 * (line * height + scan)) *
+									pitch;
+				for(i = 0; i < 8; i++) {
+					y = (bits >> i) & 1;
+					if(wide) {
+						put2(row, pitch, x * 16 + 2 * i,
+							pal[y ? fg : bg]);
+						put2(row, pitch,
+							x * 16 + 2 * i + 1,
+							pal[y ? fg : bg]);
+					} else {
+						put2(row, pitch, x * 8 + i,
+							pal[y ? fg : bg]);
+					}
+				}
+			}
 		}
 	}
 }

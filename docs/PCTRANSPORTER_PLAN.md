@@ -17,8 +17,8 @@ EmuBuddy's own `slotcard.h`, `moremem.c` and `sim65816.c`.
 **State (2026-11-26):** phases 1 and 2 are written (`pcxport.c`, libx86emu in `x86emu/`), pass
 `tests/test_pcxport.c`, and **run the Applied Engineering software 2.04**: AEPC.SYSTEM finds the card, loads the BIOS
 and the drivers, the V30 starts, and **MS-DOS 5 boots from a 16 MB `MSDOSVOL`** on a ProDOS hard disk and answers
-commands (`ver`: "MS-DOS Version 5.00"). The PC's picture is not drawn yet (phase 4): the tests read the CGA text memory
-(`EMUBUDDY_PCXPORT_SCREEN=1`).
+commands (`ver`: "MS-DOS Version 5.00"), and **Windows 3.0 starts** in CGA 640x200. The PC's picture is in EmuBuddy's
+own window, as the ColorView daughterboard puts it on the IIgs's monitor (phase 4).
 
 What the real software taught, against MAME's driver:
 - **The V30 takes an interrupt once per `$CF31` bit 6 write.** Kept as a level, the V30 re-entered the handler after
@@ -42,7 +42,7 @@ What the real software taught, against MAME's driver:
 | Where does the knowledge come from? | MAME's driver: the register map, the mailbox protocol, the port routing table and the TransDrive wiring are all documented there. MAME's file is BSD-3-Clause, which may be used in GPLv3 EmuBuddy with its notice kept. EmuBuddy's card is written in C on the `Slot_card` interface; where code follows MAME closely, the file carries MAME's copyright line. |
 | V30 core | **libx86emu** (`wfeldt/libx86emu`), vendored under `emubuddy/src/x86emu/`. Plain C, an MIT-style licence, callbacks for every memory and I/O access, runs N instructions and returns. It compiles cleanly with `gcc -Wall` (checked). It is a 386 core run in real mode: the 8086/V30 differences that matter (`PUSH SP`, shift counts, opcode `0F`, the NEC-only instructions) are handled in phase 2. MAME's own NEC core is the alternative if accuracy demands it, but it is C++ tied to MAME's device framework. |
 | Which slot? | Slot 2 or 4 in the Slots window, 1, 2 or 4 on the command line (`-sl2 pcxport`, MAME's name). Not 3 (80 columns), 5 and 6 (the drives) or 7 (the hard disks); with a mouse not 4 either (see the state above). The card takes the place of what was in its slot. The slot must be set to "Your Card" in the IIgs Control Panel, as on a real IIgs. |
-| PC screen | The CGA output gets its own **PC Screen** window (menu Machine > PC Screen), as a second monitor on the desk. Text shown by the 6502 driver on the Apple screen needs nothing extra. |
+| PC screen | As the **ColorView** daughterboard of the real card: it sits between the IIgs and its monitor and shows the PC's picture while the card sends one. EmuBuddy shows the CGA picture in its own window while the V30 runs and the CGA's mode register has "video on" (bit 3), which AEPC.SYSTEM sets when it starts the PC and clears when the PC stops; then the IIgs's picture comes back. No second window. |
 | PC hard disk | The software's own way: an `MSDOSVOL` file on a ProDOS volume. That works with every EmuBuddy disk **and with shared folders**, so the PC's disk can be a plain file on the computer. |
 | Floppy (TransDrive) | Last phase and optional. It needs an ISM (the MFM half of the SWIM), which EmuBuddy does not have. |
 | Default | Off. The Slots window offers "PC Transporter" for slots 1–7. |
@@ -121,9 +121,12 @@ Apple screen: the PC Transporter draws it on its own CGA output (phase 4).
 mailbox, so the 6502 driver does them with the IIgs's own timers and sound. *Test:* `TIME`, a program that beeps, a game
 that uses the timer; only if they fail does the card need more.
 
-**Phase 4 – PC Screen.** A 6845 and the CGA mode/colour registers; text 40/80, 320×200 4 colours, 640×200 2 colours,
-drawn from `B8000` into the PC Screen window at 60 Hz. Screenshot (F10) of the front window. *Test:* `MODE`, a CGA game,
-GW-BASIC `SCREEN 1`/`SCREEN 2`.
+**Phase 4 – PC Screen.** *Written.* The CGA's registers and its 16 KB, drawn at the end of every IIgs frame
+(`video_pcxport_frame` in `video.c`, `pcxport_screen_draw` in `pcxport.c`): text 40/80 columns with cursor and blinking,
+320×200 in 4 colours (both palettes, intensity, the "black and white" palette), 640×200 in 2 colours, the border colour.
+The text font is IBM CGA from *The Ultimate Oldschool PC Font Pack* by VileR (CC BY-SA 4.0, `pcxport_font.h`). *Tested:*
+MS-DOS 5 text in 40 and 80 columns, Windows 3.0's Program Manager. *Still to try:* a CGA game, GW-BASIC
+`SCREEN 1`/`SCREEN 2`.
 
 **Phase 5 – TransDrive (optional).** An ISM and PC disk images (`.img`, 360 KB and 720 KB) in two new rows of the
 Drives window. MAME gets the ISM from its SWIM1 core; EmuBuddy would need it written. *Test:* format, copy, `DISKCOPY`.
