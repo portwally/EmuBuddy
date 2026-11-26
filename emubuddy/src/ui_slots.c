@@ -39,7 +39,7 @@ typedef struct {
 
 static const SlotDef g_slots[7] = {
 	{ "Printer Port", { "Idle", "Modem", "ImageWriter", "PostScript" }, 4, 15, NULL },
-	{ "Modem Port", { "Idle", "Modem", "FujiNet", NULL }, 3, 7, NULL },
+	{ "Modem Port", { "Idle", "Modem", "FujiNet", "PC Transporter" }, 4, 15, NULL },
 	{ "Network", { "Empty", "Video Overlay", "Uthernet II", NULL }, 3, 7, NULL },
 	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II", "PC Transporter" }, 4, 15, NULL },
 	{ "3.5\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
@@ -62,6 +62,9 @@ slot_current(int i)
 	case 1:		/* 2: the FujiNet card sits in slot 2 (smartport.c) */
 		if(g_fujinet && g_fujinet_slot == 2) {
 			return 2;
+		}
+		if(g_pcxport_slot == 2) {
+			return 3;
 		}
 		return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
 	case 2: return g_uthernet2_slot == 3 ? 2 : (g_voc_enable ? 1 : 0);
@@ -115,8 +118,8 @@ apply(void)
 		}
 	}
 	for(p = 0; p < 2; p++) {
-		if(p == 1 && g_pend[1] == 2) {
-			continue;		/* FujiNet: done above */
+		if(p == 1 && g_pend[1] >= 2) {
+			continue;	/* FujiNet: done above; PC Transporter below */
 		}
 		if(g_pend[p] != slot_current(p) && g_pend[p] >= 0) {
 			/* choice 2 = ImageWriter (mode 4), 3 = PostScript (mode 5) */
@@ -135,8 +138,13 @@ apply(void)
 	g_slot7_scsi = g_pend[6];	/* 0 empty, 1 hard disk card, 2 HS SCSI */
 	/* the PC Transporter has no ROM: it goes in or out without a restart
 	 *  (pcxport_attach takes care of the card that was in its slot) */
-	if((g_pend[3] == 3) != (g_pcxport_slot == 4)) {
-		pcxport_attach(g_pend[3] == 3 ? 4 : 0);
+	if(g_pend[1] == 3 && g_serial_cfg[1] != 0) {
+		g_serial_cfg[1] = 0;		/* the card has the slot */
+		scc_config_changed(1, 1, 0, 0);
+	}
+	p = (g_pend[1] == 3) ? 2 : (g_pend[3] == 3) ? 4 : 0;
+	if(p != g_pcxport_slot) {
+		pcxport_attach(p);
 	}
 	g_config_kegs_update_needed = 1;
 	if(restart) {
@@ -193,6 +201,12 @@ slots_draw(UiWindow *win, int cx, int cy)
 				g_pend[3] = 0;
 			} else if(i == 3 && g_pend[3] == 2 && g_pend[2] == 2) {
 				g_pend[2] = 0;
+			}
+			/* and one PC Transporter: slot 2 or slot 4 */
+			if(i == 1 && g_pend[1] == 3 && g_pend[3] == 3) {
+				g_pend[3] = 0;
+			} else if(i == 3 && g_pend[3] == 3 && g_pend[1] == 3) {
+				g_pend[1] = 0;
 			}
 		}
 	}

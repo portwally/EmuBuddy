@@ -151,6 +151,8 @@ main(void)
 	wr(0xcf31, 0x40);	/* INT to the V30 */
 	run(5);
 	CHECK(peek(0x503) == 0x33, "interrupt 40h taken out of HLT");
+	run(5);
+	CHECK(peek(0x503) == 0x33, "taken once: the handler is not re-entered");
 	wr(0xcf30, 0x40);
 	CHECK(peek(0x0100) == 0x47 && peek(0x0103) == 0xf0, "IVT written by V30");
 

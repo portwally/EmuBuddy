@@ -35,7 +35,12 @@
  * the V30 runs the same IN again.
  *
  * EMUBUDDY_PCXPORT_TRACE=1 prints the mailbox traffic and the control
- * register writes, =2 also every access to $CFxx. */
+ * register writes, =2 also every access to $CFxx, =3 also the PC's disk
+ * calls (INT 13h) with the first bytes of the last sector read, =4 also
+ * every V30 port access, routed or not.
+ * EMUBUDDY_PCXPORT_SCREEN=1 prints the PC's text screen (CGA, B8000) when
+ * it has changed, at most once a second of IIgs time: for tests without a
+ * window; =2 also where the V30 is, every second. */
 
 #include "defc.h"
 #include "slotcard.h"
@@ -91,6 +96,9 @@ typedef struct {
 static Pcxport	*g_pcx;
 static x86emu_t	*g_v30;
 static int	g_pcx_trace;
+static int	g_pcx_screen_dump;
+static word32	g_pcx_screen_sum;
+static dword64	g_pcx_screen_next;
 static int	g_pcx_slot_in_use;	/* where the card is plugged in now */
 
 static unsigned	pcx_rom_read(int off, dword64 dfcyc);
@@ -386,8 +394,22 @@ x86_port_w(word32 port, word32 val, word32 mask)
 }
 
 /* One byte from a V30 port */
+static unsigned v30_in8_(word32 port);
+
 static unsigned
 v30_in8(word32 port)
+{
+	unsigned	val;
+
+	val = v30_in8_(port);
+	if(g_pcx_trace >= 4) {
+		printf("pcxport: v30 in  %03x = %02x\n", port & 0xffff, val);
+	}
+	return val;
+}
+
+static unsigned
+v30_in8_(word32 port)
 {
 	port &= 0xffff;
 	if(port >= 0x400) {
@@ -406,6 +428,9 @@ static void
 v30_out8(word32 port, unsigned val)
 {
 	port &= 0xffff;
+	if(g_pcx_trace >= 4) {
+		printf("pcxport: v30 out %03x = %02x\n", port, val & 0xff);
+	}
 	if(port >= 0x400) {
 		return;
 	}
@@ -528,8 +553,8 @@ v30_push16(word32 val)
 	v30_mem_w8(g_v30->x86.R_SS_BASE + sp + 1, (val >> 8) & 0xff);
 }
 
-/* The V30 takes the interrupt the Apple asked for ($CF31 bit 6); its INTA
- * cycle reads the vector the Apple left at BFFFE */
+/* The V30 takes the interrupt the Apple asked for ($CF31 bit 6), once; its
+ * INTA cycle reads the vector the Apple left at BFFFE */
 static void
 v30_take_int(void)
 {
@@ -549,9 +574,43 @@ v30_take_int(void)
 	g_v30->x86.saved_cs = cs;
 	g_v30->x86.saved_eip = ip;
 	g_pcx->hlt_wait = 0;
+	/* taken once per request: MAME's NEC core clears its pending IRQ
+	 *  when it accepts it (nec.cpp, external_int); the 6502 writes
+	 *  $CF31 bit 6 again for the next one */
+	g_pcx->int_line = 0;
 	if(g_pcx_trace) {
 		printf("pcxport: V30 INT %02x -> %04x:%04x\n", vector, cs, ip);
 	}
+}
+
+/* Software interrupts, for EMUBUDDY_PCXPORT_TRACE=3: the disk calls */
+static word32	g_int13_buf = 0xffffffff;
+
+static int
+v30_intr(x86emu_t *emu, u8 num, unsigned type)
+{
+	word32	i;
+
+	(void)emu;
+	if(!(type & 0xff00) && num == 0x13 && g_pcx_trace >= 3) {
+		if(g_int13_buf != 0xffffffff) {
+			printf("pcxport:   last read:");
+			for(i = 0; i < 16; i++) {
+				printf(" %02x", v30_mem_r8(g_int13_buf + i));
+			}
+			printf("\n");
+			g_int13_buf = 0xffffffff;
+		}
+		printf("pcxport: INT 13 AX=%04x CX=%04x DX=%04x ES:BX=%04x:%04x"
+			" (from %04x:%04x)\n", g_v30->x86.R_AX,
+			g_v30->x86.R_CX, g_v30->x86.R_DX, g_v30->x86.R_ES,
+			g_v30->x86.R_BX, g_v30->x86.saved_cs,
+			g_v30->x86.saved_eip);
+		if((g_v30->x86.R_AX >> 8) == 2) {
+			g_int13_buf = (g_v30->x86.R_ES << 4) + g_v30->x86.R_BX;
+		}
+	}
+	return 0;		/* the V30 runs its own handler */
 }
 
 /* Before every instruction */
@@ -616,6 +675,49 @@ queue_event(dword64 dfcyc)
 	}
 }
 
+/* The text screen as plain text, when it changed */
+static void
+screen_dump(dword64 dfcyc)
+{
+	word32	sum, cols, row, col, ch, start;
+
+	if((dfcyc >> 16) < g_pcx_screen_next) {
+		return;
+	}
+	g_pcx_screen_next = (dfcyc >> 16) + 1020484;	/* 1 s */
+	if(g_pcx_screen_dump > 1) {
+		printf("pcxport: V30 at %04x:%04x flags %04x%s%s%s%s%s\n",
+			g_v30->x86.R_CS, g_v30->x86.R_IP, g_v30->x86.R_FLG & 0xffff,
+			g_pcx->hlt_wait ? " HLT" : "",
+			g_pcx->stalled ? " waits for the Apple" : "",
+			g_pcx->halt_line ? " halted" : "",
+			g_pcx->reset_line ? " in reset" : "",
+			g_pcx->int_line ? " INT pending" : "");
+	}
+	cols = (g_pcx->cga_mode & 0x01) ? 80 : 40;
+	start = ((g_pcx->crtc[12] << 8) | g_pcx->crtc[13]) * 2;
+	sum = cols;
+	for(row = 0; row < 25 * cols * 2; row++) {
+		sum = sum * 31 + g_pcx->vram[(start + row) & (PCX_VRAM_SIZE - 1)];
+	}
+	if(sum == g_pcx_screen_sum) {
+		return;
+	}
+	g_pcx_screen_sum = sum;
+	printf("pcxport: screen, mode %02x, %u columns, at %.1f s\n",
+		g_pcx->cga_mode, cols, (double)(dfcyc >> 16) / 1020484.0);
+	for(row = 0; row < 25; row++) {
+		printf("|");
+		for(col = 0; col < cols; col++) {
+			ch = g_pcx->vram[(start + (row * cols + col) * 2) &
+							(PCX_VRAM_SIZE - 1)];
+			putchar((ch >= 0x20 && ch < 0x7f) ? ch : (ch ? '.' : ' '));
+		}
+		printf("|\n");
+	}
+	fflush(stdout);
+}
+
 void
 pcxport_event(dword64 dfcyc)
 {
@@ -627,6 +729,9 @@ pcxport_event(dword64 dfcyc)
 		return;			/* the card was taken out */
 	}
 	v30_run(PCX_SLICE_FCYC * PCX_INSTR_PER_FCYC);
+	if(g_pcx_screen_dump) {
+		screen_dump(dfcyc);
+	}
 	queue_event(dfcyc);
 }
 
@@ -699,6 +804,12 @@ pcx_exp_read(int off, dword64 dfcyc)
 	case 0x724: case 0x725: case 0x726: case 0x727:
 		return ism_read(off);
 	case 0x730:
+		/* bit 7: the card's IRQ is on. MAME reads the V30's wait here,
+		 *  but AEPC.SYSTEM 2.04 reads this bit, turns the IRQ off and
+		 *  later writes the saved bit to $CF31 to turn it back on
+		 *  ($4040-$4053), and its IRQ handler takes bit 7 clear as
+		 *  "not this card" ($2167) */
+		return (g_pcx->regs[reg] & 0x7f) | (g_pcx->irq_enable ? 0x80 : 0);
 	case 0x732:
 		return (g_pcx->regs[reg] & 0x7f) | g_pcx->data_pending;
 	case 0x731:
@@ -882,8 +993,9 @@ pcx_reset(void)
 		remove_irq(IRQ_PENDING_PCXPORT);
 		g_pcx->irq_raised = 0;
 	}
-	g_pcx->event_queued = 0;	/* do_reset() may have cleared it */
-	queue_event(g_cur_dfcyc);
+	queue_event(g_cur_dfcyc);	/* once: the queue keeps it across a
+					 *  reset, a second one would be a
+					 *  duplicate (check_for_one_event_type) */
 }
 
 /* ------------------------------------------------------------------ */
@@ -921,9 +1033,12 @@ pcxport_attach(int slot)
 		}
 		x86emu_set_memio_handler(g_v30, v30_memio);
 		x86emu_set_code_handler(g_v30, v30_code_check);
+		x86emu_set_intr_handler(g_v30, v30_intr);
 		v30_reset();
 		g_pcx_trace = getenv("EMUBUDDY_PCXPORT_TRACE") ?
 				atoi(getenv("EMUBUDDY_PCXPORT_TRACE")) : 0;
+		g_pcx_screen_dump = getenv("EMUBUDDY_PCXPORT_SCREEN") ?
+				atoi(getenv("EMUBUDDY_PCXPORT_SCREEN")) : 0;
 	}
 	/* one card per slot: what else was in it comes out */
 	if(slot == 4) {

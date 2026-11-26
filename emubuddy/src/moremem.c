@@ -195,6 +195,7 @@ Emustate_intlist g_emustate_intlist[] = {
 
 extern dword64 g_paddle_trig_dfcyc;
 extern dword64 g_last_vbl_dfcyc;
+extern dword64 g_adb_now_dfcyc;
 
 Emustate_dword64list g_emustate_dword64list[] = {
 	EMUSTATE(g_paddle_trig_dfcyc),
@@ -1170,8 +1171,10 @@ io_read(word32 loc, dword64 *cyc_ptr)
 		case 0x25: /* 0xc025 */
 			return adb_read_c025();
 		case 0x26: /* 0xc026 */
+			g_adb_now_dfcyc = dfcyc;
 			return adb_read_c026();
 		case 0x27: /* 0xc027 */
+			g_adb_now_dfcyc = dfcyc;
 			return adb_read_c027();
 		case 0x28: /* 0xc028 */
 			return 0;
@@ -1738,6 +1741,7 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 			/* Write to mouse reg: Throw it away */
 			return;
 		case 0x26: /* 0xc026 */
+			g_adb_now_dfcyc = dfcyc;
 			adb_write_c026(val);
 			return;
 		case 0x27: /* 0xc027 */

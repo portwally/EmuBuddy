@@ -65,6 +65,17 @@ word32	g_adb_layout_lang = 0x0;
 
 word32	g_adb_interrupt_byte = 0;
 int	g_adb_state = ADB_IDLE;
+/* EmuBuddy: the ADB microcontroller is not instant. A command's answer is
+ * there ADB_ANSWER_FCYC (1.02 MHz cycles) after its last byte is written:
+ * software that reads $C026 right after that write, as a handshake, and then
+ * waits on $C027 bit 5 (the PC Transporter's AEPC.SYSTEM reading the ADB
+ * memory for each key) gets nothing on that read, as on a real IIgs, and the
+ * answer afterwards. Before, the handshake read took the answer away and
+ * the program waited forever. g_adb_now_dfcyc: set by moremem.c on every
+ * $C026/$C027 access. */
+#define ADB_ANSWER_FCYC		20
+dword64	g_adb_now_dfcyc = 0;
+static dword64 g_adb_answer_dfcyc = 0;
 
 word32	g_adb_cmd = (word32)-1;
 int	g_adb_cmd_len = 0;
@@ -523,6 +534,7 @@ adb_send_bytes(int num_bytes, word32 val0, word32 val1, word32 val2)
 
 	g_adb_state = ADB_SENDING_DATA;
 	g_adb_data_pending = num_bytes;
+	g_adb_answer_dfcyc = g_adb_now_dfcyc + ((dword64)ADB_ANSWER_FCYC << 16);
 	adb_add_data_int();
 
 	for(i = 0; i < num_bytes; i++) {
@@ -776,6 +788,10 @@ adb_read_c026()
 		ret = 0;
 		break;
 	case ADB_SENDING_DATA:
+		if(g_adb_now_dfcyc < g_adb_answer_dfcyc) {
+			ret = 0;		/* not there yet */
+			break;
+		}
 		ret = g_adb_data[0];
 		for(i = 1; i < g_adb_data_pending; i++) {
 			g_adb_data[i-1] = g_adb_data[i];
@@ -1153,7 +1169,9 @@ adb_read_c027()
 	if(g_adb_interrupt_byte != 0) {
 		ret |= ADB_C027_DATA_VALID;
 	} else if(g_adb_data_pending > 0) {
-		if((g_adb_state != ADB_IN_CMD)) {
+		if((g_adb_state != ADB_IN_CMD) && !((g_adb_state ==
+				ADB_SENDING_DATA) && (g_adb_now_dfcyc <
+				g_adb_answer_dfcyc))) {
 			ret |= ADB_C027_DATA_VALID;
 		}
 	}

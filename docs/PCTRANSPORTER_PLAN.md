@@ -14,10 +14,25 @@ All facts below were read on 2026-11-26 from MAME's `src/devices/bus/a2bus/pc_xp
 reverse-engineering by Peter Ferrie; BSD-3-Clause) and the CGA variant in `src/devices/bus/isa/cga.cpp`, and from
 EmuBuddy's own `slotcard.h`, `moremem.c` and `sim65816.c`.
 
-**State (2026-11-26):** phases 1 and 2 are written (`pcxport.c`, libx86emu in `x86emu/`) and pass
-`tests/test_pcxport.c`, which drives the card through its Apple registers and runs a small V30 program through the
-mailbox, the repeated `IN` and an interrupt. They have **not yet met the Applied Engineering software**: that is the
-next step, with the user's system disks.
+**State (2026-11-26):** phases 1 and 2 are written (`pcxport.c`, libx86emu in `x86emu/`), pass
+`tests/test_pcxport.c`, and **run the Applied Engineering software 2.04**: AEPC.SYSTEM finds the card, loads the BIOS
+and the drivers, the V30 starts, and **MS-DOS 5 boots from a 16 MB `MSDOSVOL`** on a ProDOS hard disk and answers
+commands (`ver`: "MS-DOS Version 5.00"). The PC's picture is not drawn yet (phase 4): the tests read the CGA text memory
+(`EMUBUDDY_PCXPORT_SCREEN=1`).
+
+What the real software taught, against MAME's driver:
+- **The V30 takes an interrupt once per `$CF31` bit 6 write.** Kept as a level, the V30 re-entered the handler after
+  every `IRET` (INT 0Eh storm). MAME's NEC core clears its pending IRQ when it accepts it, so MAME does the same.
+- **`$CF30` bit 7 reads back the card's IRQ enable**, not the V30's wait (MAME's reading). AEPC.SYSTEM saves the bit,
+  turns the IRQ off and writes the saved bit to `$CF31` later ($4040-$4053), and its IRQ handler takes bit 7 clear as
+  "not this card" ($2167).
+- **With a mouse, the card cannot go in slot 4**: the IIgs mouse firmware is slot 4's, and AEPC.SYSTEM's mouse driver
+  stops with "MOUSE CARD NOT FOUND". Slots 1 and 2 are offered too.
+- **An EmuBuddy bug, not the card's:** the ADB microcontroller answered a command at once, so a program that reads
+  `$C026` right after writing the last command byte (a handshake) took the answer away and then waited forever on
+  `$C027` bit 5. AEPC.SYSTEM does exactly that for every key (it reads the ADB memory for the raw keycode), so the PC got
+  the first key and no other. `adb.c` now makes the answer wait 20 µs, as a real microcontroller would. GS/OS and the
+  Finder still start and take the mouse and keyboard.
 
 ## 1. Decisions
 
@@ -26,7 +41,7 @@ next step, with the user's system disks.
 | What is emulated? | The card's hardware only, as MAME does it. The Applied Engineering software (6502 driver, BIOS, utilities) runs as it is, from the user's own disks. Nothing of it ships with EmuBuddy. |
 | Where does the knowledge come from? | MAME's driver: the register map, the mailbox protocol, the port routing table and the TransDrive wiring are all documented there. MAME's file is BSD-3-Clause, which may be used in GPLv3 EmuBuddy with its notice kept. EmuBuddy's card is written in C on the `Slot_card` interface; where code follows MAME closely, the file carries MAME's copyright line. |
 | V30 core | **libx86emu** (`wfeldt/libx86emu`), vendored under `emubuddy/src/x86emu/`. Plain C, an MIT-style licence, callbacks for every memory and I/O access, runs N instructions and returns. It compiles cleanly with `gcc -Wall` (checked). It is a 386 core run in real mode: the 8086/V30 differences that matter (`PUSH SP`, shift counts, opcode `0F`, the NEC-only instructions) are handled in phase 2. MAME's own NEC core is the alternative if accuracy demands it, but it is C++ tied to MAME's device framework. |
-| Which slot? | Slot 4 in the Slots window and on the command line (`-sl4 pcxport`, MAME's name); slots 1 and 2 through the settings file. Not 3 (80 columns), 5 and 6 (the drives) or 7 (the hard disks). The card takes the place of the Mockingboard or Uthernet II in its slot. The slot must be set to "Your Card" in the IIgs Control Panel, as on a real IIgs. |
+| Which slot? | Slot 2 or 4 in the Slots window, 1, 2 or 4 on the command line (`-sl2 pcxport`, MAME's name). Not 3 (80 columns), 5 and 6 (the drives) or 7 (the hard disks); with a mouse not 4 either (see the state above). The card takes the place of what was in its slot. The slot must be set to "Your Card" in the IIgs Control Panel, as on a real IIgs. |
 | PC screen | The CGA output gets its own **PC Screen** window (menu Machine > PC Screen), as a second monitor on the desk. Text shown by the 6502 driver on the Apple screen needs nothing extra. |
 | PC hard disk | The software's own way: an `MSDOSVOL` file on a ProDOS volume. That works with every EmuBuddy disk **and with shared folders**, so the PC's disk can be a plain file on the computer. |
 | Floppy (TransDrive) | Last phase and optional. It needs an ISM (the MFM half of the SWIM), which EmuBuddy does not have. |
@@ -92,15 +107,15 @@ come through `$CF31` bit 6. MAME's PIT8253 and PIC8259 are there only for the IS
 
 **Phase 1 – The card, without the V30.** *Written.* `pcxport.c`: 768 KB, the windows, the pointer, the registers,
 `$C800-$CBFF`, the CGA registers (no picture yet) and an ISM with no drive on it. Slots window entry and `-sl4 pcxport`.
-`$C4xx` now reaches a card with firmware in slot 4 (`moremem.c`). *Still to test:* the Applied Engineering installer
-and its configuration program find the card and load the BIOS (compare the card's RAM with MAME's after loading).
+`$C4xx` now reaches a card with firmware in slot 4 (`moremem.c`). *Tested:* AEPC.SYSTEM 2.04 finds the card (its
+search at $6E21 walks the pointer through `$CF03`) and loads the BIOS.
 
 **Phase 2 – The V30.** *Written.* libx86emu with one memory and I/O handler for the card, reset/halt from
 `$CF30/$CF31`, level-triggered interrupts with the vector at `BFFFE` (taken before an instruction, also out of `HLT`),
 the routing table at `BF400`, the stop-and-repeat of an `IN` (IP set back to the instruction's start), the Apple IRQ
 (`IRQ_PENDING_PCXPORT`). `EV_PCXPORT` runs the V30 every 64 µs of IIgs time, 64 instructions a slice, which is about a
-7 MHz V30. *Still to test:* MS-DOS boots from an `MSDOSVOL` to `A>`/`C>`, with the 6502 driver's text on the Apple
-screen.
+7 MHz V30. *Tested:* MS-DOS 5 boots from a 16 MB `MSDOSVOL` to `C:\>` and runs commands. The PC's text is not on the
+Apple screen: the PC Transporter draws it on its own CGA output (phase 4).
 
 **Phase 3 – Timer and sound.** Probably nothing to do on the card: phase 0 found the PIT and the speaker port in the
 mailbox, so the 6502 driver does them with the IIgs's own timers and sound. *Test:* `TIME`, a program that beeps, a game
