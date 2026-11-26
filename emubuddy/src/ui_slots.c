@@ -5,6 +5,7 @@
 #include "ui.h"
 #include "webgate.h"
 #include "localtalk.h"
+#include "pcxport.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -40,7 +41,7 @@ static const SlotDef g_slots[7] = {
 	{ "Printer Port", { "Idle", "Modem", "ImageWriter", "PostScript" }, 4, 15, NULL },
 	{ "Modem Port", { "Idle", "Modem", "FujiNet", NULL }, 3, 7, NULL },
 	{ "Network", { "Empty", "Video Overlay", "Uthernet II", NULL }, 3, 7, NULL },
-	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II", NULL }, 3, 7, NULL },
+	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II", "PC Transporter" }, 4, 15, NULL },
 	{ "3.5\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
 	{ "5.25\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
 	{ "Storage", { "Empty", "Hard Disk Card", "HS SCSI Card", NULL }, 3, 7, NULL },
@@ -64,7 +65,8 @@ slot_current(int i)
 		}
 		return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
 	case 2: return g_uthernet2_slot == 3 ? 2 : (g_voc_enable ? 1 : 0);
-	case 3: return g_uthernet2_slot == 4 ? 2 : (g_slot4_mockingboard ? 1 : 0);
+	case 3: return g_pcxport_slot == 4 ? 3 : g_uthernet2_slot == 4 ? 2 :
+					(g_slot4_mockingboard ? 1 : 0);
 	case 6: return (g_slot7_scsi >= 0 && g_slot7_scsi <= 2) ? g_slot7_scsi : 1;
 	}
 	return 0;
@@ -131,6 +133,11 @@ apply(void)
 	g_slot4_mockingboard = g_pend[3] == 1;
 	g_uthernet2_slot = (g_pend[2] == 2) ? 3 : (g_pend[3] == 2) ? 4 : 0;
 	g_slot7_scsi = g_pend[6];	/* 0 empty, 1 hard disk card, 2 HS SCSI */
+	/* the PC Transporter has no ROM: it goes in or out without a restart
+	 *  (pcxport_attach takes care of the card that was in its slot) */
+	if((g_pend[3] == 3) != (g_pcxport_slot == 4)) {
+		pcxport_attach(g_pend[3] == 3 ? 4 : 0);
+	}
 	g_config_kegs_update_needed = 1;
 	if(restart) {
 		load_roms_init_memory();	/* new slot 7 card ROM */
@@ -248,7 +255,7 @@ ui_slots_toggle(void)
 	}
 	load_pending();
 	snprintf(g_slots_win.title, sizeof(g_slots_win.title), "Slots");
-	g_slots_win.w = 580;
+	g_slots_win.w = 640;	/* room for "PC Transporter" */
 	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 102 + 8 + 24 + 12;
 	g_rom_found = hsscsi_rom_found();
 	g_slots_win.closable = 1;

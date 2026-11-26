@@ -115,7 +115,7 @@ usage(void)
 "  -sl2  modem | imagewriter | fujinet | none   modem port; fujinet: the FujiNet as a card\n"
 "                                     of its own (the IIgs can start up from its disks)\n"
 "  -sl3  uthernet2 | voc | none\n"
-"  -sl4  mockingboard | uthernet2 | none\n"
+"  -sl4  mockingboard | uthernet2 | pcxport | none   pcxport: the PC Transporter\n"
 "  -sl7  hd | hsscsi | none           hd: the hard disk card (scsi and cffa2 mean the same)\n"
 "                                     hsscsi: Apple II High-Speed SCSI Card; needs its ROM\n"
 "                                     341-0803.bin or a2hsscsi.zip next to the IIgs ROM,\n"
@@ -243,11 +243,17 @@ slot_option(int slot, const char *card)
 	case 4:
 		if(is(card, "mockingboard") || is(card, "mockingboarda")) {
 			emit2("-g_slot4_mockingboard", "1");
+			emit2("-g_pcxport_slot", "0");
 		} else if(is(card, "uthernet2") || is(card, "uthernet")) {
 			emit2("-g_uthernet2_slot", "4");
 			emit2("-g_slot4_mockingboard", "0");
+			emit2("-g_pcxport_slot", "0");
+		} else if(is(card, "pcxport")) {	/* MAME's name */
+			emit2("-g_pcxport_slot", "4");
+			emit2("-g_slot4_mockingboard", "0");
 		} else if(is(card, "none") || is(card, "")) {
 			emit2("-g_slot4_mockingboard", "0");
+			emit2("-g_pcxport_slot", "0");
 		} else {
 			break;
 		}

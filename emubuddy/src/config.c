@@ -14,6 +14,7 @@
 #include "defc.h"
 #include <stdarg.h>
 #include "config.h"
+#include "pcxport.h"
 
 #if defined(_WIN32) && defined(_MSC_VER)
 # include "win_dirent.h"	/* MSVC has no <dirent.h>; windriver.c implements it */
@@ -470,6 +471,8 @@ Cfg_menu g_cfg_main_menu[] = {
 { "AppleTalk network,0,Off,1,LocalTalk over UDP", KNMP(g_appletalk), CFGTYPE_INT },
 { "Uthernet II slot,0,None,3,Slot 3,4,Slot 4", KNMP(g_uthernet2_slot),
 		CFGTYPE_INT },
+{ "PC Transporter slot,0,None,1,Slot 1,2,Slot 2,4,Slot 4",
+		KNMP(g_pcxport_slot), CFGTYPE_INT },
 { "Speed,0,Unlimited,1,1.0MHz,2,2.8MHz,3,8.0MHz (Zip)",
 		KNMP(g_limit_speed), CFGTYPE_INT },
 { "ZipGS Speed,8,8MHz,16,16MHz,32,32MHz,64,64MHz,128,128MHz",
@@ -1422,6 +1425,8 @@ config_load_roms()
 	if(hsscsi_attach(g_slot7_scsi == 2, &g_cfg_tmp_path[0]) != 0) {
 		g_slot7_scsi = 1;
 	}
+	/* EmuBuddy: the PC Transporter has no ROM; it only needs its slot */
+	pcxport_attach(g_pcxport_slot);
 	for(i = 0; (g_slot7_scsi == 1) && i < 256; i++) {
 		// Place HD PROM in slot 7 (only if the SCSI card is plugged in)
 		g_rom_cards_ptr[0x700 + i] = g_rom_c700[i];
