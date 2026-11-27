@@ -11,6 +11,9 @@
 #include <time.h>
 
 #include "defc.h"
+#include "pcxport.h"
+
+static void video_pcxport_frame(void);
 
 extern int Verbose;
 
@@ -1898,6 +1901,7 @@ video_update_through_line(int line)
 			g_border_sides_refresh_needed = 1;
 		}
 
+		video_pcxport_frame();
 		video_form_change_rects();
 		g_num_lines_prev_superhires = g_num_lines_superhires;
 		g_num_lines_prev_superhires640 = g_num_lines_superhires640;
@@ -2221,6 +2225,68 @@ video_form_change_rects()
 	GET_ITIMER(end_time);
 
 	g_cycs_in_xredraw += (end_time - start_time);
+}
+
+/* EmuBuddy: the PC Transporter's picture. Its ColorView daughterboard sits
+ * between the IIgs and the monitor and shows the PC's CGA picture while the
+ * card sends one (pcxport_screen_on); then the IIgs's picture comes back.
+ * Called at the end of each frame, before the change rectangles are made. */
+static int	g_pcx_shown = 0;
+static word32	g_pcx_frame = 0;
+
+static void
+video_pcxport_frame(void)
+{
+	static const word32 cga_rgb[16] = {	/* 0xRGB, 4 bits each */
+		0x000, 0x00a, 0x0a0, 0x0aa, 0xa00, 0xa0a, 0xa50, 0xaaa,
+		0x555, 0x55f, 0x5f5, 0x5ff, 0xf55, 0xf5f, 0xff5, 0xfff };
+	word32	pal[16];
+	word32	*wptr, border;
+	int	pitch, height, width, red, green, blue;
+	int	i, j;
+
+	if(!pcxport_screen_on()) {
+		if(g_pcx_shown) {		/* back to the IIgs */
+			g_pcx_shown = 0;
+			video_force_reparse();
+			g_full_refresh_needed = (word32)-1;
+			g_a2_screen_buffer_changed = (word32)-1;
+			g_border_sides_refresh_needed = 1;
+			g_border_special_refresh_needed = 1;
+		}
+		return;
+	}
+	g_pcx_shown = 1;
+	g_pcx_frame++;
+	for(i = 0; i < 16; i++) {
+		red = ((cga_rgb[i] >> 8) & 0xf) * 0x11;
+		green = ((cga_rgb[i] >> 4) & 0xf) * 0x11;
+		blue = (cga_rgb[i] & 0xf) * 0x11;
+		pal[i] = (((red >> g_red_right_shift) & g_red_mask) <<
+							g_red_left_shift) +
+			(((green >> g_green_right_shift) & g_green_mask) <<
+							g_green_left_shift) +
+			(((blue >> g_blue_right_shift) & g_blue_mask) <<
+							g_blue_left_shift);
+	}
+	pitch = g_mainwin_kimage.a2_width_full;
+	height = g_video_act_margin_top + A2_WINDOW_HEIGHT +
+						g_video_act_margin_bottom;
+	height = MY_MIN(height, g_mainwin_kimage.a2_height);
+	width = MY_MIN(g_video_act_width, pitch);
+	border = pal[pcxport_screen_border()];
+	wptr = g_mainwin_kimage.wptr;
+	for(i = 0; i < height; i++) {		/* the border all round */
+		for(j = 0; j < width; j++) {
+			wptr[i * pitch + j] = border;
+		}
+	}
+	pcxport_screen_draw(wptr + g_video_act_margin_top * pitch +
+			g_video_act_margin_left, pitch, pal, g_pcx_frame);
+	g_full_refresh_needed = (word32)-1;
+	g_a2_screen_buffer_changed = (word32)-1;
+	g_border_sides_refresh_needed = 1;
+	g_border_special_refresh_needed = 1;
 }
 
 int

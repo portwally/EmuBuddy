@@ -111,11 +111,14 @@ usage(void)
 "  <img or folder>                put in the first free fitting drive\n"
 "\n"
 "Slots (-slN <card>):\n"
-"  -sl1  imagewriter | postscript | modem | none   printer port\n"
-"  -sl2  modem | imagewriter | fujinet | none   modem port; fujinet: the FujiNet as a card\n"
-"                                     of its own (the IIgs can start up from its disks)\n"
+"  -sl1  imagewriter | postscript | modem | pcxport | none   printer port\n"
+"  -sl2  modem | imagewriter | fujinet | pcxport | none   modem port\n"
+"                                     fujinet: the FujiNet as a card of its own (the IIgs\n"
+"                                     can start up from its disks)\n"
 "  -sl3  uthernet2 | voc | none\n"
-"  -sl4  mockingboard | uthernet2 | none\n"
+"  -sl4  mockingboard | uthernet2 | pcxport | none\n"
+"        pcxport: the Applied Engineering PC Transporter (slot 1, 2 or 4; set\n"
+"        that slot to Your Card in the IIgs Control Panel; with a mouse, not 4)\n"
 "  -sl7  hd | hsscsi | none           hd: the hard disk card (scsi and cffa2 mean the same)\n"
 "                                     hsscsi: Apple II High-Speed SCSI Card; needs its ROM\n"
 "                                     341-0803.bin or a2hsscsi.zip next to the IIgs ROM,\n"
@@ -218,6 +221,10 @@ slot_option(int slot, const char *card)
 			emit2(name, "0");	/* the FujiNet card in slot 2 */
 			emit2("-g_fujinet", "1");
 			emit2("-g_fujinet_slot", "2");
+		} else if(is(card, "pcxport")) {
+			emit2(name, "0");	/* the PC Transporter has the slot */
+			snprintf(name, sizeof(name), "%d", slot);
+			emit2("-g_pcxport_slot", name);
 		} else if(is(card, "modem") || is(card, "null_modem")) {
 			emit2(name, "1");
 		} else if(is(card, "none") || is(card, "")) {
@@ -243,11 +250,17 @@ slot_option(int slot, const char *card)
 	case 4:
 		if(is(card, "mockingboard") || is(card, "mockingboarda")) {
 			emit2("-g_slot4_mockingboard", "1");
+			emit2("-g_pcxport_slot", "0");
 		} else if(is(card, "uthernet2") || is(card, "uthernet")) {
 			emit2("-g_uthernet2_slot", "4");
 			emit2("-g_slot4_mockingboard", "0");
+			emit2("-g_pcxport_slot", "0");
+		} else if(is(card, "pcxport")) {	/* MAME's name */
+			emit2("-g_pcxport_slot", "4");
+			emit2("-g_slot4_mockingboard", "0");
 		} else if(is(card, "none") || is(card, "")) {
 			emit2("-g_slot4_mockingboard", "0");
+			emit2("-g_pcxport_slot", "0");
 		} else {
 			break;
 		}

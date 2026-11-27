@@ -1767,9 +1767,11 @@ sdl_dev_mouse(Window_info *win, int frames)
 }
 
 /* EMUBUDDY_KEYS="frame:combo;..." presses a key, e.g. "cmd+o", "return",
- * "down", "shift+3", "ctrl+cmd+escape" (SDL key names; "cmd" is the Open-Apple
+ * "down", "shift+3", "ctrl+cmd+escape", "capslock" (turns it on or off; SDL key names; "cmd" is the Open-Apple
  * key, "opt" Option; "semi" is the ; key, because a ; ends an entry). The key
- * goes down at frame and up 3 frames later. */
+ * goes down at frame and up 3 frames later; "shift/hold" only presses it,
+ * "shift/release" only lets it go (Shift held while Caps Lock goes on and
+ * off twice: the PC Transporter's control panel). */
 static void
 sdl_dev_keys(Window_info *win, int frames)
 {
@@ -1779,9 +1781,20 @@ sdl_dev_keys(Window_info *win, int frames)
 	SDL_Scancode	mods[4], key;
 	SDL_Keymod	km;
 
+	int		only;	/* 'h': only down ("/hold"), 'r': only up */
+	char		*slash;
+
 	while(p && sscanf(p, "%d:%63[^;]%n", &f, combo, &n) == 2) {
-		down = (f == frames);
-		if(down || f + 3 == frames) {
+		only = 0;
+		slash = strrchr(combo, '/');
+		if(slash && slash != combo && (!strcmp(slash, "/hold") ||
+						!strcmp(slash, "/release"))) {
+			only = slash[1];
+			*slash = 0;
+		}
+		down = (f == frames) && only != 'r';
+		if(down || (only == 0 && f + 3 == frames) ||
+					(only == 'r' && f == frames)) {
 			nmods = 0;
 			km = SDL_KMOD_NONE;
 			name = combo;
@@ -1805,6 +1818,12 @@ sdl_dev_keys(Window_info *win, int frames)
 			/* Shift and Control reach the IIgs through SDL's modifier
 			 * state (sdl_update_modifiers), so set it while the key is down */
 			if(down) {
+				/* Caps Lock locks: as on a real keyboard, each press
+				 *  turns it on or off (the IIgs reads it in $C025) */
+				if(key == SDL_SCANCODE_CAPSLOCK) {
+					SDL_SetModState(SDL_GetModState() ^
+								SDL_KMOD_CAPS);
+				}
 				if(km) SDL_SetModState(SDL_GetModState() | km);
 				for(i = 0; i < nmods; i++) {
 					sdl_handle_key(win, mods[i], 0, 0, 0);

@@ -1,0 +1,14 @@
+libx86emu, vendored for the PC Transporter card (pcxport.c).
+
+Source: https://github.com/wfeldt/libx86emu
+Commit: ce81129c57fdfbf690bebc210a8db97d926cc5e7 (2025-02-24)
+Licence: see LICENSE (MIT-style, SciTech / XFree86 / SUSE)
+
+Files taken: api.c decode.c mem.c ops.c ops2.c prim_ops.c include/*.h LICENSE.
+
+EmuBuddy changes, nothing else:
+- include/x86emu_int.h: WITH_TSC and WITH_IOPL are always 0, so the emulator
+  never runs rdtsc or reads the host's IOPL.
+- mem.c: <sys/io.h> is not included; the host port I/O calls are the dummy
+  macros the library already has for other CPUs. EmuBuddy installs its own
+  memory and I/O handler (x86emu_set_memio_handler), so they are never used.

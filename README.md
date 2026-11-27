@@ -426,7 +426,12 @@ License, version 3** (see [LICENSE](LICENSE)).
   firmware, and the LLAP dialogs); LocalTalk over UDP is the transport of Mini vMac and TashRouter.
 - The **Shaston** font used for the menus and windows is the IIgs system font.
 - **SDL3** for windows, input and sound, and **libslirp** for the virtual network.
+- The **PC Transporter** card follows MAME's `a2bus/pc_xporter.cpp` (R. Belmont, with reverse-engineering by Peter
+  Ferrie; BSD-3-Clause). Its V30 is **libx86emu** (SciTech, XFree86 and SUSE; MIT-style licence, in
+  `emubuddy/src/x86emu`). The PC's text font is **IBM CGA** from *The Ultimate Oldschool PC Font Pack* by VileR
+  ([int10h.org](https://int10h.org/oldschool-pc-fonts/)), under the Creative Commons Attribution-ShareAlike 4.0 licence.
 - **Ghostscript** and **FFmpeg** are separate programs that EmuBuddy calls when you print PostScript or record
   video; they are not part of EmuBuddy and come under their own licenses.
 
 Apple, Apple IIgs, GS/OS and ImageWriter are trademarks of Apple Inc. EmuBuddy is not affiliated with Apple.
+PC Transporter is a product of Applied Engineering; its software is not part of EmuBuddy.

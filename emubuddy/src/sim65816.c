@@ -13,6 +13,7 @@
 #define INCLUDE_RCSID_C
 #include "defc.h"
 #include "slotcard.h"
+#include "pcxport.h"
 #include "bridge.h"
 #undef INCLUDE_RCSID_C
 
@@ -38,6 +39,7 @@ extern char *g_argv0_path;
 #define EV_SCC			6
 #define EV_VID_UPD		7
 #define EV_MOCKINGBOARD		8
+#define EV_PCXPORT		9	/* EmuBuddy: the PC Transporter's V30 */
 
 extern int g_stepping;
 
@@ -961,6 +963,15 @@ add_event_mockingboard(dword64 dfcyc)
 	add_event_entry(dfcyc, EV_MOCKINGBOARD);
 }
 
+void
+add_event_pcxport(dword64 dfcyc)
+{
+	if(dfcyc < g_cur_dfcyc) {
+		dfcyc = g_cur_dfcyc;
+	}
+	add_event_entry(dfcyc, EV_PCXPORT);
+}
+
 dword64 g_dfcyc_scan_int = 0;
 
 void
@@ -1310,6 +1321,9 @@ run_a2_one_vbl()
 				break;
 			case EV_MOCKINGBOARD:
 				mockingboard_event(dfcyc);
+				break;
+			case EV_PCXPORT:
+				pcxport_event(dfcyc);
 				break;
 			default:
 				printf("Unknown event: %d!\n", type);

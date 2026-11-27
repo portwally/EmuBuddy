@@ -95,6 +95,13 @@ set(GSPLUS_CORE_SOURCES
     scsi_cd.c
     cdimage.c
     fujinet.c
+    pcxport.c
+    x86emu/api.c
+    x86emu/decode.c
+    x86emu/mem.c
+    x86emu/ops.c
+    x86emu/ops2.c
+    x86emu/prim_ops.c
     sim65816.c
     smartport.c
     doc.c
@@ -112,6 +119,13 @@ set(GSPLUS_CORE_SOURCES
     voc.c
     compile_time.c
 )
+
+# libx86emu (the PC Transporter's V30) is vendored as it is; its own warnings
+# are not ours to fix, so it builds quietly.
+set_source_files_properties(
+    x86emu/api.c x86emu/decode.c x86emu/mem.c
+    x86emu/ops.c x86emu/ops2.c x86emu/prim_ops.c
+    PROPERTIES COMPILE_OPTIONS "-w")
 
 # Create the static library target from those sources.
 add_library(gsplus_core STATIC ${GSPLUS_CORE_SOURCES})
@@ -223,6 +237,12 @@ endif()
 add_executable(test_scsi EXCLUDE_FROM_ALL tests/test_scsi.c ncr5380.c scsi_disk.c scsi_cd.c cdimage.c)
 
 # Host test for AppleTalk (localtalk.c), not built by default:
+#   cmake --build build --target test_pcxport && build/test_pcxport
+add_executable(test_pcxport EXCLUDE_FROM_ALL tests/test_pcxport.c pcxport.c
+    x86emu/api.c x86emu/decode.c x86emu/mem.c
+    x86emu/ops.c x86emu/ops2.c x86emu/prim_ops.c)
+target_include_directories(test_pcxport PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 #   cmake --build build --target test_localtalk && build/test_localtalk
 add_executable(test_localtalk EXCLUDE_FROM_ALL tests/test_localtalk.c localtalk.c)
 

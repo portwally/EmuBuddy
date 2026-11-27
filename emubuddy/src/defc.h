@@ -280,6 +280,7 @@ STRUCT(Lzw_state) {
 #define IRQ_PENDING_DOC			0x08000
 #define IRQ_PENDING_MOCKINGBOARDA	0x10000
 #define IRQ_PENDING_MOCKINGBOARDB	0x20000		/* must be BOARDA*2 */
+#define IRQ_PENDING_PCXPORT		0x40000		/* EmuBuddy: PC Transporter */
 
 
 #define EXTRU(val, pos, len)					\

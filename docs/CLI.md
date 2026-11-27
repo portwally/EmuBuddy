@@ -31,10 +31,10 @@ Images: `.po .hdv .2mg .dsk .do .woz .dc .shk .sdk` and more.
 
 | Option | Cards |
 |---|---|
-| `-sl1 <card>` | `imagewriter`, `postscript` (also `laserwriter`), `modem`, `none` (printer port) |
-| `-sl2 <card>` | `modem`, `imagewriter`, `postscript`, `fujinet` (the FujiNet as a card of its own: the IIgs can start up from it, and it works next to the High-Speed SCSI Card), `none` (modem port) |
+| `-sl1 <card>` | `imagewriter`, `postscript` (also `laserwriter`), `modem`, `pcxport`, `none` (printer port) |
+| `-sl2 <card>` | `modem`, `imagewriter`, `postscript`, `fujinet` (the FujiNet as a card of its own: the IIgs can start up from it, and it works next to the High-Speed SCSI Card), `pcxport`, `none` (modem port) |
 | `-sl3 <card>` | `uthernet2`, `voc`, `none` |
-| `-sl4 <card>` | `mockingboard`, `uthernet2`, `none` |
+| `-sl4 <card>` | `mockingboard`, `uthernet2`, `pcxport` (the Applied Engineering PC Transporter, also in `-sl1`/`-sl2`; the slot must be "Your Card" in the Control Panel, and with a mouse not 4), `none` |
 | `-sl7 <card>` | `hd` (the Hard Disk Card; `scsi` and `cffa2` mean the same), `hsscsi` (Apple II High-Speed SCSI Card), `none` |
 
 The High-Speed SCSI Card needs its ROM, which EmuBuddy does not ship: `341-0803.bin` or MAME's `a2hsscsi.zip` next to
