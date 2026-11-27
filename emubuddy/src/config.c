@@ -66,6 +66,7 @@ extern int g_swap_paddles;
 extern int g_invert_paddles;
 extern int g_joystick_swap_buttons;
 extern int g_voc_enable;
+extern int g_secondsight;
 extern int g_status_enable;
 extern int g_video_center_a2;
 extern int g_mainwin_width;
@@ -393,6 +394,7 @@ Cfg_menu g_cfg_video_menu[] = {
 #endif
 { "GSplus Display Effects (SDL)", g_cfg_sdl_video_menu, 0, 0, CFGTYPE_SUBMENU },
 { "Enable VOC,0,Disabled,1,Enabled", KNMP(g_voc_enable), CFGTYPE_INT },
+{ "Second Sight VGA card,0,Disabled,1,Enabled", KNMP(g_secondsight), CFGTYPE_INT },
 { "Default Main Window width", KNMP(g_mainwin_width), CFGTYPE_INT },
 { "Default Main Window height", KNMP(g_mainwin_height), CFGTYPE_INT },
 { "Main Window X position", KNMP(g_mainwin_xpos), CFGTYPE_INT },

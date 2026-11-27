@@ -643,6 +643,7 @@ video_reset()
 	int	i;
 
 	voc_reset();
+	secondsight_reset();
 
 	stat = ALL_STAT_TEXT | ALL_STAT_ANNUNC3 |
 					(0xf << BIT_ALL_STAT_TEXT_COLOR);

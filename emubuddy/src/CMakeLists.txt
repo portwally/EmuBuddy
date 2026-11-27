@@ -110,6 +110,7 @@ set(GSPLUS_CORE_SOURCES
     applesingle.c
     video.c
     voc.c
+    secondsight.c
     compile_time.c
 )
 

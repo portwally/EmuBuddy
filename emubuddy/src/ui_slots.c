@@ -11,6 +11,7 @@
 extern int	g_serial_cfg[2];
 extern char	*g_serial_device[2];
 extern int	g_voc_enable;
+extern int	g_secondsight;
 extern int	g_slot4_mockingboard;
 extern int	g_slot7_scsi;
 extern int	g_uthernet2_slot;
@@ -39,7 +40,7 @@ typedef struct {
 static const SlotDef g_slots[7] = {
 	{ "Printer Port", { "Idle", "Modem", "ImageWriter", "PostScript" }, 4, 15, NULL },
 	{ "Modem Port", { "Idle", "Modem", "FujiNet", NULL }, 3, 7, NULL },
-	{ "Network", { "Empty", "Video Overlay", "Uthernet II", NULL }, 3, 7, NULL },
+	{ "Video / Net", { "Empty", "Video Overlay", "Second Sight", "Uthernet II" }, 4, 15, NULL },
 	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II", NULL }, 3, 7, NULL },
 	{ "3.5\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
 	{ "5.25\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
@@ -63,7 +64,8 @@ slot_current(int i)
 			return 2;
 		}
 		return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
-	case 2: return g_uthernet2_slot == 3 ? 2 : (g_voc_enable ? 1 : 0);
+	case 2: return g_uthernet2_slot == 3 ? 3 : g_secondsight ? 2 :
+						(g_voc_enable ? 1 : 0);
 	case 3: return g_uthernet2_slot == 4 ? 2 : (g_slot4_mockingboard ? 1 : 0);
 	case 6: return (g_slot7_scsi >= 0 && g_slot7_scsi <= 2) ? g_slot7_scsi : 1;
 	}
@@ -128,8 +130,9 @@ apply(void)
 		}
 	}
 	g_voc_enable = g_pend[2] == 1;
+	g_secondsight = g_pend[2] == 2;
 	g_slot4_mockingboard = g_pend[3] == 1;
-	g_uthernet2_slot = (g_pend[2] == 2) ? 3 : (g_pend[3] == 2) ? 4 : 0;
+	g_uthernet2_slot = (g_pend[2] == 3) ? 3 : (g_pend[3] == 2) ? 4 : 0;
 	g_slot7_scsi = g_pend[6];	/* 0 empty, 1 hard disk card, 2 HS SCSI */
 	g_config_kegs_update_needed = 1;
 	if(restart) {
@@ -182,9 +185,9 @@ slots_draw(UiWindow *win, int cx, int cy)
 		if(ui_segment(win, cx, cy, 196, y + 2, cw - 196 - 10, 24,
 				s->labels, s->n, &g_pend[i], s->enabled)) {
 			/* there is one Uthernet II card: slot 3 or slot 4 */
-			if(i == 2 && g_pend[2] == 2 && g_pend[3] == 2) {
+			if(i == 2 && g_pend[2] == 3 && g_pend[3] == 2) {
 				g_pend[3] = 0;
-			} else if(i == 3 && g_pend[3] == 2 && g_pend[2] == 2) {
+			} else if(i == 3 && g_pend[3] == 2 && g_pend[2] == 3) {
 				g_pend[2] = 0;
 			}
 		}

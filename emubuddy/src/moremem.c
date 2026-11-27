@@ -69,6 +69,7 @@ word32	g_c06d_val = 0;
 word32	g_c06f_val = 0;
 extern int g_slot4_mockingboard;
 extern int g_uthernet2_slot;
+extern int g_secondsight;
 int uthernet2_read(int reg);
 void uthernet2_write(int reg, int val);
 
@@ -1492,6 +1493,9 @@ io_read(word32 loc, dword64 *cyc_ptr)
 		case 0xb4: case 0xb5: case 0xb6: case 0xb7:
 		case 0xb8: case 0xb9: case 0xba: case 0xbb:
 		case 0xbc: case 0xbd: case 0xbe: case 0xbf:
+			if(g_secondsight) {
+				return secondsight_devsel_read(loc, dfcyc);
+			}
 			return voc_devsel_read(loc, dfcyc);
 
 		/* 0xc0c0 - 0xc0cf */
@@ -2171,6 +2175,10 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 		case 0xb4: case 0xb5: case 0xb6: case 0xb7:
 		case 0xb8: case 0xb9: case 0xba: case 0xbb:
 		case 0xbc: case 0xbd: case 0xbe: case 0xbf:
+			if(g_secondsight) {
+				secondsight_devsel_write(loc, val, dfcyc);
+				return;
+			}
 			voc_devsel_write(loc, val, dfcyc);
 			return;
 

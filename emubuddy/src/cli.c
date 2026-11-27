@@ -114,7 +114,7 @@ usage(void)
 "  -sl1  imagewriter | postscript | modem | none   printer port\n"
 "  -sl2  modem | imagewriter | fujinet | none   modem port; fujinet: the FujiNet as a card\n"
 "                                     of its own (the IIgs can start up from its disks)\n"
-"  -sl3  uthernet2 | voc | none\n"
+"  -sl3  uthernet2 | voc | secondsight | none\n"
 "  -sl4  mockingboard | uthernet2 | none\n"
 "  -sl7  hd | hsscsi | none           hd: the hard disk card (scsi and cffa2 mean the same)\n"
 "                                     hsscsi: Apple II High-Speed SCSI Card; needs its ROM\n"
@@ -232,10 +232,16 @@ slot_option(int slot, const char *card)
 		if(is(card, "uthernet2") || is(card, "uthernet")) {
 			emit2("-g_uthernet2_slot", "3");
 			emit2("-g_voc_enable", "0");
+			emit2("-g_secondsight", "0");
 		} else if(is(card, "voc")) {
 			emit2("-g_voc_enable", "1");
+			emit2("-g_secondsight", "0");
+		} else if(is(card, "secondsight") || is(card, "ss")) {
+			emit2("-g_secondsight", "1");
+			emit2("-g_voc_enable", "0");
 		} else if(is(card, "none") || is(card, "")) {
 			emit2("-g_voc_enable", "0");
+			emit2("-g_secondsight", "0");
 		} else {
 			break;
 		}

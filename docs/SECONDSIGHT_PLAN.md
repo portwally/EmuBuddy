@@ -1,0 +1,273 @@
+# Second Sight VGA card: plan
+
+Second Sight (Sequential Systems, about 1993, designed by Jawaid Bazyar) is a VGA card for the Apple IIgs and IIe. It has
+its own CPU (Zilog Z180), a VGA chip (Oak OTI-087), 128 KB RAM, a 128 KB firmware EPROM, and 1 MB of video memory on
+the IIgs. It drives a VGA monitor. While it is in "Apple II mode" it copies the IIgs's video memory writes and shows the
+normal IIgs screen on the VGA monitor. In its own VGA modes it shows a picture of up to 1024×768.
+
+The IIgs does not see the card's video memory. It sends **commands** through four registers in slot 3's I/O space
+(`$C0B0–$C0BF`), and moves bulk data byte by byte through two of them.
+
+This plan adds Second Sight to EmuBuddy as a slot-3 card, next to the Video Overlay Card (VOC) and Uthernet II, which
+also use `$C0B0–$C0BF`. Only one of them can be in slot 3.
+
+Note on the name: Second Sight is not a video *overlay* card. Apple's Video Overlay Card is a different card. EmuBuddy
+emulates part of it (`voc.c`, interlaced Super Hi-Res only).
+
+## 1. Decisions
+
+| Question | Decision |
+|---|---|
+| Emulate the Z180, or the commands? | **The commands** (high-level emulation). The firmware runs on the Z180 and answers the IIgs's commands; EmuBuddy answers the same commands itself in C. No Z180 core and no card ROM are needed. Programs that upload their own Z180 code and start it ("Run Code", command `$0A`) will not work. Z180 emulation can be added later if such programs turn up (see 5). |
+| Card ROM | Not needed and not shipped. If text modes need the card's fonts, see 5. |
+| Where does the information come from? | The Sequential Systems documents (developer kit: low-level commands, VGA library, firmware, VGA registers), and standard VGA register documents for the OTI-087's IBM-compatible registers. |
+| GSSquared | Jawaid Bazyar's GSSquared emulator has a Second Sight emulation. Its repository has **no license**, so none of its code may be copied into EmuBuddy (GPL-3). It is used only as a black box: run the same program in GSSquared and in EmuBuddy and compare the pictures. Asking Jawaid for permission to use his code, or for his documents, is an option and is the user's call. |
+| GSSquared's own modes | GSSquared adds modes the real card never had (PPU, GPU, Host Text, GPU Text: SetMode emulation flag `$02–$05`). They are left out. EmuBuddy emulates the card as it was sold. |
+| Slot | Slot 3. Slots window, slot 3: **Empty / Video Overlay Card / Second Sight / Uthernet II**. CLI `-sl3 secondsight`. Default stays Empty. |
+| Display | When the card is in a VGA mode and its screen is on, EmuBuddy's window shows the card's picture instead of the IIgs screen, scaled to fit, like a monitor switched to the VGA input. In Apple II mode the window shows the normal IIgs screen. A key or menu item to show the IIgs screen while a VGA mode is on (a real user had two monitors) is a later option. |
+
+## 2. What exists and what is missing
+
+| Part | State today |
+|---|---|
+| Slot 3 I/O `$C0B0–$C0BF` | Exists: `moremem.c` hands reads and writes to `voc_devsel_read`/`voc_devsel_write` (`voc.c`). |
+| Second Sight detection | `voc.c` returns `$00` at `$C0B8` with a comment that Second Sight returns `$01` there (jpeGS checks it). |
+| Slot 3 choice | Slots window (`ui_slots.c`: Empty / VOC / Uthernet II), CLI (`cli.c`: `-sl3 voc|uthernet2|none`), config key `g_voc_enable`. |
+| Window picture | One fixed 704×482 ARGB texture (`sdl_driver.c`), 640×400 picture area plus borders. |
+| Command engine, VGA memory, VGA modes, VGA picture, palette, text modes | Missing. |
+
+## 3. Facts about the card (confirmed in phase 0)
+
+Sources: Sequential Systems' *Low-Level Command Interface & Firmware Documentation* (10 Aug 1995), *Programmer's
+Library Documentation* (14 Jul 1995), the user manual, and Sequential's own library source `vgalow.asm` (Jawaid
+Bazyar, 1994; fixed 26 Aug 1996) with `modes.h` and `SS.Modes`. Where these are stored: see phase 0 below.
+
+### Registers
+
+Fixed addresses in bank `$E0`, used by both Sequential's library and Brutal Deluxe's `VGA.Lib.s`:
+
+| Address | Name | Use |
+|---|---|---|
+| `$C0B0` | WR_CMD | Write the command byte. |
+| `$C0B1` | WR_DATA | Write argument bytes and upload data. |
+| `$C0B2` | RD_DATA | Read returned bytes (GetStatus, GetVGAReg). |
+| `$C0B8` | HANDSHAKE | Status the IIgs polls. |
+
+The card answers at `$C0B0` whatever slot it is in: it uses the IIgs's `$C0Bx` select signal (M2B0, pin 35). On a
+ROM 01 only slot 3 carries that signal; on a ROM 03 slots 1–6 do. So in EmuBuddy the card is tied to `$C0B0–$C0BF`, not
+to a slot's own I/O range, and it shares that range with the VOC and with Uthernet II in slot 3. The manual says the
+VOC and Second Sight work together in one machine, though both use M2B0; EmuBuddy still offers one at a time.
+
+### Protocol (from `vgalow.asm`)
+
+1. Write the command byte to `$C0B0`.
+2. Wait until HANDSHAKE reads `$01` (card ready).
+3. Write the argument bytes to `$C0B1`, low byte first for addresses and lengths.
+4. Wait until HANDSHAKE reads `$00` (card has taken the arguments).
+5. Long commands (SetMode, Clear Screen, Scroll Screen, ...): wait until HANDSHAKE reads `$A5` (done) or `$A6` (error).
+
+Commands without arguments (Screen On, Screen Off) need no handshake. GetStatus: after `$01`, one dummy read of
+`$C0B2`, then the status record byte by byte from `$C0B2`. Upload: after the arguments, for each 64 KB bank of data the
+IIgs waits for `$01` and then writes the data bytes to `$C0B1` itself; the card does not read IIgs memory. The library
+gives up on GetStatus after 65,535 polls without `$01` (that is how "no card" is detected).
+
+### Status record (GetStatus)
+
+| Offset | Value |
+|---|---|
+| `$00–$04` | `'G' 'S' 'V' 'G' 'A'` |
+| `$05` | number of bytes that follow |
+| `$06` | firmware version, `$11` = 1.1 |
+| `$07` | 0 = emulating Apple II video, not 0 = not |
+| `$08` | last mode set |
+| `$09` | video memory: 0 = 512 KB, 1 = 1 MB |
+| `$0A` | monitor: `$10` = VGA, `$00` = AppleColor RGB |
+
+### Commands
+
+| # | Command | Bytes (with command) | Arguments |
+|---|---|---|---|
+| `$00` | GetStatus | 1 | returns the status record |
+| `$01` | SetMode | 3 | mode, emulation flag (0 = emulate Apple II video, 1 = don't) |
+| `$02` | Upload Code/Data | 11 | flag (0 = Z180 memory, 1 = VGA memory), destination (3), length (3), IIgs source (3) |
+| `$03` | Scroll Screen | 10 | source offset (3), destination (3), length (3): a copy within VGA memory, low 512 KB only |
+| `$04` | Screen Off | 1 | |
+| `$05` | Screen On | 1 | |
+| `$06` | SetPalette | 4 | IIgs address of 256 × R,G,B (8 bits each) |
+| `$07` | SetPaletteEntry | 5 | entry, R, G, B |
+| `$08` | SetBorder | 2 | palette entry |
+| `$09` | Run Code | 6 | CBR, CBAR, BBR, Z180 address (2) |
+| `$0A` | Clear Screen | 8 | colour, address (3), length (3), low 512 KB only |
+| `$0B` | SetShadow | 2 | 0 = shadow IIgs video writes, 4 = don't |
+| `$0C` | SetVGAReg | 7 | index port (2), index, data port (2), value |
+| `$0D` | GetVGAReg | 6 | index port (2), index, data port (2); returns the value |
+| `$0E` | SetUserMode | 1 + 84 | an 84-byte register table (`vga_mode_rec`) |
+| `$0F` | SetTextFont | 4 | 0 = ROM font, 1 = alternate ROM font, 2 = PC ANSI font, 3 = user font at Z180 `$F000`; not implemented in ROM 1.1 |
+
+Upload Bitmap is documented but "not currently implemented" and has no command number of its own. Uploads cannot cross
+the 512 KB boundary of video memory (the card switches 512 KB halves per transfer). The palette has full 8-bit R, G, B
+(the DAC is a Brooktree Bt481), not the 6 bits of a PC VGA card.
+
+### Video modes
+
+Officially supported (`SS.Modes`, 1995). Some tables live only in the library and reach the card through SetUserMode:
+
+| Mode | Picture | Monitor |
+|---|---|---|
+| `$01` | text 40×25 | VGA, RGB |
+| `$03` | text 80×25 | VGA, RGB |
+| `$13` | 320×200, 256 colours | VGA, RGB |
+| `$53` | 640×480, 256 colours | VGA |
+| `$5C` | 640×480, 32K colours | VGA |
+| `$61` | 640×400, 256 colours | VGA, RGB |
+| `$70` | 320×200, 32K colours | VGA |
+| `$5B` | 640×400, 32K colours | RGB (library table) |
+| `$FA`–`$FE` | Apple II modes: double hi-res 560×192, hi-res 280×192, text 40×24 and 80×24, Super Hi-Res 640×200 | both |
+
+The library documentation also lists 800×600, 1024×768, 132-column text and 24-bit modes (`$5F`, `$59`, `$60`, `$50`,
+`$51`, `$4F`), but says the list is not a promise. They come after the official modes, and only if a program uses them.
+32K colours means 5-5-5 (or 5-6-5) bits per pixel.
+
+## 4. Phases
+
+### Phase 0: documents, test programs, reference (small) — done 2026-11-27
+
+Everything found is kept outside the repository in `/Applications/Emulatoren/Apple IIgs disks/Second Sight/`
+(not ours to publish):
+
+- `docs/`: firmware command reference, programmer's library documentation, user manual, VGA register book, Oak OTI-087
+  data book, schematic (PDFs from apple2online.com and Corbatech, all scans), and OCR text of the first three.
+- `sources/`: Sequential's developer package `ss.source.082395` (library `vgalow.asm`, `vgalib.c`, `modes.h`,
+  `SS.Modes`, firmware fonts and shadowing algorithms, test programs; **no Z180 firmware source**), the 1996 library
+  fix (`sslib082696`), and Brutal Deluxe's `VGA.Lib.s`.
+- `software/`: Cogito 2 (*The Return of Cogito*, Brutal Deluxe 1998), Third View, GView 0.25c, SView 1.0a5, ViewDL 2.0,
+  the developer package disk, Spectrum 2.5.3 (all from the Asimov archive).
+- `reference/`: how GSSquared was run, and its pictures.
+
+Results:
+
+- Section 3 is now confirmed from Sequential's documents and library source. The command numbers of the first draft
+  were right.
+- **Cogito 2** is the first test program. Without the card EmuBuddy shows "SecondSight not detected! Press a key to
+  quit." In GSSquared it sets mode `$61` (640×400, 256 colours) with emulation off, uploads its picture line by line
+  (640-byte uploads into VGA memory) and fades the palette in. So it covers detection, SetMode, Upload, SetPalette and
+  SetTextFont, and the 256-colour picture.
+- **GSSquared reference**: built from source (commit `e569985`) in the session's scratch folder, with a local
+  screenshot hook (`reference/gssquared-e569985-local-shot.diff`, never part of EmuBuddy) and run without a window
+  (`SDL_VIDEO_DRIVER=dummy`, software renderer, `reference/gsqmac.py`). The card's emulation logs each command, which
+  is a useful second check.
+- Not found: **jpeGS** and **Video640.Demo** (not on Asimov).
+- Still missing per mode group: **text** (Spectrum 2.5.3 detects the card; to be tried in phase 4), **32K colours** and
+  **24-bit**. The image viewers can show such images but need an image file and mouse use. Plan: write a small test
+  program ourselves in phase 2/3 (Merlin 32 or gsasm, booted as `System/Start` like Cogito) that sets each mode and
+  draws a known pattern, so every mode can be checked headless in both emulators.
+- Test disk recipe: a copy of a clean GS/OS hard disk with the program put in place of `System/Start` (cadius
+  `EXTRACTFILE` / `ADDFILE`, resource fork included); the IIgs then starts straight into the program.
+
+### Phase 1: the card in slot 3 (small) — done 2026-11-27
+
+- `secondsight.c`: config key `g_secondsight` (0/1, "Second Sight VGA card" in the config file). When it is on,
+  `moremem.c` sends `$C0B0–$C0BF` to it instead of the VOC. Reset clears it (`video_reset`).
+- The protocol of section 3 is in place already: commands are framed with their argument counts, the handshake runs
+  `$01` → `$00` → (`$01`/`$00` per 64 KB of data) → `$A5`, GetStatus returns `GSVGA` and the status record (firmware
+  1.1, 1 MB, VGA monitor), SetMode is remembered, GetVGAReg returns 0, Run Code answers `$A6`. Upload and palette data
+  are counted and dropped for now. Arguments are also taken from `$C0B0` (Sequential's library sends some there) and
+  data from `$C0B2` (16-bit stores write `$C0B1` and `$C0B2`). A value that should follow another one takes over after
+  the IIgs has read the first one twice.
+- `EMUBUDDY_SSLOG=1` logs every command with its arguments.
+- Slot 3 choice: Slots window "Video / Net": Empty / Video Overlay / Second Sight / Uthernet II; CLI
+  `-sl3 secondsight` (also `ss`). Instead of one new key (`g_slot3_card`) the three old keys stay, and every place that
+  sets one clears the others.
+- Result: Cogito 2 no longer says "SecondSight not detected!". It runs its whole start: GetStatus, two SetVGARegs,
+  ClearScreen, SetPalette, SetMode `$61` with emulation off, 400 uploads of 640 bytes, and the palette fade
+  (SetPalette over and over), without hanging. The window still shows the IIgs screen; the picture comes in phase 3.
+
+### Phase 2: the command engine (medium)
+
+- The protocol of section 3: command byte at `$C0B0` → HANDSHAKE `$01` → argument bytes at `$C0B1` → `$00` → for long
+  commands `$A5`/`$A6`. Long commands answer `$A5` after a few polls, not at once, in case a program reads the
+  register once before it changes.
+- Uploads: per 64 KB bank HANDSHAKE `$01`, then the data bytes written to `$C0B1` go to card RAM or VGA memory; reads
+  through `$C0B2` for GetStatus and GetVGAReg (with the dummy read first).
+- Memory: 1 MB VGA memory, 128 KB card RAM.
+- Commands: GetStatus, SetMode, Upload, Scroll Screen, Screen On/Off, Set Palette, SetPaletteEntry, SetBorder,
+  Clear Screen, SetShadow, SetVGAReg, GetVGAReg, SetUserMode, SetTextFont. Run Code answers with an error and a
+  message in the log.
+- A debug log (`EMUBUDDY_SSLOG=1`) prints each command and its arguments.
+- Done when: Cogito 2 runs through its command sequence without hanging, and EmuBuddy's command log matches the
+  GSSquared log in `reference/gsq-cogito2/card-log.txt` (picture not yet shown).
+
+### Phase 3: VGA modes and the picture (large; the main part)
+
+- Work out width, height, colour depth, line pitch and start address from the current VGA registers (sequencer, CRTC,
+  graphics controller, attribute controller, Oak extensions), so SetUserMode and SetVGAReg modes work and not only the
+  fixed SetMode numbers.
+- Render 8-bit (palette of 256 × 18- or 24-bit colours), 15-bit and 24-bit pixels from VGA memory into an ARGB
+  picture of up to 1024×768.
+- `sdl_driver.c`: a second texture for the card's picture. When the card is in a VGA mode with the screen on, the
+  window draws that texture instead of the IIgs picture, scaled to fit the picture area with the right aspect ratio.
+  Status lines, the overlay menus and the CRT effect keep working.
+- Only redraw when VGA memory, the palette or the mode changed (a dirty flag), so the emulator does not slow down.
+- Screenshots and the test hook's frame dumps (`.bmp`) show what the window shows.
+- Done when: each graphics mode's test program shows the same picture as in GSSquared.
+
+### Phase 4: text modes (medium)
+
+- 40×25 and 80×25: character and attribute bytes, 16 colours, blinking, cursor.
+- Fonts: SetTextFont's choices (standard ROM font, alternate ROM font, PC ANSI font, user font uploaded to `$F000`).
+  User fonts work without any ROM. For the built-in fonts see 5.
+- Done when: Spectrum shows its 80×25 screen.
+
+### Phase 5: settings, Launcher and documents (medium)
+
+- Slots window, slot 3, with the four choices; CLI `-sl3 secondsight` (`cli.c`, `docs/CLI.md`); Launcher key.
+- Picture menu or key: "Show IIgs screen / Show Second Sight screen" (optional, see 1).
+- README, `docs/CLI.md`, manual: what works, what does not (Run Code), which programs were tested.
+- Done when: the card can be chosen in all three places and the setting survives a restart.
+
+### Phase 6: Apple II mode details (small, optional)
+
+- On a real card, Apple II mode shows the IIgs screen on a VGA monitor with the card's own scaling (the "emulated"
+  modes `$FA–$FE`: 560×192, 280×192, 40×24, 80×24, 640×400). In EmuBuddy the window already shows the IIgs screen, so
+  this phase only matters if a program reads those modes back or the card's look differs visibly.
+
+## 5. Risks and open questions
+
+- **Command numbers**: settled in phase 0 (Upload Bitmap has no number of its own).
+- **Programs that run Z180 code**: some programs (a sprite engine was mentioned on Apple II Infinitum) upload Z180
+  code. These need a Z180 core and the card's firmware ROM, which EmuBuddy would not ship (the user supplies it, as for
+  the SCSI card). Not planned; decide once such a program is found.
+- **Fonts**: the card's built-in fonts are in its EPROM. The developer package has font tables (`firm/font.tab`,
+  `font8.tab`, `intl.font`), but no license; Sequential Systems no longer exists. Options: read the fonts from a card ROM
+  the user supplies, or ship a freely licensed font that looks the same. The IBM VGA ROM font found online is not freely
+  licensed either.
+- **Few programs**: little software used the card, so testing is limited to the programs in phase 0. Brutal Deluxe and
+  Jawaid Bazyar may know of more.
+- **Speed**: data moves one byte per IIgs access through `$C0B1`, as on the real card. EmuBuddy runs much faster than a
+  real IIgs, so this should be fine.
+- **GSSquared and permission**: see 1. Asking Jawaid is optional; this plan does not depend on his code.
+- **Windows and Linux**: the second texture is plain SDL, but it must be checked on the CI builds.
+
+## 6. Size
+
+| Phase | Size |
+|---|---|
+| 0 documents and tests | small |
+| 1 slot 3 | small |
+| 2 command engine | medium |
+| 3 VGA modes and picture | large |
+| 4 text modes | medium |
+| 5 settings and documents | medium |
+| 6 Apple II mode details | small, optional |
+
+About the size of the SCSI card work without its CD audio phase. Phase 3 carries most of the risk.
+
+## 7. Sources
+
+- GSSquared, documentation only: `Docs/Cards_SecondSight.md`, `Docs/SecondSight.md`
+  (https://github.com/jawaidbazyar2/gssquared).
+- apple2online.com, non-Apple hardware documents: Second Sight firmware, VGA manual, VGA registers, programmer's library.
+- Corbatech rare documents list: Second Sight developer kit, low-level commands, VGA library
+  (https://corbatech.sourceforge.net/appleII/raredoc.htm).
+- comp.sys.apple2: the card's feature list (it shadows the IIgs video modes onto the VGA monitor).
+- FreeVGA (standard VGA registers).
