@@ -67,6 +67,7 @@ extern int g_invert_paddles;
 extern int g_joystick_swap_buttons;
 extern int g_voc_enable;
 extern int g_secondsight;
+extern int g_mb_speech;
 extern int g_status_enable;
 extern int g_video_center_a2;
 extern int g_mainwin_width;
@@ -453,6 +454,8 @@ Cfg_menu g_cfg_main_menu[] = {
 { "Video Settings", g_cfg_video_menu, 0, 0, CFGTYPE_SUBMENU },
 { "Auto-update emubuddy.config,0,Manual,1,Immediately",
 		KNMP(g_config_kegs_auto_update), CFGTYPE_INT },
+{ "Mockingboard speech chips,0,None,1,One,2,Two", KNMP(g_mb_speech),
+								CFGTYPE_INT },
 { "Slot 4 Mockingboard,0,Empty,1,Mockingboard",
 		KNMP(g_slot4_mockingboard), CFGTYPE_INT },
 { "Slot 7 SCSI card,0,Empty,1,SCSI card,2,High-Speed SCSI card", KNMP(g_slot7_scsi), CFGTYPE_INT },

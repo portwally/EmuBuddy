@@ -38,6 +38,7 @@ extern char *g_argv0_path;
 #define EV_SCC			6
 #define EV_VID_UPD		7
 #define EV_MOCKINGBOARD		8
+#define EV_MBSPEECH		9		/* EmuBuddy: Mockingboard speech chips */
 
 extern int g_stepping;
 
@@ -1002,6 +1003,15 @@ remove_event_scc(int type)
 }
 
 void
+add_event_mbspeech(dword64 dfcyc)
+{
+	if(dfcyc < g_cur_dfcyc) {
+		dfcyc = g_cur_dfcyc;
+	}
+	add_event_entry(dfcyc, EV_MBSPEECH);
+}
+
+void
 remove_event_mockingboard()
 {
 	(void)remove_event_entry(EV_MOCKINGBOARD, 0xff);
@@ -1310,6 +1320,9 @@ run_a2_one_vbl()
 				break;
 			case EV_MOCKINGBOARD:
 				mockingboard_event(dfcyc);
+				break;
+			case EV_MBSPEECH:
+				mbspeech_event(dfcyc);
 				break;
 			default:
 				printf("Unknown event: %d!\n", type);

@@ -295,6 +295,9 @@ mockingboard_write(word32 loc, word32 val, dword64 dfcyc)
 	// printf("mockingboard write: %04x=%02x\n", loc, val);
 	pair_num = (loc >> 7) & 1;		// 0 or 1
 	mock_6522_write(pair_num, loc & 0xf, val, dfcyc);
+	if(loc & 0x60) {			// EmuBuddy: the speech chips
+		mbspeech_write(loc & 0xff, val, dfcyc);
+	}
 }
 
 word32
@@ -312,7 +315,13 @@ mock_6522_read(int pair_num, word32 loc, dword64 dfcyc)
 		val = mos6522ptr->orb;
 			// There are no outputs from AY8913 to the 6522 B Port
 		break;
-	case 0x1:		// ORA
+	case 0x1:		// ORA: reading it clears the CA1 flag
+		if(mos6522ptr->ifr & 0x02) {
+			mos6522ptr->ifr = mock_6522_new_ifr(dfcyc, pair_num,
+				mos6522ptr->ifr & (~0x02), mos6522ptr->ier);
+		}
+		val = mos6522ptr->ora;
+		break;
 	case 0xf:		// ORA, no handshake
 		val = mos6522ptr->ora;
 		break;
@@ -398,7 +407,12 @@ mock_6522_write(int pair_num, word32 loc, word32 val, dword64 dfcyc)
 		}
 		mos6522ptr->orb = new_val;
 		break;
-	case 0x1:		// ORA
+	case 0x1:		// ORA: writing it clears the CA1 flag
+		if(mos6522ptr->ifr & 0x02) {
+			mos6522ptr->ifr = mock_6522_new_ifr(dfcyc, pair_num,
+				mos6522ptr->ifr & (~0x02), mos6522ptr->ier);
+		}
+		/* fall through */
 	case 0xf:		// ORA, no handshake
 		mask = mos6522ptr->ddra;
 		ora = mos6522ptr->ora;

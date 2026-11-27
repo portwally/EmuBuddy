@@ -546,6 +546,7 @@ void add_event_scc(dword64 dfcyc, int type);
 void add_event_vbl(void);
 void add_event_vid_upd(int line);
 void add_event_mockingboard(dword64 dfcyc);
+void add_event_mbspeech(dword64 dfcyc);
 void add_event_scan_int(dword64 dfcyc, int line);
 dword64 remove_event_doc(int osc);
 dword64 remove_event_scc(int type);
@@ -903,6 +904,11 @@ word32 float_bus(dword64 dfcyc);
 word32 float_bus_lines(dword64 dfcyc, word32 lines_since_vbl);
 
 
+
+/* mbspeech.c */
+void mbspeech_event(dword64 dfcyc);
+void mbspeech_write(word32 loc, word32 val, dword64 dfcyc);
+int mbspeech_mix(int *out, int num_samps, int zero_first, dword64 dfcyc);
 
 /* secondsight.c */
 word32 secondsight_devsel_read(word32 loc, dword64 dfcyc);

@@ -653,6 +653,11 @@ sound_play(dword64 dfcyc)
 		}
 	}
 
+	// EmuBuddy: the Mockingboard's speech chips (mbspeech.c)
+	if(mbspeech_mix(outptr_start, num_samps, snd_buf_init == 0, dfcyc)) {
+		snd_buf_init++;
+	}
+
 	// EmuBuddy: the audio of a CD in the SCSI CD-ROM drive (hsscsi.c)
 	if(hsscsi_audio_mix(outptr_start, num_samps, g_audio_rate,
 							snd_buf_init == 0)) {

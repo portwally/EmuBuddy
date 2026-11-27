@@ -111,6 +111,9 @@ set(GSPLUS_CORE_SOURCES
     video.c
     voc.c
     secondsight.c
+    mbspeech.c
+    ssi263/ssi263.c
+    ssi263/ssi263dsp.c
     compile_time.c
 )
 

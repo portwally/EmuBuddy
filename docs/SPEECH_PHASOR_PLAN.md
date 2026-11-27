@@ -93,18 +93,34 @@ Kept outside the repository in `/Applications/Emulatoren/Apple IIgs disks/Mockin
 - Open for phase 1: whether IIgs programs that use the Mockingboard at normal speed (Ultima V for the IIgs) work in
   EmuBuddy today; mb-audit cannot tell.
 
-### Phase 1: the SSI-263 on the Mockingboard C (medium)
+### Phase 1: the SSI-263 on the Mockingboard C (medium) — done 2026-11-27
 
-- `emubuddy/src/ssi263/` with the MIT files; one chip object per socket (`ssi263_new` at the emulator's sound rate).
-- Writes to `$C420–$C427` and `$C440–$C447` (and their mirrors per AppleWin) go to the chip, as well as to the VIA.
-- Time: the chip advances with emulated time, not with the host's audio. On each register write and each sound
-  buffer, run it up to the current cycle; its output goes into the mix. `ssi263_request()` drives the VIA's CA1
-  edge; the VIA's interrupt logic (already there) does the rest. At high emulated speeds the speech must still keep its
-  own pace (it is tied to emulated time, so it follows the "MHz" setting as the AYs do; check what this does at
-  Unlimited).
-- Mixing: speech on both channels (or chip 1 left, chip 2 right, as the card's outputs are wired; check with MAME).
-- Save state, reset (CTL behaviour above), and the "Speech chips" setting.
-- Done when: mb-audit's SSI-263 tests pass and a speaking program says its words in EmuBuddy as in MAME.
+- `emubuddy/src/ssi263/`: the chip model's four C files, unchanged, with its MIT `LICENSE` and a README naming the
+  commit. `mbspeech.c` wires them to the card.
+- Two sockets: the first chip takes writes with address bit 6 and drives CA1 of the second 6522; the second chip
+  address bit 5, CA1 of the first 6522. Writes reach the chip and the 6522 the address selects, as on the card.
+- Time: each chip makes its samples up to the emulated "now" on every write, on every `sound_play()`, and on a new
+  event (`EV_MBSPEECH`, every 256 cycles while a chip is awake). When A/R comes, CA1 of its 6522 is flagged (negative
+  edge, PCR bit 0 = 0) and the 6522's interrupt logic does the rest. Writes to registers 0–2 (and 3 with CTL=1) clear
+  it. Ctrl-Reset does not reach the chips.
+- **A card behaviour the chip model lacks:** on real cards a phoneme repeats, and after a write to register 1 or 2
+  answers a request, the chip asks again when the phoneme ends again (AppleWin GH#1197; mb-audit test 41:06 checks
+  it). The model keeps its request up instead. `mbspeech.c` writes the current phoneme again in that case (the model
+  holds it until the current one ends), which drops the request and raises it at the end. The chip files stay
+  unchanged.
+- The 6522 now clears its CA1 flag when port A is read or written (register 1), as a real 6522 does.
+- Mixing: speech on both channels, after the AY chips; level scaled with the IIgs volume.
+- Setting `g_mb_speech` ("Mockingboard speech chips": 0 none, 1 one, 2 two; default one). `EMUBUDDY_SPEECHLOG=1`
+  logs register writes and requests, `=2` also every mixed buffer.
+- **Results** (mb-audit v1.61, 1 MHz): no chip — all tests passed (total `$32D`), as before; one chip — the chip is
+  found ("U"), all tests passed (`$35F`), including the phrase-duration test; two chips — both found ("UU"), all
+  tests passed (`$390`). MAME's 6522 fails earlier (test 11.03), so EmuBuddy now passes more of mb-audit than MAME.
+- `PLAYSC01ON263` finds a real SSI-263 (it offers phrases A–G; in MAME it fell back to SC-01 phrases 1–7). Phrase A:
+  26 phonemes, about 2 seconds of speech (`reference/emubuddy-ssi263-phrase-A.wav`).
+- Not checked: how the speech sounds next to a real card (by ear: `reference/emubuddy-ssi263-phrase-A.wav`); IIgs
+  programs that use the Mockingboard at normal speed (Ultima V for the IIgs).
+- Seen on the way, not changed: EmuBuddy's `EMUBUDDY_SOUNDFILE` WAV keeps a stale length in its header when a
+  headless run ends at its snapshot frame (`sound_file_close` is not called); the samples are all there.
 
 ### Phase 2: the Phasor (medium)
 
