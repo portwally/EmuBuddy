@@ -524,6 +524,13 @@ mock_6522_write(int pair_num, word32 loc, word32 val, dword64 dfcyc)
 		mask = mos6522ptr->ddrb;
 		orb = mos6522ptr->orb;
 		new_val = (val & mask) | (orb & (~mask));
+		if(pair_num == 0 && (mos6522ptr->pcr & 0xe0) == 0xa0 &&
+			mbspeech_sc01_write((val & mask) | (mask ^ 0xff), dfcyc)) {
+			// CB2 pulses: a phoneme for the SC-01 (mbspeech.c),
+			//  the AY does not see it
+			mos6522ptr->orb = new_val;
+			break;
+		}
 		if(orb != new_val) {
 			mock_ay8913_control_update(pair_num, new_val, orb,
 									dfcyc);

@@ -179,10 +179,34 @@ Kept outside the repository in `/Applications/Emulatoren/Apple IIgs disks/Mockin
   (`test_profile`, `test_attract`, `test_jpeg`, `test_lang`, `test_library`) pass.
 - Not checked: a picture of the Launcher's editor with the new row (the Launcher does not run headless).
 
-### Phase 4: Votrax SC-01 (small–medium, optional)
+### Phase 4: Votrax SC-01 (small–medium, optional) — done 2026-11-27
 
-- The original Mockingboard speech chip, on the first VIA's port B with its own A/R on CB1 (AppleWin's notes from
-  Crimewave). A port of MAME's `votrax.cpp` (BSD-3) in C. Only if programs that need it turn up in phase 0.
+- **The chip:** `emubuddy/src/votrax/votrax.c`, a C port of MAME's `votrax.cpp` (Olivier Galibert, BSD-3-Clause,
+  MAME commit ecbaa509ee94; `LICENSE` and `README.md` in the folder). The chip logic, ROM decoding, filters and
+  constants are MAME's line for line; MAME's device, stream and timer became a struct, a sample loop and a tick
+  counter, and the chip's rate (clock / 18) is averaged down to the host's. Built alone with `cc -std=c99 -Wall
+  -Wextra` without a warning; 3 s of speech cost 7 ms of CPU.
+- **The ROM:** the chip needs its 512-byte phoneme ROM, `sc01a.bin` (SHA-1 1d6da90b…, as MAME expects). EmuBuddy
+  does not ship it, as with the High-Speed SCSI Card: the setting "SC-01 ROM" (`-sc01rom`), or `sc01a.bin` or MAME's
+  `votrax.zip` next to the IIgs ROM. Without it there is no SC-01 and nothing changes. The SCSI card's zip reader
+  moved to `romfile.c` (`rom_file_read`), which both cards use; the SCSI card was checked with its ROM as a file and
+  as MAME's zip.
+- **Wiring** (MAME's Mockingboard and AppleWin): when the first 6522's PCR sets CB2 to pulse output (`$B0`), a write
+  to its port B is a phoneme (bits 5–0; inflection bits 7–6) and does not reach the AY; A/R goes to CB1 of that 6522
+  (IFR bit 4, positive edge) and rises when the phoneme ends; a new phoneme clears the flag. The chip runs at
+  1,022,727 Hz, in step with emulated time like the SSI-263s. It sits on both cards, next to the SSI-263s, as in
+  AppleWin.
+- **Settings:** "Mockingboard SC-01" (`g_mb_sc01`, on; `-sc01 on|off`) and "SC-01 ROM" (`-sc01rom`). The Slots window
+  says on its last line whether the ROM was found (picture in the manual retaken). README, `docs/CLI.md`, the manual
+  (a paragraph, command-line rows, credit, index) and the PDF updated.
+- **Results** (mb-audit v1.61, 1 MHz, ROM found next to the IIgs ROM): mb-audit finds the SC-01 ("V") and passes all
+  tests: Mockingboard with SC-01 and no, one or two SSI-263s `$32E`, `$360`, `$391`; Phasor with SC-01 and two
+  `$49F`. With `-sc01 off` the totals are those of phase 1 (`$35F`).
+- `PLAYSC01ON263` finds the SC-01 and offers phrases 1–7: phrase 1 is 24 phonemes and lasts **1.15 s, as in MAME's
+  recording** (`reference/speech_mb.wav`). Its level was set to about the SSI-263's (peak 7,164 against 7,619;
+  `reference/emubuddy-sc01-phrase-1.wav`).
+- Not checked: programs that speak only through the SC-01 (Crimewave and others) and how it sounds next to a real
+  chip; the Launcher has no field for the SC-01 ROM (`-sc01rom` can go in its extra options).
 
 ## 4. Risks and open questions
 

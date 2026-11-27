@@ -114,6 +114,8 @@ set(GSPLUS_CORE_SOURCES
     mbspeech.c
     ssi263/ssi263.c
     ssi263/ssi263dsp.c
+    votrax/votrax.c
+    romfile.c
     compile_time.c
 )
 

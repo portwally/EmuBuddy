@@ -68,6 +68,8 @@ extern int g_joystick_swap_buttons;
 extern int g_voc_enable;
 extern int g_secondsight;
 extern int g_mb_speech;
+extern int g_mb_sc01;		/* mbspeech.c: the Votrax SC-01 */
+extern char *g_sc01_rom;
 extern int g_status_enable;
 extern int g_video_center_a2;
 extern int g_mainwin_width;
@@ -456,6 +458,9 @@ Cfg_menu g_cfg_main_menu[] = {
 		KNMP(g_config_kegs_auto_update), CFGTYPE_INT },
 { "Mockingboard speech chips,0,None,1,One,2,Two", KNMP(g_mb_speech),
 								CFGTYPE_INT },
+{ "Mockingboard SC-01 (needs sc01a.bin),0,Off,1,On", KNMP(g_mb_sc01),
+								CFGTYPE_INT },
+{ "SC-01 ROM", KNMP(g_sc01_rom), CFGTYPE_STR },
 { "Slot 4 Mockingboard,0,Empty,1,Mockingboard,2,Phasor",
 		KNMP(g_slot4_mockingboard), CFGTYPE_INT },
 { "Slot 7 SCSI card,0,Empty,1,SCSI card,2,High-Speed SCSI card", KNMP(g_slot7_scsi), CFGTYPE_INT },
@@ -1424,6 +1429,7 @@ config_load_roms()
 
 	/* EmuBuddy: the High-Speed SCSI card brings its own firmware; without
 	 *  its ROM, slot 7 falls back to the hard disk card */
+	mbspeech_set_rom_dir(&g_cfg_tmp_path[0]);	/* where the SC-01 ROM may be */
 	if(hsscsi_attach(g_slot7_scsi == 2, &g_cfg_tmp_path[0]) != 0) {
 		g_slot7_scsi = 1;
 	}

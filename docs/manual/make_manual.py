@@ -76,6 +76,7 @@ INDEX = [
     ("menu bar", ["menu bar"]),
     ("Mockingboard", ["Mockingboard"]),
     ("Phasor", ["Phasor"]),
+    ("Votrax SC-01", ["SC-01"]),
     ("modem", ["modem"]),
     ("Mount Shared Folder at Start", ["Mount Shared Folder at Start"]),
     ("network", ["network"]),

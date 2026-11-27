@@ -178,7 +178,9 @@ viewers made for the card. No card ROM is needed. New; the manual says what work
 sound chips (AY-3-8913) and sockets for the SSI-263 speech chip, so programs written for it can talk. Applied
 Engineering's Phasor has four sound chips and plays Mockingboard programs too. **Speech:** in the Slots window (None,
 One or Two; one is the default, as on most cards sold). Both cards pass the mb-audit test disk. Programs find a card in
-slot 4 only when slot 4 is set to "Your Card" in the IIgs Control Panel.
+slot 4 only when slot 4 is set to "Your Card" in the IIgs Control Panel. The **Votrax SC-01**, the speech chip of the
+first Mockingboards (Sound/Speech I), is there too when its ROM is found: `sc01a.bin` or MAME's `votrax.zip` next to
+your IIgs ROM file, or `-sc01rom`. EmuBuddy does not ship it.
 
 **FujiNet.** With [FujiNet-PC](https://github.com/FujiNetWIFI/fujinet-firmware) running on your computer
 (`./run-fujinet -u http://127.0.0.1:8000`), click **FujiNet On** in the Slots window: the FujiNet's eight disk drives, its
@@ -436,8 +438,9 @@ License, version 3** (see [LICENSE](LICENSE)).
 - **AppleTalk** follows the LocalTalk support of GSport by Peter Neubauer (how the serial chip serves the IIgs
   firmware, and the LLAP dialogs); LocalTalk over UDP is the transport of Mini vMac and TashRouter.
 - The **SSI-263 speech chip** is Tamas Geczy's chip model ([ssi263-speech](https://github.com/tgeczy/ssi263-speech),
-  MIT license), in `emubuddy/src/ssi263/`. How the Mockingboard and the Phasor behave follows AppleWin's notes from
-  real cards, and Tom Charlesworth's mb-audit was the test disk.
+  MIT license), in `emubuddy/src/ssi263/`. The **Votrax SC-01** is a C port of MAME's `votrax.cpp` by Olivier
+  Galibert (BSD-3-Clause), in `emubuddy/src/votrax/`. How the Mockingboard and the Phasor behave follows AppleWin's
+  notes from real cards and MAME's Mockingboard, and Tom Charlesworth's mb-audit was the test disk.
 - The **Shaston** font used for the menus and windows is the IIgs system font.
 - **SDL3** for windows, input and sound, and **libslirp** for the virtual network.
 - **Ghostscript** and **FFmpeg** are separate programs that EmuBuddy calls when you print PostScript or record

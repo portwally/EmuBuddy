@@ -93,6 +93,9 @@ usage(void)
 "  -cdrom <img>                   CD image (.iso, .cdr, .toast, .cue) in hard disk drive 7,\n"
 "                                 the CD-ROM drive of the High-Speed SCSI Card\n"
 "  -hsscsirom <file>              ROM of the High-Speed SCSI Card (341-0803.bin or a zip)\n"
+"  -sc01rom <file>                ROM of the Votrax SC-01 speech chip (sc01a.bin or\n"
+"                                 MAME's votrax.zip; looked for next to the IIgs ROM)\n"
+"  -sc01 on | off                 the SC-01 on the Mockingboard (on when its ROM is found)\n"
 "  -fujinet on | off              FujiNet: its devices follow the hard disks of the hard disk\n"
 "                                 card; needs FujiNet-PC running on this computer\n"
 "  -fujinetport <n>               the port FujiNet-PC connects to (default 1985)\n"
@@ -443,6 +446,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines") ||
 				is(o, "-cdrom") || is(o, "-hsscsirom") ||
+				is(o, "-sc01rom") || is(o, "-sc01") ||
 				is(o, "-fujinet") || is(o, "-fujinetport") ||
 				is(o, "-fujinetpc") ||
 				is(o, "-title") || is(o, "-profile") || is(o, "-quitshot") || is(o, "-screen"))) {
@@ -491,6 +495,18 @@ emubuddy_cli(int *pargc, char ***pargv)
 		} else if(is(o, "-hsscsirom")) {
 			emit2("-g_hsscsi_rom", v);
 			check("ROM", v);
+		} else if(is(o, "-sc01rom")) {
+			emit2("-g_sc01_rom", v);
+			check("ROM", v);
+		} else if(is(o, "-sc01")) {
+			if(is(v, "on")) {
+				emit2("-g_mb_sc01", "1");
+			} else if(is(v, "off")) {
+				emit2("-g_mb_sc01", "0");
+			} else {
+				fprintf(stderr, "EmuBuddy: -sc01 on or off\n");
+				return -1;
+			}
 		} else if(is(o, "-share")) {
 			later(v);
 			check("folder", v);

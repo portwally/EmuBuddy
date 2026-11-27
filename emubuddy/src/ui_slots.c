@@ -29,6 +29,9 @@ extern char	*g_hsscsi_rom;		/* hsscsi.c */
 int		hsscsi_rom_found(void);
 int		hsscsi_rom_file_ok(const char *path);
 static int	g_rom_found;		/* looked up when the window opens */
+static int	g_sc01_found;		/* the SC-01 ROM, likewise */
+int		mbspeech_sc01_rom_found(void);
+extern int	g_mb_sc01;
 
 typedef struct {
 	const char	*name;		/* what the slot is for */
@@ -213,7 +216,11 @@ slots_draw(UiWindow *win, int cx, int cy)
 		(g_pend[6] == 2 && !g_rom_found) ? UI_BLACK : UI_GREY);
 	/* FujiNet: its devices come through the Hard Disk Card (smartport.c) */
 	ui_draw_text(cx + 10, cy + by + 85, smartport_fujinet_status(), UI_GREY);
-	by += 17 + 17 + 17 + 17 + 17 + 17 + 8;
+	/* the Mockingboard's Votrax SC-01: only with its ROM (mbspeech.c) */
+	ui_draw_text(cx + 10, cy + by + 102, !g_mb_sc01 ? "Votrax SC-01: off" :
+		g_sc01_found ? "Votrax SC-01: on the Mockingboard, its ROM is there" :
+		"Votrax SC-01: needs its ROM, sc01a.bin or votrax.zip", UI_GREY);
+	by += 17 + 17 + 17 + 17 + 17 + 17 + 17 + 8;
 	if(ui_button(win, cx, cy, 10, by, 110, 24, "SCSI ROM...", 1)) {
 		ui_file_browser_open("Choose the SCSI Card ROM", scsi_rom_picked);
 	}
@@ -267,8 +274,9 @@ ui_slots_toggle(void)
 	load_pending();
 	snprintf(g_slots_win.title, sizeof(g_slots_win.title), "Slots");
 	g_slots_win.w = 620;		/* four choices of up to "Mockingboard" */
-	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 102 + 8 + 24 + 12;
+	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 119 + 8 + 24 + 12;
 	g_rom_found = hsscsi_rom_found();
+	g_sc01_found = mbspeech_sc01_rom_found();
 	g_slots_win.closable = 1;
 	g_slots_win.modal = 0;
 	g_slots_win.draw = slots_draw;

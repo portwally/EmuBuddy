@@ -558,137 +558,14 @@ static Slot_card g_hs_card = {
 	hs_reset
 };
 
-/* Reads 341-0803.bin out of a zip file (MAME's a2hsscsi.zip). 0 when it
- * worked. The zip directory is read here: EmuBuddy's zip reader for disk
- * images (cfg_partition_make_list) leaves out files under 140 KB. */
-static int
-hs_read_rom_zip(const char *path)
-{
-	static const char want[] = "341-0803.bin";
-	Disk	tmp;
-	byte	buf[1024], *dir, *e;
-	dword64	dsize, dlen, dir_off, dir_size, off, local;
-	word32	entries, method, csize, usize, name_len, hdr_len, i, j;
-	int	fd, pos, ret = -1;
-
-	fd = open(path, O_RDONLY | O_BINARY, 0x1b6);
-	if(fd < 0) {
-		return -1;
-	}
-	dsize = cfg_get_fd_size(fd);
-	dlen = (dsize > sizeof(buf)) ? sizeof(buf) : dsize;
-	dir = 0;
-	if(dlen < 22 || cfg_read_from_fd(fd, buf, dsize - dlen, dlen) != dlen) {
-		goto done;
-	}
-	/* the "end of central directory" record is the last one in the file */
-	for(pos = (int)dlen - 22; pos >= 0; pos--) {
-		if(buf[pos] == 'P' && buf[pos + 1] == 'K' &&
-				buf[pos + 2] == 5 && buf[pos + 3] == 6) {
-			break;
-		}
-	}
-	if(pos < 0) {
-		goto done;
-	}
-	entries = cfg_get_le16(&buf[pos + 10]);
-	dir_size = cfg_get_le32(&buf[pos + 12]);
-	dir_off = cfg_get_le32(&buf[pos + 16]);
-	if(dir_size > (1 << 20) || (dir_off + dir_size) > dsize) {
-		goto done;
-	}
-	dir = malloc((size_t)dir_size + 1);
-	if(!dir || cfg_read_from_fd(fd, dir, dir_off, dir_size) != dir_size) {
-		goto done;
-	}
-	for(i = 0, off = 0; i < entries && (off + 46) <= dir_size; i++) {
-		e = dir + off;
-		if(e[0] != 'P' || e[1] != 'K' || e[2] != 1 || e[3] != 2) {
-			break;
-		}
-		method = cfg_get_le16(e + 10);
-		csize = cfg_get_le32(e + 20);
-		usize = cfg_get_le32(e + 24);
-		name_len = cfg_get_le16(e + 28);
-		hdr_len = 46 + name_len + cfg_get_le16(e + 30) +
-							cfg_get_le16(e + 32);
-		local = cfg_get_le32(e + 42);
-		if((off + hdr_len) > dir_size) {
-			break;
-		}
-		off += hdr_len;
-		if(usize != HSSCSI_ROM_SIZE || name_len < sizeof(want) - 1) {
-			continue;
-		}
-		/* the name ends in 341-0803.bin, in any case */
-		e += 46 + name_len - (sizeof(want) - 1);
-		for(j = 0; j < sizeof(want) - 1; j++) {
-			if(tolower(e[j]) != want[j]) {
-				break;
-			}
-		}
-		if(j < sizeof(want) - 1) {
-			continue;
-		}
-		if(method == 0) {		/* stored */
-			if(cfg_read_from_fd(fd, buf, local, 30) != 30) {
-				break;
-			}
-			local += 30 + cfg_get_le16(&buf[26]) +
-							cfg_get_le16(&buf[28]);
-			if(cfg_read_from_fd(fd, g_hs_rom, local,
-				HSSCSI_ROM_SIZE) == HSSCSI_ROM_SIZE) {
-				ret = 0;
-			}
-		} else if(method == 8) {	/* deflate */
-			memset(&tmp, 0, sizeof(tmp));
-			tmp.fd = -1;
-			if(undeflate_zipfile(&tmp, fd, local, usize, csize)
-					== 0 && tmp.raw_data &&
-					tmp.raw_dsize == HSSCSI_ROM_SIZE) {
-				memcpy(g_hs_rom, tmp.raw_data, HSSCSI_ROM_SIZE);
-				ret = 0;
-			}
-			free(tmp.raw_data);
-		}
-		break;
-	}
-done:
-	free(dir);
-	close(fd);
-	return ret;
-}
-
-/* Reads the card ROM: a 32 KB file, or a zip file with 341-0803.bin in it.
- * 0 when it worked. */
+/* Reads the card ROM: a 32 KB file, or a zip file with 341-0803.bin in it
+ * (MAME's a2hsscsi.zip; romfile.c). 0 when it worked. */
 static int
 hs_read_rom(const char *path)
 {
-	FILE	*f;
-	long	len;
-	size_t	plen = strlen(path);
-
-	f = fopen(path, "rb");
-	if(!f) {
+	if(rom_file_read(path, "341-0803.bin", g_hs_rom, HSSCSI_ROM_SIZE) != 0) {
 		return -1;
 	}
-	if(plen > 4 && !cfgcasecmp(path + plen - 4, ".zip")) {
-		fclose(f);
-		if(hs_read_rom_zip(path) != 0) {
-			return -1;
-		}
-		printf("hsscsi: card ROM %s\n", path);
-		return 0;
-	}
-	fseek(f, 0, SEEK_END);
-	len = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	if(len != HSSCSI_ROM_SIZE ||
-			fread(g_hs_rom, 1, HSSCSI_ROM_SIZE, f) != HSSCSI_ROM_SIZE) {
-		fclose(f);
-		return -1;
-	}
-	fclose(f);
 	printf("hsscsi: card ROM %s\n", path);
 	return 0;
 }

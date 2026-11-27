@@ -36,12 +36,18 @@ Images: `.po .hdv .2mg .dsk .do .woz .dc .shk .sdk` and more.
 | `-sl3 <card>` | `uthernet2`, `voc` (Video Overlay Card), `secondsight` (Second Sight VGA card), `none` |
 | `-sl4 <card>` | `mockingboard`, `phasor` (Applied Engineering's Phasor: four sound chips), `uthernet2`, `none` |
 | `-mbspeech <n>` | speech chips (SSI-263) on the Mockingboard or Phasor: `0`, `1` (default) or `2` |
+| `-sc01rom <file>` | ROM of the Votrax SC-01 speech chip (`sc01a.bin`, or MAME's `votrax.zip`) |
+| `-sc01 on\|off` | the SC-01 on the Mockingboard or Phasor (on when its ROM is found) |
 | `-sl7 <card>` | `hd` (the Hard Disk Card; `scsi` and `cffa2` mean the same), `hsscsi` (Apple II High-Speed SCSI Card), `none` |
 
 The High-Speed SCSI Card needs its ROM, which EmuBuddy does not ship: `341-0803.bin` or MAME's `a2hsscsi.zip` next to
 the IIgs ROM file, or `-hsscsirom <file>`. Without it, slot 7 keeps the Hard Disk Card. With this card a hard disk has
 to be in its drive at startup; a CD (`-cdrom`, or dropped on the window) can go in at any time. The card moves its
 data by true DMA; `-g_hsscsi_dma 0` turns that off (pseudo-DMA only, a little slower).
+
+The Votrax SC-01, the speech chip of the first Mockingboards, also needs its ROM, which EmuBuddy does not ship:
+`sc01a.bin` or MAME's `votrax.zip` next to the IIgs ROM file, or `-sc01rom <file>`. Without it there is no SC-01; the
+SSI-263 speech chips need no file.
 
 Slots 5 and 6 hold the built-in drives. As on a real IIgs, a card is only
 used when its slot is set to "Your Card" in the IIgs Control Panel.

@@ -909,11 +909,17 @@ word32 float_bus_lines(dword64 dfcyc, word32 lines_since_vbl);
 
 
 
+/* romfile.c */
+int rom_file_read(const char *path, const char *want, byte *out, word32 size);
+
 /* mbspeech.c */
 void mbspeech_event(dword64 dfcyc);
 void mbspeech_write(word32 loc, word32 val, dword64 dfcyc);
 int mbspeech_mix(int *out, int num_samps, int zero_first, dword64 dfcyc);
 word32 mbspeech_read(word32 loc, dword64 dfcyc);
+int mbspeech_sc01_write(word32 val, dword64 dfcyc);
+int mbspeech_sc01_rom_found(void);
+void mbspeech_set_rom_dir(const char *iigs_rom);
 void mbspeech_card_mode(dword64 dfcyc);
 
 /* secondsight.c */

@@ -10,7 +10,7 @@ Second Sight card (`docs/SECONDSIGHT_PLAN.md`). Nothing here is decided; the ord
 | 1 Printer port | Modem, ImageWriter, PostScript printer, AppleTalk |
 | 2 Modem port | Modem, FujiNet (as a card of its own), AppleTalk |
 | 3 | Video Overlay Card (interlaced Super Hi-Res only), Second Sight VGA card, Uthernet II |
-| 4 | Mockingboard (two AY-3-8913, up to two SSI-263 speech chips), Phasor (four AY-3-8913), Uthernet II |
+| 4 | Mockingboard (two AY-3-8913, up to two SSI-263 speech chips, Votrax SC-01 with its ROM), Phasor (four AY-3-8913), Uthernet II |
 | 5, 6 | The built-in 3.5" and 5.25" drives |
 | 7 | Hard Disk Card (seven hard disks), Apple II High-Speed SCSI Card with CD-ROM |
 | Not a slot | ZipGS accelerator (8–128 MHz), memory expansion 0–8 MB |
@@ -90,7 +90,7 @@ them).
 
 1. **14 MB of RAM**, the useful part of the AppleSqueezer — done.
 2. **Mockingboard speech (SSI-263)** and **Phasor**: both extend the existing Mockingboard, and games use them.
-   Plan: `docs/SPEECH_PHASOR_PLAN.md` — done 2026-11-27 (phases 0–3; the SC-01 of phase 4 is optional).
+   Plan: `docs/SPEECH_PHASOR_PLAN.md` — done 2026-11-27 (phases 0–4, with the Votrax SC-01).
 3. **MIDI** through the serial port: brings the IIgs's music programs to real and software synthesizers.
 4. **Uthernet (I)** only if a program that needs it turns up.
 5. **The AppleSqueezer card itself**, VidHD, CFFA 3000, RamFAST: only with documentation from their makers or a
