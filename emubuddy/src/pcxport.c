@@ -675,7 +675,12 @@ v30_run(word32 n)
 int
 pcxport_screen_on(void)
 {
-	return g_pcx && g_pcx_slot_in_use && !g_pcx->reset_line &&
+	static int apple_only = -1;
+
+	if(apple_only < 0) {	/* for tests: always show the IIgs's screen */
+		apple_only = getenv("EMUBUDDY_PCXPORT_APPLE_SCREEN") != 0;
+	}
+	return !apple_only && g_pcx && g_pcx_slot_in_use && !g_pcx->reset_line &&
 			!g_pcx->halt_line && (g_pcx->cga_mode & 0x08);
 }
 

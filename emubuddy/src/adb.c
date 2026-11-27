@@ -948,6 +948,18 @@ adb_write_c026(int val)
 			adb_printf("Disabling Mouse SRQ's (device 3)\n");
 			/* HACK HACK...should deal with SRQs on mouse */
 			break;
+		case 0xa0: case 0xa1: case 0xa2: case 0xa3:
+		case 0xa4: case 0xa5: case 0xa6: case 0xa7:
+		case 0xa8: case 0xa9: case 0xaa: case 0xab:
+		case 0xac: case 0xad: case 0xae: case 0xaf:
+			/* EmuBuddy: Listen dev x reg 2, two bytes. For the
+			 *  keyboard, register 2 holds its LEDs (the PC
+			 *  Transporter's driver sets Caps Lock and Num Lock
+			 *  with $A2); taken and ignored */
+			adb_printf("Sending data to dev %x reg 2\n", dev);
+			g_adb_state = ADB_IN_CMD;
+			g_adb_cmd_len = 2;
+			break;
 		case 0xb0: case 0xb1: case 0xb2: case 0xb3:
 		case 0xb4: case 0xb5: case 0xb6: case 0xb7:
 		case 0xb8: case 0xb9: case 0xba: case 0xbb:
@@ -1026,6 +1038,14 @@ do_adb_cmd()
 	g_adb_state = ADB_IDLE;
 
 	switch(g_adb_cmd) {
+	case 0xa0: case 0xa1: case 0xa2: case 0xa3:
+	case 0xa4: case 0xa5: case 0xa6: case 0xa7:
+	case 0xa8: case 0xa9: case 0xaa: case 0xab:
+	case 0xac: case 0xad: case 0xae: case 0xaf:
+		/* EmuBuddy: Listen dev x reg 2 (the keyboard LEDs) */
+		adb_printf("Listen dev %x reg 2: %02x %02x\n", dev,
+				g_adb_cmd_data[0], g_adb_cmd_data[1]);
+		break;
 	case 0x04:	/* Set modes */
 		adb_printf("Performing ADB set mode: OR'ing in %02x\n",
 			g_adb_cmd_data[0]);
