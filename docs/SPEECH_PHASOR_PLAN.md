@@ -59,16 +59,39 @@ The Mockingboard in slot 4 plays music today: two 6522 VIAs, each driving one AY
 
 ## 3. Phases
 
-### Phase 0: references and test disks (small)
+### Phase 0: references and test disks (small) — done 2026-11-27
 
-- Test disk: Tom Charlesworth's **mb-audit** (v1.61, `.po`, from its GitHub releases): it checks the VIAs, AYs, SSI-263
-  and SC-01 detection, interrupts and the Phasor, card by card, on real hardware. Run it on the Mockingboard as it is
-  today to see what already passes.
-- Programs that speak through the SSI-263, and Phasor music: collect a few from the Asimov archive (Mockingboard and
-  Phasor utility/demo disks, games that list Mockingboard speech) and record what they do.
-- Reference emulator on the Mac: MAME (`/Applications/Emulatoren/mame`) has the Mockingboard Sound/Speech I (with an SSI-263, `ssi263hle`), the Phasor and the Echo Plus as IIgs slot cards; run them headless as in
-  the SCSI work, with the same disks, and record the sound (`-wavwrite`).
-- Read the chip model's `docs/engine.md` and build `ssi263.c` alone; measure its CPU cost per second of speech.
+Kept outside the repository in `/Applications/Emulatoren/Apple IIgs disks/Mockingboard and Phasor/` (`software/`,
+`docs/`, `reference/`).
+
+- **mb-audit v1.61** (Tom Charlesworth, MIT): its 140K disk does not start from the 5.25" drive in a headless run, so
+  its files were copied to an 800K ProDOS image (`software/mba800.po`) that starts as hard disk 1. Besides the audit it
+  has `PLAYSC01ON263` (speaks SC-01 phrases through an SSI-263), `PH` and `BEARAGRUDGE` (Phasor music).
+- **Slot 4 must be "Your Card"** in the IIgs Control Panel, or mb-audit finds no card. For headless runs:
+  `reference/bram_slot4.txt` (battery RAM rows for EmuBuddy's config, ROM 03, slot 4 = Your Card, checksum fixed) and
+  `reference/rtc_slot4` (the same 256 bytes as MAME's `nvram/apple2gs/rtc`).
+- **Speed:** mb-audit finds the card only at **1 MHz**. At 2.8 MHz, 8 MHz or Unlimited it says "No Mockingboard
+  detected", in EmuBuddy and in MAME alike: its timer-based detection was written for 8-bit Apple IIs. Run it with
+  `-mhz 1` (MAME: clear bit 7 of `$C036` from Lua).
+- **EmuBuddy today** (Mockingboard, 1 MHz): mb-audit finds a Mockingboard C in slot 4 with no speech chip, warns once
+  (test 21.14), passes the reset tests (Ctrl-Reset skipped with Esc), and ends with **"All tests passed"**
+  (`reference/emubuddy-mbaudit-mockingboard.png`).
+- **MAME 0.262** (`/Applications/Emulatoren/mame`, IIgs, ROM 03, headless with `reference/gsrun.sh` and
+  `reference/sched.lua`, which schedules snapshots and keys by emulated time): it finds the Mockingboard
+  (Sound/Speech I, with an SSI-263) and the Phasor, but fails mb-audit's 6522 test 11.03 on both (expected `F1`, got
+  `F0`) (`reference/both.png`). So MAME is no reference for the VIA details, where EmuBuddy is already better; it stays
+  the reference for how speech and Phasor music should sound. MAME's IIe (`apple2ee`) did not start the disk headless.
+- **Speech reference:** `reference/speech_mb.wav`, MAME's Mockingboard speaking phrase 1 of `PLAYSC01ON263`
+  (around 16.0–17.5 s), recorded with MAME's sound output off (`-wavwrite`).
+- **The chip model** (`tgeczy/ssi263-speech`, commit in `reference/chip/COMMIT`): `ssi263.c`, `ssi263.h`,
+  `ssi263_defaults.h`, `ssi263dsp.c` build alone with `cc -O2 -std=c99 -Wall` without a warning. 30 seconds of
+  continuous speech (1,220 phonemes, each started when A/R comes) cost **0.21 s of CPU, 0.7 % of one core per chip**
+  (3.6 % unoptimised). Speed is no concern. `reference/chip/bench.c` and `bench.wav`.
+- **More software** (Asimov): the four Phasor disks, "Mockingboard Sound-Speech Generator", "Mockingboard Disk 2
+  Sound-Speech Dev", Ultima V patched for the Mockingboard on the IIgs; the Phasor manual v1.3 and the Mockingboard
+  documents. Asimov also has Votrax SC-01 ROM dumps, needed only for phase 4.
+- Open for phase 1: whether IIgs programs that use the Mockingboard at normal speed (Ultima V for the IIgs) work in
+  EmuBuddy today; mb-audit cannot tell.
 
 ### Phase 1: the SSI-263 on the Mockingboard C (medium)
 
