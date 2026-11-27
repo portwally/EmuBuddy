@@ -265,10 +265,9 @@ Results:
 - **Programs that run Z180 code**: some programs (a sprite engine was mentioned on Apple II Infinitum) upload Z180
   code. These need a Z180 core and the card's firmware ROM, which EmuBuddy would not ship (the user supplies it, as for
   the SCSI card). Not planned; decide once such a program is found.
-- **Fonts**: the card's built-in fonts are in its EPROM. The developer package has font tables (`firm/font.tab`,
-  `font8.tab`, `intl.font`), but no license; Sequential Systems no longer exists. Options: read the fonts from a card ROM
-  the user supplies, or ship a freely licensed font that looks the same. The IBM VGA ROM font found online is not freely
-  licensed either.
+- **Fonts**: settled for now in phase 4 — the IIgs character set stands in for the card's EPROM fonts; a font
+  the program uploads is exact. If a real card ROM ever turns up with a clear license, or the user supplies one, its
+  fonts could be read from it.
 - **Few programs**: little software used the card, so testing is limited to the programs in phase 0. Brutal Deluxe and
   Jawaid Bazyar may know of more.
 - **Speed**: data moves one byte per IIgs access through `$C0B1`, as on the real card. EmuBuddy runs much faster than a
