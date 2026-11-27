@@ -246,12 +246,16 @@ Results:
   offset 0 (the CPU's view of a VGA text buffer). GSSquared draws garbage for the same test, so it is no reference here
   (`reference/sstest/gssquared-text.png`). A real program that uses the text modes (Spectrum 2.5.3) is the next check.
 
-### Phase 5: settings, Launcher and documents (medium)
+### Phase 5: settings, Launcher and documents (medium) — done 2026-11-27
 
-- Slots window, slot 3, with the four choices; CLI `-sl3 secondsight` (`cli.c`, `docs/CLI.md`); Launcher key.
-- Picture menu or key: "Show IIgs screen / Show Second Sight screen" (optional, see 1).
-- README, `docs/CLI.md`, manual: what works, what does not (Run Code), which programs were tested.
-- Done when: the card can be chosen in all three places and the setting survives a restart.
+- Slots window row 3 "Video / Net": Empty / Overlay / Second Sight / Uthernet II ("Video Overlay" did not fit four
+  buttons); new picture of the window in the manual (`docs/manual/img/slots.png`, taken headless).
+- CLI `-sl3 secondsight` in `docs/CLI.md`; Launcher: `sl3 = secondsight` is a fourth choice for slot 3.
+- README (slots table and a paragraph) and the manual (slots table, command-line table, a section "The Second Sight
+  VGA card", index entry); `docs/EmuBuddy-Manual.pdf` rebuilt (62 pages).
+- Left out: a menu item to show the IIgs screen while the card shows its own picture (real users had two monitors).
+  Not needed by any known program.
+- Launcher tests (`test_profile`, `test_attract`, `test_jpeg`, `test_lang`, `test_library`) pass.
 
 ### Phase 6: Apple II mode details (small, optional)
 

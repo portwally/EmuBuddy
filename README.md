@@ -156,7 +156,7 @@ The same convention is used everywhere, so a file can travel in both directions 
 |---|---|
 | 1 Printer port | Idle, Modem, ImageWriter (a printer), PostScript (a PostScript printer) |
 | 2 Modem port | Idle, Modem (a virtual modem for telnet and BBS programs) |
-| 3 | Empty, Video Overlay Card, Uthernet II |
+| 3 | Empty, Video Overlay Card, Second Sight VGA card, Uthernet II |
 | 4 | Empty, Mockingboard, Uthernet II |
 | 5, 6 | The built-in disk drives (see Drives) |
 | 7 | Empty, Hard Disk Card (seven hard disks), High-Speed SCSI Card |
@@ -168,6 +168,11 @@ with GS/OS's CD Remote) or for software that talks to the card itself. It needs 
 which EmuBuddy does not ship: `341-0803.bin` or MAME's `a2hsscsi.zip`, next to your IIgs ROM file or picked with
 **SCSI ROM...** in the Slots window. With this card, a
 hard disk has to be in its drive when the IIgs starts; a CD can go in at any time.
+
+**Second Sight** (slot 3) is Sequential Systems' VGA card of 1993. While a program uses one of its VGA modes, the
+window shows the card's picture (up to 640×480 in 256 or 32,768 colours, and 40- or 80-column text) instead of the
+IIgs's, as a monitor on the card would. Programs for it are few: Brutal Deluxe's *The Return of Cogito* and the image
+viewers made for the card. No card ROM is needed. New; the manual says what works.
 
 **FujiNet.** With [FujiNet-PC](https://github.com/FujiNetWIFI/fujinet-firmware) running on your computer
 (`./run-fujinet -u http://127.0.0.1:8000`), click **FujiNet On** in the Slots window: the FujiNet's eight disk drives, its

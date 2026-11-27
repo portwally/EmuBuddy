@@ -312,7 +312,7 @@
       <tr><td>Slot 1, the printer port</td><td>Idle, a modem, an ImageWriter printer or a PostScript printer (Chapter 6)</td></tr>
       <tr><td>Slot 2, the modem port</td><td>Idle, or a modem that dials Internet addresses in place of phone numbers, for terminal programs</td></tr>
       <tr><td>Either port</td><td>AppleTalk, when the IIgs itself is set to use the port for it. You do not choose that here (Chapter 5).</td></tr>
-      <tr><td>Slot 3</td><td>Empty, a Video Overlay Card or an Uthernet II network card</td></tr>
+      <tr><td>Slot 3</td><td>Empty, a Video Overlay Card, the Second Sight VGA card or an Uthernet II network card (see below)</td></tr>
       <tr><td>Slot 4</td><td>Empty, a Mockingboard sound card or an Uthernet II network card (Chapter 5)</td></tr>
       <tr><td>Slots 5 and 6</td><td>The built-in 3.5-inch and 5.25-inch drives</td></tr>
       <tr><td>Slot 7</td><td>Empty, the Hard Disk Card with its seven hard disks, or the High-Speed SCSI Card (see below)</td></tr>
@@ -340,6 +340,12 @@
     <p>GS/OS reads CDs in the ProDOS, HFS and ISO 9660 formats when its files <i>SCSI.Manager</i>, <i>SCSICD.Driver</i>, <i>HFS.FST</i> and <i>HS.FST</i> are in the System folder. If a CD does not show up, check that these files are there.</p>
     <p><b>Audio CDs</b> play too. They need an image with tracks: a <code>.cue</code> file with its <code>.bin</code> file next to it (audio tracks may also be <code>.wav</code> files: 16 bits, stereo, 44,100 Hz). Drop the <code>.cue</code> file on the window. In GS/OS, the desk accessory <i>CD Remote</i> from the System 6 disks plays the tracks; you hear them with the other sounds of the IIgs. A CD with a data track and music plays its music the same way.</p>
     <div class="note"><span class="nt">By the way</span>The High-Speed SCSI Card is new and was tested with a ROM 03 and System 6.</div>
+
+    <h2>The Second Sight VGA card</h2>
+    <p>Second Sight, made by Sequential Systems in 1993, gave the IIgs a VGA monitor with pictures far beyond Super Hi-Res: 640&times;480 pixels in 256 colours, 32,768 colours at once, and 40- or 80-column text. Choose Second Sight for slot 3 in the Slots window and click Apply. No ROM file is needed.</p>
+    <p>Most of the time nothing looks different: on the real card the VGA monitor showed the normal IIgs screen too. When a program switches the card to one of its own modes, the window shows the card&rsquo;s picture, as a monitor on the card would, and when the program switches back, the IIgs screen returns. The picture is drawn at the shape of a VGA monitor, 4:3, with the card&rsquo;s border colour around it.</p>
+    <p>Few programs were written for the card. Brutal Deluxe&rsquo;s game <i>The Return of Cogito</i> works; the image viewers made for Second Sight have not been tried yet. Programs that load code into the card&rsquo;s own processor do not; EmuBuddy answers the card&rsquo;s commands itself.</p>
+    <div class="note"><span class="nt">By the way</span>Second Sight in EmuBuddy is new. Its 256-colour, 32,768-colour and text modes were tried with Cogito and a test program; 24-bit colour and the text modes have not been checked against a real card. The card&rsquo;s own text fonts are not part of EmuBuddy: text is drawn in the IIgs&rsquo;s own character set, unless a program brings its own font.</div>
 
     <h2>FujiNet</h2>
     <p>FujiNet is a network and storage device for old computers. On an Apple II it is a row of devices on the disk port: eight disk drives, a network device, a clock, a printer and more. Programs made for FujiNet reach the Internet through it, and its drives hold disk images from this computer or from servers on the Internet.</p>
@@ -728,7 +734,7 @@
     <table class="keys opts">
       <tr><td><code>-sl1</code> <i>card</i></td><td><code>imagewriter</code>, <code>postscript</code>, <code>modem</code> or <code>none</code></td></tr>
       <tr><td><code>-sl2</code> <i>card</i></td><td><code>modem</code>, <code>imagewriter</code>, <code>postscript</code>, <code>fujinet</code> (the FujiNet as a card of its own) or <code>none</code></td></tr>
-      <tr><td><code>-sl3</code> <i>card</i></td><td><code>uthernet2</code>, <code>voc</code> (the Video Overlay Card) or <code>none</code></td></tr>
+      <tr><td><code>-sl3</code> <i>card</i></td><td><code>uthernet2</code>, <code>voc</code> (the Video Overlay Card), <code>secondsight</code> (the Second Sight VGA card) or <code>none</code></td></tr>
       <tr><td><code>-sl4</code> <i>card</i></td><td><code>mockingboard</code>, <code>uthernet2</code> or <code>none</code></td></tr>
       <tr><td><code>-sl7</code> <i>card</i></td><td><code>hd</code> (the Hard Disk Card; <code>scsi</code> means the same), <code>hsscsi</code> (the High-Speed SCSI Card) or <code>none</code></td></tr>
       <tr><td><code>-cdrom</code> <i>image</i></td><td>A CD image in the CD-ROM drive of the High-Speed SCSI Card</td></tr>

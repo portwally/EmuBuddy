@@ -33,7 +33,7 @@ Images: `.po .hdv .2mg .dsk .do .woz .dc .shk .sdk` and more.
 |---|---|
 | `-sl1 <card>` | `imagewriter`, `postscript` (also `laserwriter`), `modem`, `none` (printer port) |
 | `-sl2 <card>` | `modem`, `imagewriter`, `postscript`, `fujinet` (the FujiNet as a card of its own: the IIgs can start up from it, and it works next to the High-Speed SCSI Card), `none` (modem port) |
-| `-sl3 <card>` | `uthernet2`, `voc`, `none` |
+| `-sl3 <card>` | `uthernet2`, `voc` (Video Overlay Card), `secondsight` (Second Sight VGA card), `none` |
 | `-sl4 <card>` | `mockingboard`, `uthernet2`, `none` |
 | `-sl7 <card>` | `hd` (the Hard Disk Card; `scsi` and `cffa2` mean the same), `hsscsi` (Apple II High-Speed SCSI Card), `none` |
 

@@ -862,7 +862,7 @@ static Choice g_ch[] = {
 	{ "mhz", { "1", "2.8", "8", "16", "32", "64", "128", "max" }, 8, -1 },
 	{ "sl1", { "none", "imagewriter", "postscript", "modem" }, 4, 0 },
 	{ "sl2", { "none", "modem", "imagewriter", "fujinet" }, 4, 0 },
-	{ "sl3", { "none", "uthernet2", "voc" }, 3, 0 },
+	{ "sl3", { "none", "uthernet2", "voc", "secondsight" }, 4, 0 },
 	{ "sl4", { "none", "mockingboard", "uthernet2" }, 3, 0 },
 	{ "sl7", { "none", "scsi", "hsscsi" }, 3, 1 },	/* scsi: the hard disk card */
 	{ "scale", { "1", "2", "3", "4" }, 4, -1 },

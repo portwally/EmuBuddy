@@ -40,7 +40,7 @@ typedef struct {
 static const SlotDef g_slots[7] = {
 	{ "Printer Port", { "Idle", "Modem", "ImageWriter", "PostScript" }, 4, 15, NULL },
 	{ "Modem Port", { "Idle", "Modem", "FujiNet", NULL }, 3, 7, NULL },
-	{ "Video / Net", { "Empty", "Video Overlay", "Second Sight", "Uthernet II" }, 4, 15, NULL },
+	{ "Video / Net", { "Empty", "Overlay", "Second Sight", "Uthernet II" }, 4, 15, NULL },
 	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II", NULL }, 3, 7, NULL },
 	{ "3.5\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
 	{ "5.25\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },

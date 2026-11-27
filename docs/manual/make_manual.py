@@ -103,6 +103,7 @@ INDEX = [
     ("SCSI card", ["SCSI"]),
     ("Share a Folder", ["Share a Folder", "Share Folder"]),
     ("shared folders", ["shared folder", "Shared folder"]),
+    ("Second Sight VGA card", ["Second Sight"]),
     ("ShrinkIt archives", ["ShrinkIt"]),
     ("skins", ["skin"]),
     ("slots", ["slot ", "Slots"]),
