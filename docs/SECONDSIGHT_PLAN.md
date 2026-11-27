@@ -224,12 +224,27 @@ Results:
   swapped compared with EmuBuddy), and its `$61` colours after SetPaletteEntry look wrong, though the arguments follow
   Sequential's documentation and library (entry, R, G, B). EmuBuddy keeps to the documentation.
 
-### Phase 4: text modes (medium)
+### Phase 4: text modes (medium) — done 2026-11-27
 
-- 40×25 and 80×25: character and attribute bytes, 16 colours, blinking, cursor.
-- Fonts: SetTextFont's choices (standard ROM font, alternate ROM font, PC ANSI font, user font uploaded to `$F000`).
-  User fonts work without any ROM. For the built-in fonts see 5.
-- Done when: Spectrum shows its 80×25 screen.
+- Modes `$01` (40×25) and `$03` (80×25), emulation off: character and attribute bytes interleaved in video memory
+  from the CRTC start address (`$0C/$0D` × 2), 25 rows of 40 or 80 cells. Drawn as 8×16 cells into a 640×400 picture
+  (40 columns twice as wide), shown at 4:3 like the graphics modes.
+- Attribute byte as on a PC VGA card: bits 3–0 foreground, 6–4 background, 7 blink (characters blink every 32
+  frames). Colours are palette entries 0–15; reset loads the standard 16 VGA colours there. Sequential's documentation
+  says programs must set the palette for text modes, and SetMode does not reload it.
+- Cursor: CRTC `$0E/$0F` (cell), `$0A/$0B` (first and last scan line, `$0A` bit 5 hides it), blinking every 16
+  frames. SetMode for a numbered mode now sets the start address to 0 and, for text modes, the VGA cursor shape (lines
+  13–14), as loading the card's mode table would.
+- Fonts (SetTextFont): font 3, the program's own font at Z180 RAM `$F000` (16 bytes a character, bit 7 left, the
+  format of the firmware's `cfont.c`), is drawn exactly. The card's built-in fonts 0–2 are in its EPROM and have no
+  license; EmuBuddy uses the IIgs character set it already has (`g_font_array`, from KEGS) instead, each of its 8 rows
+  drawn twice, characters `$20–$7F` only. So font 2 (PC ANSI) has no line-drawing characters.
+- Test: `SSTEST.SYSTEM` now also loads the 16 text colours, shows an 80×25 and a 40×25 screen with all foreground and
+  background colours, a blinking word and the cursor at row 2, column 10 (`reference/sstest/emubuddy-phase4-*.png`).
+  Right in EmuBuddy.
+- Not confirmed: where a real card keeps the text in video memory. EmuBuddy assumes character/attribute pairs from
+  offset 0 (the CPU's view of a VGA text buffer). GSSquared draws garbage for the same test, so it is no reference here
+  (`reference/sstest/gssquared-text.png`). A real program that uses the text modes (Spectrum 2.5.3) is the next check.
 
 ### Phase 5: settings, Launcher and documents (medium)
 

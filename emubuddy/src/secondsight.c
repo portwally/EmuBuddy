@@ -28,6 +28,9 @@
 
 #include "defc.h"
 
+extern byte g_font_array[256][8];	// video.c: the IIgs's character set
+extern word32 g_vbl_count;
+
 int	g_secondsight = 0;		// 1: the card is in the machine
 
 #define SS_FW_VERSION	0x11		// ROM 1.1
@@ -82,6 +85,16 @@ byte	g_ss_ext[0x100];		// $3DE/$3DF Oak extended registers
 static word32	g_ss_dst = 0;		// where data bytes go
 static int	g_ss_dst_kind = 0;	// 0 Z180 RAM, 1 video memory, 2 palette
 static word32	g_ss_dst_base = 0;	// video memory: start of its 512 KB half
+
+// Standard VGA text colours, loaded into palette entries 0-15 at reset
+static const byte g_ss_vga16[16][3] = {
+	{ 0x00, 0x00, 0x00 }, { 0x00, 0x00, 0xaa }, { 0x00, 0xaa, 0x00 },
+	{ 0x00, 0xaa, 0xaa }, { 0xaa, 0x00, 0x00 }, { 0xaa, 0x00, 0xaa },
+	{ 0xaa, 0x55, 0x00 }, { 0xaa, 0xaa, 0xaa }, { 0x55, 0x55, 0x55 },
+	{ 0x55, 0x55, 0xff }, { 0x55, 0xff, 0x55 }, { 0x55, 0xff, 0xff },
+	{ 0xff, 0x55, 0x55 }, { 0xff, 0x55, 0xff }, { 0xff, 0xff, 0x55 },
+	{ 0xff, 0xff, 0xff },
+};
 
 // Bytes per command, including the command byte (firmware documentation)
 static const int g_ss_cmd_len[16] = {
@@ -299,6 +312,16 @@ ss_run(void)
 	case 0x01:		// SetMode: mode, emulation flag
 		g_ss_mode = g_ss_args[0];
 		g_ss_emulating = (g_ss_args[1] == 0);
+		if(g_ss_mode != 0xff) {
+			// a numbered mode loads its register table: start
+			// address 0, and in text modes the VGA's cursor shape
+			g_ss_crtc[0x0c] = 0;
+			g_ss_crtc[0x0d] = 0;
+			if(g_ss_mode == 0x01 || g_ss_mode == 0x03) {
+				g_ss_crtc[0x0a] = 0x0d;
+				g_ss_crtc[0x0b] = 0x0e;
+			}
+		}
 		g_ss_dirty = 1;
 		ss_set_hs(0x00, 0xa5);
 		break;
@@ -513,6 +536,8 @@ secondsight_devsel_write(word32 loc, word32 val, dword64 dfcyc)
 void
 secondsight_reset(void)
 {
+	int	i;
+
 	g_ss_state = SS_IDLE;
 	g_ss_cmd = -1;
 	g_ss_nargs = 0;
@@ -524,7 +549,16 @@ secondsight_reset(void)
 	g_ss_emulating = 1;
 	g_ss_screen_on = 1;
 	g_ss_shadow = 0;
+	g_ss_font = 0;
 	g_ss_dirty = 1;
+	for(i = 0; i < 16; i++) {
+		g_ss_pal[i * 3] = g_ss_vga16[i][0];
+		g_ss_pal[i * 3 + 1] = g_ss_vga16[i][1];
+		g_ss_pal[i * 3 + 2] = g_ss_vga16[i][2];
+	}
+	// cursor: the VGA's text mode default, scan lines 13-14
+	g_ss_crtc[0x0a] = 0x0d;
+	g_ss_crtc[0x0b] = 0x0e;
 }
 
 // ---- The picture (phase 3) ----
@@ -604,6 +638,76 @@ ss_pal_argb(int i)
 				(g_ss_pal[i * 3 + 1] << 8) | g_ss_pal[i * 3 + 2];
 }
 
+static int	g_ss_blink_drawn = -1;
+
+// One row (0-15) of character c as 8 pixels, bit 7 = leftmost.  Font 3 is
+// the font the program uploaded to Z180 RAM $F000 (16 bytes a character).
+// The card's own fonts (0-2) are in its EPROM and not ours to ship; the
+// IIgs's character set stands in for them, each of its 8 rows drawn twice.
+static word32
+ss_font_row(int c, int row)
+{
+	word32	bits;
+
+	if(g_ss_font == 3) {
+		return g_ss_sram[0xf000 + c * 16 + row];
+	}
+	if(c < 0x20 || c >= 0x80) {
+		return 0;		// no PC graphics characters
+	}
+	bits = g_font_array[0x80 | c][row >> 1] & 0x7f;	// 7 dots
+	return bits << 1;
+}
+
+// Text modes $01 (40x25) and $03 (80x25): character and attribute bytes
+// interleaved from the CRTC start address; 8x16 cells, 640x400 pixels
+// (40 columns drawn twice as wide).  Attribute: bits 3-0 foreground,
+// 6-4 background, 7 blink; colours are palette entries 0-15.
+static void
+ss_draw_text(int cols, word32 *pix)
+{
+	word32	start, a, bits, fg, bg, cur;
+	int	row, col, y, x, c, at, blink, curon, cs, ce, cw, k;
+	word32	*out;
+
+	start = (((word32)g_ss_crtc[0x0c] << 8) | g_ss_crtc[0x0d]) * 2;
+	cur = ((word32)g_ss_crtc[0x0e] << 8) | g_ss_crtc[0x0f];
+	cs = g_ss_crtc[0x0a] & 0x1f;
+	ce = g_ss_crtc[0x0b] & 0x1f;
+	curon = !(g_ss_crtc[0x0a] & 0x20) && ((g_vbl_count >> 4) & 1);
+	blink = (g_vbl_count >> 5) & 1;
+	cw = 640 / cols;		// 8 or 16 pixels a character
+	for(row = 0; row < 25; row++) {
+		for(col = 0; col < cols; col++) {
+			a = start + (row * cols + col) * 2;
+			c = g_ss_vram[a & 0xfffff];
+			at = g_ss_vram[(a + 1) & 0xfffff];
+			fg = ss_pal_argb(at & 0x0f);
+			bg = ss_pal_argb((at >> 4) & 0x07);
+			for(y = 0; y < 16; y++) {
+				bits = ss_font_row(c, y);
+				if((at & 0x80) && blink) {
+					bits = 0;
+				}
+				if(curon && (word32)(row * cols + col) ==
+						(cur - start / 2) &&
+						y >= cs && y <= ce) {
+					bits = 0xff;
+				}
+				out = pix + (size_t)(row * 16 + y) * 640 +
+								col * cw;
+				for(x = 0; x < 8; x++) {
+					k = (bits & (0x80 >> x)) ? 1 : 0;
+					out[x * cw / 8] = k ? fg : bg;
+					if(cw == 16) {
+						out[x * 2 + 1] = k ? fg : bg;
+					}
+				}
+			}
+		}
+	}
+}
+
 // The card's picture for the window: 1 and an ARGB picture if the card
 // shows a VGA mode, 0 if the window shows the IIgs's own picture.
 // *changed is 1 when the pixels are new since the last call.
@@ -617,7 +721,21 @@ secondsight_picture(word32 **pix, int *w, int *h, word32 *border,
 	byte	*vram;
 
 	*changed = 0;
-	if(!g_secondsight || !ss_geometry(&pw, &ph, &bpp, &pitch, &start)) {
+	if(!g_secondsight || !g_ss_vram) {
+		return 0;
+	}
+	if(!g_ss_emulating && (g_ss_mode == 0x01 || g_ss_mode == 0x03)) {
+		pw = 640;
+		ph = 400;
+		bpp = 0;		// text
+		pitch = 0;
+		start = 0;
+		x = (g_vbl_count >> 4) & 3;	// cursor and blink phase
+		if(x != g_ss_blink_drawn) {
+			g_ss_blink_drawn = x;
+			g_ss_dirty = 1;
+		}
+	} else if(!ss_geometry(&pw, &ph, &bpp, &pitch, &start)) {
 		return 0;
 	}
 	if(pw != g_ss_pix_w || ph != g_ss_pix_h || !g_ss_pix) {
@@ -637,6 +755,10 @@ secondsight_picture(word32 **pix, int *w, int *h, word32 *border,
 	g_ss_dirty = 0;
 	*changed = 1;
 	vram = g_ss_vram;
+	if(bpp == 0 && g_ss_screen_on) {
+		ss_draw_text(g_ss_mode == 0x01 ? 40 : 80, g_ss_pix);
+		return 1;
+	}
 	for(y = 0; y < ph; y++) {
 		out = g_ss_pix + (size_t)y * pw;
 		a = start + y * pitch;
