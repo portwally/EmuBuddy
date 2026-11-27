@@ -426,9 +426,11 @@ ss_command(word32 val)
 		return;
 	case 0x04:
 		g_ss_screen_on = 0;
+		g_ss_dirty = 1;
 		break;
 	case 0x05:
 		g_ss_screen_on = 1;
+		g_ss_dirty = 1;
 		break;
 	}
 	if(g_ss_need == 0) {
@@ -523,6 +525,155 @@ secondsight_reset(void)
 	g_ss_screen_on = 1;
 	g_ss_shadow = 0;
 	g_ss_dirty = 1;
+}
+
+// ---- The picture (phase 3) ----
+
+typedef struct {
+	byte	mode;
+	short	w, h;
+	byte	bpp;		// 8 (palette), 16 (5-5-5), 24
+} SsMode;
+
+// Built-in modes (SS.Modes, the library's mode list and vga.h).  $5B, $5C
+// and $70 come from the library as SetUserMode + SetMode $FF; they are here
+// too in case a program sets them by number.
+static const SsMode g_ss_modes[] = {
+	{ 0x13, 320, 200, 8 },
+	{ 0x53, 640, 480, 8 },
+	{ 0x61, 640, 400, 8 },
+	{ 0x54, 800, 600, 8 },
+	{ 0x56, 1024, 768, 8 },
+	{ 0x59, 1024, 768, 8 },
+	{ 0x5a, 640, 480, 16 },
+	{ 0x5b, 640, 400, 16 },
+	{ 0x5c, 640, 480, 16 },
+	{ 0x70, 320, 200, 16 },
+	{ 0x60, 800, 600, 16 },
+	{ 0x5f, 640, 480, 24 },
+};
+
+static word32	*g_ss_pix = 0;		// ARGB picture
+static int	g_ss_pix_w = 0, g_ss_pix_h = 0;
+
+// Width, height, bits per pixel, bytes per line and start address of the
+// current VGA picture.  0 if the card shows no VGA picture of its own.
+static int
+ss_geometry(int *w, int *h, int *bpp, word32 *pitch, word32 *start)
+{
+	int	i, vde, dbl;
+
+	if(!g_ss_vram || g_ss_emulating || g_ss_mode == 0) {
+		return 0;
+	}
+	// CRTC start address (registers $0C/$0D), in units of 4 bytes as in
+	// the VGA's 256-colour modes.  Not checked against a real card.
+	*start = (((word32)g_ss_crtc[0x0c] << 8) | g_ss_crtc[0x0d]) * 4;
+	if(g_ss_mode == 0xff) {
+		// A user mode: all the library's tables (5B, 5C, 70) are 32K
+		// colours, with the CRTC offset register in units of 16 bytes
+		*bpp = 16;
+		*pitch = g_ss_crtc[0x13] * 16;
+		*w = *pitch / 2;
+		vde = g_ss_crtc[0x12] | ((g_ss_crtc[0x07] & 0x02) << 7) |
+					((g_ss_crtc[0x07] & 0x40) << 3);
+		vde++;
+		dbl = (g_ss_crtc[0x09] & 0x80) ? 2 : (g_ss_crtc[0x09] & 0x1f) + 1;
+		*h = vde / dbl;
+		if(*w < 64 || *h < 64 || *w > 1024 || *h > 768) {
+			return 0;
+		}
+		return 1;
+	}
+	for(i = 0; i < (int)(sizeof(g_ss_modes) / sizeof(g_ss_modes[0])); i++) {
+		if(g_ss_modes[i].mode == g_ss_mode) {
+			*w = g_ss_modes[i].w;
+			*h = g_ss_modes[i].h;
+			*bpp = g_ss_modes[i].bpp;
+			*pitch = *w * (*bpp / 8);
+			return 1;
+		}
+	}
+	return 0;		// text modes come in phase 4
+}
+
+static word32
+ss_pal_argb(int i)
+{
+	return 0xff000000 | (g_ss_pal[i * 3] << 16) |
+				(g_ss_pal[i * 3 + 1] << 8) | g_ss_pal[i * 3 + 2];
+}
+
+// The card's picture for the window: 1 and an ARGB picture if the card
+// shows a VGA mode, 0 if the window shows the IIgs's own picture.
+// *changed is 1 when the pixels are new since the last call.
+int
+secondsight_picture(word32 **pix, int *w, int *h, word32 *border,
+								int *changed)
+{
+	int	pw, ph, bpp, x, y;
+	word32	pitch, start, a, v, r, g, b;
+	word32	*out;
+	byte	*vram;
+
+	*changed = 0;
+	if(!g_secondsight || !ss_geometry(&pw, &ph, &bpp, &pitch, &start)) {
+		return 0;
+	}
+	if(pw != g_ss_pix_w || ph != g_ss_pix_h || !g_ss_pix) {
+		free(g_ss_pix);
+		g_ss_pix = calloc((size_t)pw * ph, sizeof(word32));
+		g_ss_pix_w = pw;
+		g_ss_pix_h = ph;
+		g_ss_dirty = 1;
+	}
+	*pix = g_ss_pix;
+	*w = pw;
+	*h = ph;
+	*border = g_ss_screen_on ? ss_pal_argb(g_ss_border) : 0xff000000;
+	if(!g_ss_dirty) {
+		return 1;
+	}
+	g_ss_dirty = 0;
+	*changed = 1;
+	vram = g_ss_vram;
+	for(y = 0; y < ph; y++) {
+		out = g_ss_pix + (size_t)y * pw;
+		a = start + y * pitch;
+		if(!g_ss_screen_on) {
+			for(x = 0; x < pw; x++) {
+				out[x] = 0xff000000;
+			}
+			continue;
+		}
+		switch(bpp) {
+		case 8:
+			for(x = 0; x < pw; x++) {
+				out[x] = ss_pal_argb(vram[(a + x) & 0xfffff]);
+			}
+			break;
+		case 16:	// 5-5-5, low byte first
+			for(x = 0; x < pw; x++, a += 2) {
+				v = vram[a & 0xfffff] | (vram[(a + 1) & 0xfffff] << 8);
+				r = (v >> 10) & 0x1f;
+				g = (v >> 5) & 0x1f;
+				b = v & 0x1f;
+				out[x] = 0xff000000 | (((r << 3) | (r >> 2)) << 16) |
+					(((g << 3) | (g >> 2)) << 8) |
+					((b << 3) | (b >> 2));
+			}
+			break;
+		case 24:	// B, G, R as on PC VGA cards; not checked
+			for(x = 0; x < pw; x++, a += 3) {
+				out[x] = 0xff000000 |
+					(vram[(a + 2) & 0xfffff] << 16) |
+					(vram[(a + 1) & 0xfffff] << 8) |
+					vram[a & 0xfffff];
+			}
+			break;
+		}
+	}
+	return 1;
 }
 
 // Test hook (EMUBUDDY_DUMPRAM): video memory, Z180 RAM, palette, registers

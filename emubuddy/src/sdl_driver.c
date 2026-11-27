@@ -2348,6 +2348,65 @@ sdl_blur_kernel(int blur, float *weight)
  * result is a weighted average -- which requires the target to already be cleared
  * to black (both call sites do). With both blurs == 0 this is just the normal
  * crisp 1:1 copy. */
+/* Second Sight VGA card: while it shows a VGA mode of its own, the window
+ * shows that picture (as a monitor on the card's VGA port would) instead of
+ * the IIgs's.  The picture fills the picture area at 4:3, the rest is the
+ * card's border colour.  Returns 1 if it drew. */
+static SDL_Texture	*g_ss_tex = NULL;
+static int		g_ss_tex_w = 0, g_ss_tex_h = 0;
+
+static int
+sdl_render_secondsight(Window_info *win, int w, int h)
+{
+	SDL_Renderer	*r = win->renderer;
+	SDL_FRect	dst;
+	word32		*pix, border;
+	int		pw, ph, changed;
+	float		fw, fh;
+
+	if(!secondsight_picture(&pix, &pw, &ph, &border, &changed)) {
+		return 0;
+	}
+	if(!g_ss_tex || pw != g_ss_tex_w || ph != g_ss_tex_h) {
+		if(g_ss_tex) {
+			SDL_DestroyTexture(g_ss_tex);
+		}
+		g_ss_tex = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888,
+					SDL_TEXTUREACCESS_STATIC, pw, ph);
+		if(!g_ss_tex) {
+			return 0;
+		}
+		SDL_SetTextureBlendMode(g_ss_tex, SDL_BLENDMODE_NONE);
+		SDL_SetTextureScaleMode(g_ss_tex, SDL_SCALEMODE_LINEAR);
+		g_ss_tex_w = pw;
+		g_ss_tex_h = ph;
+		changed = 1;
+	}
+	if(changed) {
+		SDL_UpdateTexture(g_ss_tex, NULL, pix, pw * (int)sizeof(word32));
+	}
+	SDL_SetRenderDrawColor(r, (border >> 16) & 0xff, (border >> 8) & 0xff,
+						border & 0xff, 255);
+	dst.x = 0;
+	dst.y = 0;
+	dst.w = (float)w;
+	dst.h = (float)h;
+	SDL_RenderFillRect(r, &dst);
+	/* every VGA mode fills a 4:3 monitor */
+	fh = (float)h;
+	fw = fh * 4.0f / 3.0f;
+	if(fw > (float)w) {
+		fw = (float)w;
+		fh = fw * 3.0f / 4.0f;
+	}
+	dst.x = ((float)w - fw) / 2.0f;
+	dst.y = ((float)h - fh) / 2.0f;
+	dst.w = fw;
+	dst.h = fh;
+	SDL_RenderTexture(r, g_ss_tex, NULL, &dst);
+	return 1;
+}
+
 static void
 sdl_render_framebuffer(Window_info *win, int w, int h)
 {
@@ -2358,6 +2417,9 @@ sdl_render_framebuffer(Window_info *win, int w, int h)
 	int		kx, ky, hhalf, vhalf, mod;
 	SDL_BlendMode	add;
 
+	if(sdl_render_secondsight(win, w, h)) {
+		return;
+	}
 	hhalf = sdl_blur_kernel(g_hblur, hweight);
 	vhalf = sdl_blur_kernel(g_vblur, vweight);
 

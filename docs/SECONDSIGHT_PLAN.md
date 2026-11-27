@@ -199,19 +199,30 @@ Results:
 - Result: Cogito 2's video memory at frame 3000, drawn offline at 640×400 with its palette, is the same picture GSSquared
   shows (`reference/phase2-cogito2-vram-vs-gssquared.png`). No SetVGAReg went to an unknown port.
 
-### Phase 3: VGA modes and the picture (large; the main part)
+### Phase 3: VGA modes and the picture (large; the main part) — done 2026-11-27
 
-- Work out width, height, colour depth, line pitch and start address from the current VGA registers (sequencer, CRTC,
-  graphics controller, attribute controller, Oak extensions), so SetUserMode and SetVGAReg modes work and not only the
-  fixed SetMode numbers.
-- Render 8-bit (palette of 256 × 18- or 24-bit colours), 15-bit and 24-bit pixels from VGA memory into an ARGB
-  picture of up to 1024×768.
-- `sdl_driver.c`: a second texture for the card's picture. When the card is in a VGA mode with the screen on, the
-  window draws that texture instead of the IIgs picture, scaled to fit the picture area with the right aspect ratio.
-  Status lines, the overlay menus and the CRT effect keep working.
-- Only redraw when VGA memory, the palette or the mode changed (a dirty flag), so the emulator does not slow down.
-- Screenshots and the test hook's frame dumps (`.bmp`) show what the window shows.
-- Done when: each graphics mode's test program shows the same picture as in GSSquared.
+- `secondsight_picture()` (core) turns video memory into an ARGB picture when the card shows a VGA mode of its own
+  (emulation off, a known mode); only when something changed (`g_ss_dirty`). Screen Off gives a black picture.
+- Modes: the numbered ones from a table — 8 bit `$13`, `$53`, `$61`, `$54`, `$56`, `$59`; 32K `$5A`, `$5B`, `$5C`,
+  `$70`, `$60`; 24 bit `$5F`. Mode `$FF` (SetUserMode) is worked out from the registers: all the library's tables are
+  32K colours, so 16 bits per pixel, bytes per line = CRTC `$13` × 16, height = vertical display end (CRTC `$12` and
+  the overflow bits of `$07`) divided by the scan doubling of CRTC `$09`. That gives 640×480 for `$5C` and 320×200 for
+  `$70`. The start address is CRTC `$0C/$0D` × 4 (not checked on a real card; every test program uses 0).
+- Pixel formats: 8 bit through the palette; 32K is 5-5-5, red in bits 14–10, low byte first (confirmed by Sequential's
+  viewer, `a3200.c`); 24 bit is taken as B, G, R as on PC cards — **not confirmed**, no known program shows 24-bit
+  pictures (Sequential's viewer turns them into 32K).
+- `sdl_driver.c`: `sdl_render_secondsight()` runs at the start of `sdl_render_framebuffer()`, so the plain path, the
+  CRT effect, screenshots, recordings and the headless snapshots all get the card's picture. It fills the picture area
+  with the border colour and draws the picture at 4:3 (every VGA mode fills a 4:3 monitor), with linear scaling. Its
+  own texture is rebuilt when the size changes.
+- Test program `SSTEST.SYSTEM` (ProDOS 8, built by `reference/sstest/mktest.py`, 17.7 KB): the library's 640×480×32K
+  user table + SetMode `$FF`, then `$61` with SetPaletteEntry, then `$5F`, then back to emulation with SetMode `$60`;
+  colour bars and a grey band in each. All four are right in EmuBuddy (`reference/sstest/emubuddy-phase3.png`).
+- Cogito 2 shows its title picture in the window after start-up (`reference/phase3-cogito2-emubuddy.png`), as in
+  GSSquared.
+- GSSquared compared with the test program: the 32K user mode is the same; for `$5F` it reads R, G, B (red and blue
+  swapped compared with EmuBuddy), and its `$61` colours after SetPaletteEntry look wrong, though the arguments follow
+  Sequential's documentation and library (entry, R, G, B). EmuBuddy keeps to the documentation.
 
 ### Phase 4: text modes (medium)
 
