@@ -667,10 +667,10 @@ v30_run(word32 n)
 /* ------------------------------------------------------------------ */
 /* The PC's picture. On a real card the ColorView daughterboard sits
  * between the IIgs and its monitor and puts the PC Transporter's picture
- * on the screen while the CGA sends one. Here: while the V30 runs and the
- * CGA's mode register has "video on" (bit 3), video.c shows this picture
+ * on the screen while the CGA sends one. Here: while the CGA's mode
+ * register has "video on" (bit 3), video.c shows this picture
  * instead of the IIgs's. AEPC.SYSTEM turns the CGA on when it starts the PC
- * and off when the PC stops. */
+ * and off when the PC stops; the Control Panel is on the CGA too. */
 
 int
 pcxport_screen_on(void)
@@ -680,8 +680,10 @@ pcxport_screen_on(void)
 	if(apple_only < 0) {	/* for tests: always show the IIgs's screen */
 		apple_only = getenv("EMUBUDDY_PCXPORT_APPLE_SCREEN") != 0;
 	}
-	return !apple_only && g_pcx && g_pcx_slot_in_use && !g_pcx->reset_line &&
-			!g_pcx->halt_line && (g_pcx->cga_mode & 0x08);
+	/* The CGA's "video on" alone, not whether the V30 runs: AEPC.SYSTEM
+	 *  halts the V30 and draws its Control Panel on the CGA itself */
+	return !apple_only && g_pcx && g_pcx_slot_in_use &&
+						(g_pcx->cga_mode & 0x08);
 }
 
 /* The CGA border (overscan) colour, 0-15 */
