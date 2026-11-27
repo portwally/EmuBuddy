@@ -181,6 +181,7 @@ static const struct { const char *en, *de; } g_text[] = {
 	{ "Slot 1 printer", "Slot 1 Drucker" },
 	{ "Slot 2 modem", "Slot 2 Modem" },
 	{ "Window size", "Fenstergröße" },
+	{ "Speech chips", "Sprachchips" },
 	{ "Extra options", "Weitere Optionen" },
 	{ "Drop disks and folders here", "Disks und Ordner hierher ziehen" },
 

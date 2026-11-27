@@ -236,6 +236,8 @@ read_script(const char *path, const char *rompath, Profile *p)
 				i++;
 			} else if(!strcmp(t[i], "-mhz") && i + 1 < n) {
 				profile_set(p, "mhz", t[++i]);
+			} else if(!strcmp(t[i], "-mbspeech") && i + 1 < n) {
+				profile_set(p, "mbspeech", t[++i]);
 			}
 		}
 		free(t);

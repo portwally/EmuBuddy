@@ -247,6 +247,10 @@ profile_build_args(const Profile *p, const char *exe, const char *cfgdir,
 		add(&o, "-mhz");
 		add(&o, v);
 	}
+	if((v = profile_get(p, "mbspeech"))[0]) {	/* speech chips on the Mockingboard or Phasor */
+		add(&o, "-mbspeech");
+		add(&o, v);
+	}
 	for(i = 1; i <= 7; i++) {
 		snprintf(key, sizeof(key), "sl%d", i);
 		if((v = profile_get(p, key))[0]) {

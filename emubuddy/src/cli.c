@@ -115,7 +115,9 @@ usage(void)
 "  -sl2  modem | imagewriter | fujinet | none   modem port; fujinet: the FujiNet as a card\n"
 "                                     of its own (the IIgs can start up from its disks)\n"
 "  -sl3  uthernet2 | voc | secondsight | none\n"
-"  -sl4  mockingboard | uthernet2 | none\n"
+"  -sl4  mockingboard | phasor | uthernet2 | none\n"
+"  -mbspeech 0 | 1 | 2               speech chips (SSI-263) on the Mockingboard or Phasor\n"
+"                                     (default 1)\n"
 "  -sl7  hd | hsscsi | none           hd: the hard disk card (scsi and cffa2 mean the same)\n"
 "                                     hsscsi: Apple II High-Speed SCSI Card; needs its ROM\n"
 "                                     341-0803.bin or a2hsscsi.zip next to the IIgs ROM,\n"
@@ -437,7 +439,7 @@ emubuddy_cli(int *pargc, char ***pargv)
 		if(!v && (is(o, "-flop1") || is(o, "-flop2") || is(o, "-flop3") ||
 				is(o, "-flop4") || !strncasecmp(o, "-hard", 5) ||
 				!strncasecmp(o, "-sl", 3) || is(o, "-share") || is(o, "-bridge") || is(o, "-skin") || is(o, "-webgate") || is(o, "-appletalk") ||
-				is(o, "-mhz") || is(o, "-ramsize") ||
+				is(o, "-mhz") || is(o, "-ramsize") || is(o, "-mbspeech") ||
 				is(o, "-resolution") || is(o, "-scale") ||
 				is(o, "-rompath") || is(o, "-scanlines") ||
 				is(o, "-cdrom") || is(o, "-hsscsirom") ||
@@ -530,6 +532,12 @@ emubuddy_cli(int *pargc, char ***pargv)
 			if(mhz_option(v) != 0) {
 				return -1;
 			}
+		} else if(is(o, "-mbspeech")) {
+			if(strcmp(v, "0") && strcmp(v, "1") && strcmp(v, "2")) {
+				fprintf(stderr, "EmuBuddy: -mbspeech 0, 1 or 2\n");
+				return -1;
+			}
+			emit2("-g_mb_speech", v);
 		} else if(is(o, "-ramsize")) {
 			n = atoi(v);
 			if(n < 0 || n > 14) {

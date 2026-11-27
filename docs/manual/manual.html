@@ -29,7 +29,7 @@
   <p class="legal-title">EmuBuddy User&rsquo;s Guide</p>
   <p>For EmuBuddy 1.1</p>
   <p>&copy; 2026 Walter Tengler. EmuBuddy is free software under the GNU General Public License, version 3. You may copy this guide and give it away, whole and unchanged.</p>
-  <p>EmuBuddy is built on KEGS, the Apple IIgs emulator by Kent Dickey, through GSplus by Dagen Brock, which brought KEGS to SDL. The ImageWriter II emulation comes from the GSport and GSplus line of emulators, and AppleTalk follows the LocalTalk support Peter Neubauer wrote for GSport. The font of EmuBuddy&rsquo;s menus and windows is Shaston 640 by Kreative Software. EmuBuddy uses SDL for its window, input and sound, and libslirp for its network. Ghostscript and FFmpeg are separate programs under their own licenses; EmuBuddy only calls them when you ask for PostScript printing or a video recording.</p>
+  <p>EmuBuddy is built on KEGS, the Apple IIgs emulator by Kent Dickey, through GSplus by Dagen Brock, which brought KEGS to SDL. The ImageWriter II emulation comes from the GSport and GSplus line of emulators, and AppleTalk follows the LocalTalk support Peter Neubauer wrote for GSport. The SSI-263 speech chip is Tamas Geczy&rsquo;s chip model, under the MIT license. The font of EmuBuddy&rsquo;s menus and windows is Shaston 640 by Kreative Software. EmuBuddy uses SDL for its window, input and sound, and libslirp for its network. Ghostscript and FFmpeg are separate programs under their own licenses; EmuBuddy only calls them when you ask for PostScript printing or a video recording.</p>
   <p>EmuBuddy is an independent program. It is not made, sold or endorsed by Apple Inc., and it does not contain the Apple IIgs ROM. Apple, Apple IIgs, GS/OS, ProDOS, ImageWriter, Macintosh and macOS are trademarks of Apple Inc. Windows is a trademark of Microsoft Corporation. Linux is a trademark of Linus Torvalds. Other names are trademarks of their owners.</p>
   <p>This guide is set in Apple Garamond, as Apple&rsquo;s own guides of the time were. The screen pictures were taken from EmuBuddy running Apple&rsquo;s System 6.0.4.</p>
   <p>The homepage: portwally.github.io/EmuBuddy</p>
@@ -313,7 +313,7 @@
       <tr><td>Slot 2, the modem port</td><td>Idle, or a modem that dials Internet addresses in place of phone numbers, for terminal programs</td></tr>
       <tr><td>Either port</td><td>AppleTalk, when the IIgs itself is set to use the port for it. You do not choose that here (Chapter 5).</td></tr>
       <tr><td>Slot 3</td><td>Empty, a Video Overlay Card, the Second Sight VGA card or an Uthernet II network card (see below)</td></tr>
-      <tr><td>Slot 4</td><td>Empty, a Mockingboard sound card or an Uthernet II network card (Chapter 5)</td></tr>
+      <tr><td>Slot 4</td><td>Empty, a Mockingboard or Phasor sound card (see below) or an Uthernet II network card (Chapter 5)</td></tr>
       <tr><td>Slots 5 and 6</td><td>The built-in 3.5-inch and 5.25-inch drives</td></tr>
       <tr><td>Slot 7</td><td>Empty, the Hard Disk Card with its seven hard disks, or the High-Speed SCSI Card (see below)</td></tr>
     </table>
@@ -346,6 +346,12 @@
     <p>Most of the time nothing looks different: on the real card the VGA monitor showed the normal IIgs screen too. When a program switches the card to one of its own modes, the window shows the card&rsquo;s picture, as a monitor on the card would, and when the program switches back, the IIgs screen returns. The picture is drawn at the shape of a VGA monitor, 4:3, with the card&rsquo;s border colour around it.</p>
     <p>Few programs were written for the card. Brutal Deluxe&rsquo;s game <i>The Return of Cogito</i> works; the image viewers made for Second Sight have not been tried yet. Programs that load code into the card&rsquo;s own processor do not; EmuBuddy answers the card&rsquo;s commands itself.</p>
     <div class="note"><span class="nt">By the way</span>Second Sight in EmuBuddy is new. Its 256-colour, 32,768-colour and text modes were tried with Cogito and a test program; 24-bit colour and the text modes have not been checked against a real card. The card&rsquo;s own text fonts are not part of EmuBuddy: text is drawn in the IIgs&rsquo;s own character set, unless a program brings its own font.</div>
+
+    <h2>The Mockingboard and the Phasor</h2>
+    <p>The Mockingboard, made by Sweet Micro Systems, was the sound card of Apple II games: two sound chips with three voices each, one for the left speaker and one for the right. Its sockets took the SSI-263 speech chip, and programs written for it talk. Applied Engineering&rsquo;s Phasor of 1986 has four sound chips, two for each side, and plays Mockingboard programs too; programs made for the Phasor use all four.</p>
+    <p>Choose Mockingboard or Phasor for slot 4 in the Slots window and click Apply. The Speech button below the slots sets how many speech chips the card has: none, one or two. Most cards were sold with one, and so is EmuBuddy&rsquo;s. The change takes effect at once.</p>
+    <p>A program finds the card only when slot 4 is set to Your Card in the Control Panel of the IIgs (see below). Nearly all Mockingboard programs are for ProDOS 8 or DOS 3.3.</p>
+    <div class="note"><span class="nt">By the way</span>The speech chip is Tamas Geczy&rsquo;s model of the SSI-263, which makes every sound from the chip&rsquo;s own phoneme table rather than from recordings. Both cards pass mb-audit, Tom Charlesworth&rsquo;s test disk for these cards. mb-audit only finds a card at 1 MHz; normal programs do not mind the speed. How the speech and the Phasor&rsquo;s music sound has not been compared with real cards yet.</div>
 
     <h2>FujiNet</h2>
     <p>FujiNet is a network and storage device for old computers. On an Apple II it is a row of devices on the disk port: eight disk drives, a network device, a clock, a printer and more. Programs made for FujiNet reach the Internet through it, and its drives hold disk images from this computer or from servers on the Internet.</p>
@@ -735,7 +741,8 @@
       <tr><td><code>-sl1</code> <i>card</i></td><td><code>imagewriter</code>, <code>postscript</code>, <code>modem</code> or <code>none</code></td></tr>
       <tr><td><code>-sl2</code> <i>card</i></td><td><code>modem</code>, <code>imagewriter</code>, <code>postscript</code>, <code>fujinet</code> (the FujiNet as a card of its own) or <code>none</code></td></tr>
       <tr><td><code>-sl3</code> <i>card</i></td><td><code>uthernet2</code>, <code>voc</code> (the Video Overlay Card), <code>secondsight</code> (the Second Sight VGA card) or <code>none</code></td></tr>
-      <tr><td><code>-sl4</code> <i>card</i></td><td><code>mockingboard</code>, <code>uthernet2</code> or <code>none</code></td></tr>
+      <tr><td><code>-sl4</code> <i>card</i></td><td><code>mockingboard</code>, <code>phasor</code>, <code>uthernet2</code> or <code>none</code></td></tr>
+      <tr><td><code>-mbspeech</code> <i>n</i></td><td>Speech chips on the Mockingboard or Phasor: <code>0</code>, <code>1</code> (if not given) or <code>2</code></td></tr>
       <tr><td><code>-sl7</code> <i>card</i></td><td><code>hd</code> (the Hard Disk Card; <code>scsi</code> means the same), <code>hsscsi</code> (the High-Speed SCSI Card) or <code>none</code></td></tr>
       <tr><td><code>-cdrom</code> <i>image</i></td><td>A CD image in the CD-ROM drive of the High-Speed SCSI Card</td></tr>
       <tr><td><code>-hsscsirom</code> <i>file</i></td><td>The ROM file of the High-Speed SCSI Card</td></tr>

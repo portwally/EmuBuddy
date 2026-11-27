@@ -13,6 +13,7 @@ extern char	*g_serial_device[2];
 extern int	g_voc_enable;
 extern int	g_secondsight;
 extern int	g_slot4_mockingboard;
+extern int	g_mb_speech;		/* mbspeech.c: speech chips 0-2 */
 extern int	g_slot7_scsi;
 extern int	g_uthernet2_slot;
 extern int	g_config_kegs_update_needed;
@@ -41,7 +42,7 @@ static const SlotDef g_slots[7] = {
 	{ "Printer Port", { "Idle", "Modem", "ImageWriter", "PostScript" }, 4, 15, NULL },
 	{ "Modem Port", { "Idle", "Modem", "FujiNet", NULL }, 3, 7, NULL },
 	{ "Video / Net", { "Empty", "Overlay", "Second Sight", "Uthernet II" }, 4, 15, NULL },
-	{ "Sound / Net", { "Empty", "Mockingboard", "Uthernet II", NULL }, 3, 7, NULL },
+	{ "Sound / Net", { "Empty", "Mockingboard", "Phasor", "Uthernet II" }, 4, 15, NULL },
 	{ "3.5\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
 	{ "5.25\" Drives", { NULL, NULL, NULL, NULL }, 0, 0, "Built in (see Drives)" },
 	{ "Storage", { "Empty", "Hard Disk Card", "HS SCSI Card", NULL }, 3, 7, NULL },
@@ -66,7 +67,11 @@ slot_current(int i)
 		return g_serial_cfg[1] == 1 ? 1 : (g_serial_cfg[1] == 0 ? 0 : -1);
 	case 2: return g_uthernet2_slot == 3 ? 3 : g_secondsight ? 2 :
 						(g_voc_enable ? 1 : 0);
-	case 3: return g_uthernet2_slot == 4 ? 2 : (g_slot4_mockingboard ? 1 : 0);
+	case 3:	/* 1 Mockingboard, 2 Phasor (g_slot4_mockingboard), 3 Uthernet II */
+		if(g_slot4_mockingboard == 1 || g_slot4_mockingboard == 2) {
+			return g_slot4_mockingboard;
+		}
+		return g_uthernet2_slot == 4 ? 3 : 0;
 	case 6: return (g_slot7_scsi >= 0 && g_slot7_scsi <= 2) ? g_slot7_scsi : 1;
 	}
 	return 0;
@@ -131,11 +136,8 @@ apply(void)
 	}
 	g_voc_enable = g_pend[2] == 1;
 	g_secondsight = g_pend[2] == 2;
-	/* a Phasor (set with -sl4 phasor) stays a Phasor: the window shows it as
-	 * Mockingboard until it gets its own entry */
-	g_slot4_mockingboard = (g_pend[3] == 1) ?
-				(g_slot4_mockingboard == 2 ? 2 : 1) : 0;
-	g_uthernet2_slot = (g_pend[2] == 3) ? 3 : (g_pend[3] == 2) ? 4 : 0;
+	g_slot4_mockingboard = (g_pend[3] == 1 || g_pend[3] == 2) ? g_pend[3] : 0;
+	g_uthernet2_slot = (g_pend[2] == 3) ? 3 : (g_pend[3] == 3) ? 4 : 0;
 	g_slot7_scsi = g_pend[6];	/* 0 empty, 1 hard disk card, 2 HS SCSI */
 	g_config_kegs_update_needed = 1;
 	if(restart) {
@@ -188,9 +190,9 @@ slots_draw(UiWindow *win, int cx, int cy)
 		if(ui_segment(win, cx, cy, 196, y + 2, cw - 196 - 10, 24,
 				s->labels, s->n, &g_pend[i], s->enabled)) {
 			/* there is one Uthernet II card: slot 3 or slot 4 */
-			if(i == 2 && g_pend[2] == 3 && g_pend[3] == 2) {
+			if(i == 2 && g_pend[2] == 3 && g_pend[3] == 3) {
 				g_pend[3] = 0;
-			} else if(i == 3 && g_pend[3] == 2 && g_pend[2] == 3) {
+			} else if(i == 3 && g_pend[3] == 3 && g_pend[2] == 3) {
 				g_pend[2] = 0;
 			}
 		}
@@ -230,6 +232,16 @@ slots_draw(UiWindow *win, int cx, int cy)
 		ui_message(g_fujinet ? "FujiNet on - start FujiNet-PC" :
 							"FujiNet off");
 	}
+	/* the Mockingboard's or Phasor's speech chips: at once, no restart */
+	if(ui_button(win, cx, cy, 10 + 2 * (110 + 8), by, 110, 24,
+			g_mb_speech >= 2 ? "Speech: Two" : g_mb_speech == 1 ?
+			"Speech: One" : "Speech: None", 1)) {
+		g_mb_speech = (g_mb_speech + 1) % 3;
+		g_config_kegs_update_needed = 1;
+		ui_message(g_mb_speech == 0 ? "No speech chips (SSI-263)" :
+			g_mb_speech == 1 ? "One speech chip (SSI-263)" :
+						"Two speech chips (SSI-263)");
+	}
 	if(ui_button(win, cx, cy, cw - 10 - 80, by, 80, 24, "Apply", dirty)) {
 		apply();
 	}
@@ -254,7 +266,7 @@ ui_slots_toggle(void)
 	}
 	load_pending();
 	snprintf(g_slots_win.title, sizeof(g_slots_win.title), "Slots");
-	g_slots_win.w = 580;
+	g_slots_win.w = 620;		/* four choices of up to "Mockingboard" */
 	g_slots_win.h = UI_TITLE_H + 6 + 7 * ROW_H + 4 + 102 + 8 + 24 + 12;
 	g_rom_found = hsscsi_rom_found();
 	g_slots_win.closable = 1;

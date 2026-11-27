@@ -162,10 +162,22 @@ Kept outside the repository in `/Applications/Emulatoren/Apple IIgs disks/Mockin
 - Not checked: the Phasor's own disks (`phasor1-4.dsk`) and programs that use Echo+ mode; how the music sounds next
   to a real Phasor (by ear).
 
-### Phase 3: settings, Launcher and documents (small)
+### Phase 3: settings, Launcher and documents (small) — done 2026-11-27
 
-- Slots window slot 4: Empty / Mockingboard / Phasor / Uthernet II, and the speech-chip setting; CLI `-sl4 phasor`,
-  `-mbspeech 0|1|2`; Launcher keys; README, `docs/CLI.md`, the manual (credit for the chip model), PDF rebuilt.
+- Slots window, slot 4 "Sound / Net": **Empty / Mockingboard / Phasor / Uthernet II**; a **Speech** button next to
+  FujiNet On cycles None / One / Two (at once, no restart; saved in the config). The window is 620 pixels wide now
+  (was 580), so that "Mockingboard" fits one of four buttons. New picture in the manual (`docs/manual/img/slots.png`).
+- Command line: `-sl4 phasor` and `-mbspeech 0|1|2` (`-help`, `docs/CLI.md`).
+- Launcher: `sl4 = phasor` as a fourth choice, a "Speech chips" row (`mbspeech = 0|1|2`, German "Sprachchips") passed
+  on as `-mbspeech`; imported start scripts keep `-mbspeech`; the "Sound card" switch and the game facts count a
+  Phasor as a sound card (the switch leaves a Phasor a Phasor).
+- README (slots table, a paragraph, credits), the manual (slots table, a section "The Mockingboard and the Phasor",
+  command-line table, credit for Tamas Geczy's chip model on the copyright page, index entries Phasor and speech
+  chips); `docs/EmuBuddy-Manual.pdf` rebuilt (63 pages).
+- Checked: `-showconfig` for the new options and a bad `-mbspeech 3` (exit code 2); the Slots window headless, with
+  clicks: Phasor → Uthernet II → Apply, and Mockingboard → Phasor → Apply, and the Speech button; the Launcher tests
+  (`test_profile`, `test_attract`, `test_jpeg`, `test_lang`, `test_library`) pass.
+- Not checked: a picture of the Launcher's editor with the new row (the Launcher does not run headless).
 
 ### Phase 4: Votrax SC-01 (small–medium, optional)
 

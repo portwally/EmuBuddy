@@ -863,7 +863,8 @@ static Choice g_ch[] = {
 	{ "sl1", { "none", "imagewriter", "postscript", "modem" }, 4, 0 },
 	{ "sl2", { "none", "modem", "imagewriter", "fujinet" }, 4, 0 },
 	{ "sl3", { "none", "uthernet2", "voc", "secondsight" }, 4, 0 },
-	{ "sl4", { "none", "mockingboard", "uthernet2" }, 3, 0 },
+	{ "sl4", { "none", "mockingboard", "phasor", "uthernet2" }, 4, 0 },
+	{ "mbspeech", { "0", "1", "2" }, 3, -1 },
 	{ "sl7", { "none", "scsi", "hsscsi" }, 3, 1 },	/* scsi: the hard disk card */
 	{ "scale", { "1", "2", "3", "4" }, 4, -1 },
 };
@@ -1049,7 +1050,7 @@ edit_draw(UiWindow *win, int cx, int cy)
 {
 	int	y = 8, i, lc = 110, bw_lib, bw_choose, xlib, xch, xclr, fend_file, fend_dir;
 	static const char *names[] = { "Memory", "Speed (MHz)", "Slot 1 printer", "Slot 2 modem",
-		"Slot 3", "Slot 4", "Slot 7", "Window size" };
+		"Slot 3", "Slot 4", "Speech chips", "Slot 7", "Window size" };
 
 	/* the label column is as wide as the widest label in the skin's font */
 	for(i = 0; i < NPF; i++) {
@@ -1213,7 +1214,7 @@ edit_open_full(void)
 	focus_clear();
 	snprintf(g_edit_win.title, sizeof(g_edit_win.title), "%s", g_e.is_new ? T("New Profile") : T("Edit Profile"));
 	g_edit_win.w = 740;
-	g_edit_win.h = 614;
+	g_edit_win.h = 614 + 24;		/* + the speech-chip row */
 	g_edit_win.modal = 1;
 	g_edit_win.closable = 1;
 	g_edit_win.draw = edit_draw;
@@ -1262,7 +1263,7 @@ ch_set(const char *key, const char *v)
 static void
 easy_read(void)
 {
-	g_easy_sound = !strcmp(ch_value("sl4"), "mockingboard");
+	g_easy_sound = !strcmp(ch_value("sl4"), "mockingboard") || !strcmp(ch_value("sl4"), "phasor");
 	g_easy_net = !strcmp(ch_value("sl3"), "uthernet2") || !strcmp(ch_value("sl4"), "uthernet2");
 	g_easy_print = !strcmp(ch_value("sl1"), "imagewriter") || !strcmp(ch_value("sl1"), "postscript");
 	g_easy_fast = g_ch[ch_index("mhz")].sel >= 3;
@@ -1271,7 +1272,9 @@ easy_read(void)
 static void
 easy_sound_set(void)
 {
-	ch_set("sl4", g_easy_sound ? "mockingboard" : "none");
+	if(!g_easy_sound || strcmp(ch_value("sl4"), "phasor")) {	/* a Phasor stays a Phasor */
+		ch_set("sl4", g_easy_sound ? "mockingboard" : "none");
+	}
 }
 
 static void
@@ -2145,7 +2148,7 @@ lib_draw(UiWindow *win, int cx, int cy)
 	static const char *names[640];
 	static const char *keys[][2] = { { "rom", "ROM" }, { "ramsize", "Memory" },
 		{ "mhz", "Speed" }, { "sl1", "Slot 1" }, { "sl2", "Slot 2" }, { "sl3", "Slot 3" },
-		{ "sl4", "Slot 4" }, { "sl7", "Slot 7" }, { "hard1", "Hard disk 1" },
+		{ "sl4", "Slot 4" }, { "mbspeech", "Speech chips" }, { "sl7", "Slot 7" }, { "hard1", "Hard disk 1" },
 		{ "hard2", "Hard disk 2" }, { "hard3", "Hard disk 3" }, { "hard4", "Hard disk 4" },
 		{ "hard5", "Hard disk 5" }, { "hard6", "Hard disk 6" }, { "hard7", "Hard disk 7" },
 		{ "cdrom", "CD-ROM" }, { "flop3", "3.5\" drive 1" }, { "flop4", "3.5\" drive 2" },

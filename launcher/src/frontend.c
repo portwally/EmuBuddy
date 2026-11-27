@@ -596,7 +596,7 @@ facts(const Profile *p, char *out, int n)
 	if(!strcmp(profile_get(p, "sl3"), "uthernet2") || !strcmp(profile_get(p, "sl4"), "uthernet2")) {
 		fact(out, n, T("Internet"));
 	}
-	if(!strcmp(profile_get(p, "sl4"), "mockingboard")) {
+	if(!strcmp(profile_get(p, "sl4"), "mockingboard") || !strcmp(profile_get(p, "sl4"), "phasor")) {
 		fact(out, n, T("Sound card"));
 	}
 	if(!strcmp(profile_get(p, "sl1"), "imagewriter") || !strcmp(profile_get(p, "sl1"), "postscript")) {

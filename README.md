@@ -157,7 +157,7 @@ The same convention is used everywhere, so a file can travel in both directions 
 | 1 Printer port | Idle, Modem, ImageWriter (a printer), PostScript (a PostScript printer) |
 | 2 Modem port | Idle, Modem (a virtual modem for telnet and BBS programs) |
 | 3 | Empty, Video Overlay Card, Second Sight VGA card, Uthernet II |
-| 4 | Empty, Mockingboard, Uthernet II |
+| 4 | Empty, Mockingboard, Phasor, Uthernet II |
 | 5, 6 | The built-in disk drives (see Drives) |
 | 7 | Empty, Hard Disk Card (seven hard disks), High-Speed SCSI Card |
 
@@ -173,6 +173,12 @@ hard disk has to be in its drive when the IIgs starts; a CD can go in at any tim
 window shows the card's picture (up to 640×480 in 256 or 32,768 colours, and 40- or 80-column text) instead of the
 IIgs's, as a monitor on the card would. Programs for it are few: Brutal Deluxe's *The Return of Cogito* and the image
 viewers made for the card. No card ROM is needed. New; the manual says what works.
+
+**Mockingboard and Phasor** (slot 4) are the sound cards of Apple II games and music programs. The Mockingboard has two
+sound chips (AY-3-8913) and sockets for the SSI-263 speech chip, so programs written for it can talk. Applied
+Engineering's Phasor has four sound chips and plays Mockingboard programs too. **Speech:** in the Slots window (None,
+One or Two; one is the default, as on most cards sold). Both cards pass the mb-audit test disk. Programs find a card in
+slot 4 only when slot 4 is set to "Your Card" in the IIgs Control Panel.
 
 **FujiNet.** With [FujiNet-PC](https://github.com/FujiNetWIFI/fujinet-firmware) running on your computer
 (`./run-fujinet -u http://127.0.0.1:8000`), click **FujiNet On** in the Slots window: the FujiNet's eight disk drives, its
@@ -429,6 +435,9 @@ License, version 3** (see [LICENSE](LICENSE)).
 - The **ImageWriter II** emulation comes from the GSport and GSplus line of emulators (originally from DOSBox).
 - **AppleTalk** follows the LocalTalk support of GSport by Peter Neubauer (how the serial chip serves the IIgs
   firmware, and the LLAP dialogs); LocalTalk over UDP is the transport of Mini vMac and TashRouter.
+- The **SSI-263 speech chip** is Tamas Geczy's chip model ([ssi263-speech](https://github.com/tgeczy/ssi263-speech),
+  MIT license), in `emubuddy/src/ssi263/`. How the Mockingboard and the Phasor behave follows AppleWin's notes from
+  real cards, and Tom Charlesworth's mb-audit was the test disk.
 - The **Shaston** font used for the menus and windows is the IIgs system font.
 - **SDL3** for windows, input and sound, and **libslirp** for the virtual network.
 - **Ghostscript** and **FFmpeg** are separate programs that EmuBuddy calls when you print PostScript or record
