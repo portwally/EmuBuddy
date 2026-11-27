@@ -198,6 +198,9 @@ int	ui_controllers_is_open(void);
 
 /* ---- EmuBuddy app layer (ui_app.c) ---- */
 void	ui_app_init(SDL_Window *w, SDL_Renderer *r);
+/* Type the PC Transporter Control Panel hotkey (sdl_driver.c): Shift held,
+ * Caps Lock on and off twice. */
+void	sdl_pcxport_panel_hotkey(void);
 /* Put a dropped/chosen disk image into the first suitable empty drive. */
 void	ui_insert_auto(const char *path);
 void	ui_file_browser_open(const char *title, void (*pick)(const char *path));

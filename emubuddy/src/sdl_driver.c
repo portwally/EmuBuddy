@@ -827,6 +827,9 @@ sdl_scancode_to_a2code(SDL_Scancode sc)
 /* Translate SDL's modifier state into the IIgs c025 modifier register
  * (bit0 = shift, bit1 = control, bit2 = caps lock), as x_update_modifier_state
  * does for X11. */
+static word32	g_pct_c025_or = 0;	/* PC Transporter hotkey: forced bits */
+static word32	g_pct_c025_xor = 0;
+
 static void
 sdl_update_modifiers(Window_info *win)
 {
@@ -836,7 +839,57 @@ sdl_update_modifiers(Window_info *win)
 	if(mod & SDL_KMOD_SHIFT) { c025_val |= 1; }
 	if(mod & SDL_KMOD_CTRL)  { c025_val |= 2; }
 	if(mod & SDL_KMOD_CAPS)  { c025_val |= 4; }
+	c025_val = (c025_val | g_pct_c025_or) ^ g_pct_c025_xor;
 	adb_update_c025_mask(win->kimage_ptr, c025_val, 7);
+}
+
+/* ---- PC Transporter Control Panel hotkey ----
+ * The AE driver opens its panel on Shift held while Caps Lock goes on and off
+ * twice. A Mac keyboard often never sends Caps Lock to us (or turns it into an
+ * input-source switch), so the Machine menu types it: one step every few
+ * frames, so the 6502 main loop sees each change of $C025. */
+static int	g_pct_hotkey_frame = -1;
+
+void
+sdl_pcxport_panel_hotkey(void)
+{
+	if(g_pct_hotkey_frame < 0) {
+		g_pct_hotkey_frame = 0;
+	}
+}
+
+static void
+sdl_pcxport_hotkey_tick(Window_info *win)
+{
+	int	f;
+
+	f = g_pct_hotkey_frame;
+	if(f < 0) {
+		return;
+	}
+	switch(f) {
+	case 0:				/* Shift down */
+		g_pct_c025_or = 1;
+		sdl_update_modifiers(win);
+		adb_physical_key_update(win->kimage_ptr, 0x38, 0, 0);
+		break;
+	case 6: case 18:		/* Caps Lock pressed: it toggles */
+		g_pct_c025_xor ^= 4;
+		sdl_update_modifiers(win);
+		adb_physical_key_update(win->kimage_ptr, 0x39, 0, 0);
+		break;
+	case 9: case 21:
+		adb_physical_key_update(win->kimage_ptr, 0x39, 0, 1);
+		break;
+	case 30:			/* Shift up, done */
+		adb_physical_key_update(win->kimage_ptr, 0x38, 0, 1);
+		g_pct_c025_or = 0;
+		g_pct_c025_xor = 0;
+		sdl_update_modifiers(win);
+		g_pct_hotkey_frame = -1;
+		return;
+	}
+	g_pct_hotkey_frame = f + 1;
 }
 
 static void
@@ -1401,6 +1454,7 @@ sdl_poll_events(void)
 	sdl_sync_fullscreen(win);
 	sdl_update_cursor_visibility();
 	sdl_drain_key_queue(win);
+	sdl_pcxport_hotkey_tick(win);
 
 	while(SDL_PollEvent(&ev)) {
 		if(ev.type == SDL_EVENT_DROP_BEGIN || ev.type == SDL_EVENT_DROP_FILE ||
@@ -1771,7 +1825,8 @@ sdl_dev_mouse(Window_info *win, int frames)
  * key, "opt" Option; "semi" is the ; key, because a ; ends an entry). The key
  * goes down at frame and up 3 frames later; "shift/hold" only presses it,
  * "shift/release" only lets it go (Shift held while Caps Lock goes on and
- * off twice: the PC Transporter's control panel). */
+ * off twice: the PC Transporter's control panel; "pctpanel" types that
+ * the way the Machine menu does). */
 static void
 sdl_dev_keys(Window_info *win, int frames)
 {
@@ -1793,7 +1848,9 @@ sdl_dev_keys(Window_info *win, int frames)
 			*slash = 0;
 		}
 		down = (f == frames) && only != 'r';
-		if(down || (only == 0 && f + 3 == frames) ||
+		if(!strcmp(combo, "pctpanel")) {
+			if(down) sdl_pcxport_panel_hotkey();
+		} else if(down || (only == 0 && f + 3 == frames) ||
 					(only == 'r' && f == frames)) {
 			nmods = 0;
 			km = SDL_KMOD_NONE;

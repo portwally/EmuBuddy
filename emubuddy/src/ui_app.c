@@ -4,6 +4,7 @@
 #include "pathutil.h"
 #include "ui.h"
 #include "uthernet2.h"
+#include "pcxport.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,7 +61,7 @@ void		sdl_request_screenshot(void);
 
 enum {
 	CMD_OPEN_DISK = 1, CMD_QUIT, CMD_CHOOSE_ROM, CMD_DRIVES, CMD_EJECT_ALL,
-	CMD_SHARE, CMD_BROWSER,
+	CMD_SHARE, CMD_BROWSER, CMD_PCT_PANEL,
 	CMD_RESET = 10, CMD_PAUSE, CMD_SLOTS, CMD_PRINTER, CMD_HARD_RESET,
 	CMD_SPEED_1 = 20, CMD_SPEED_28, CMD_ZIP_8, CMD_ZIP_16, CMD_ZIP_32,
 	CMD_ZIP_64, CMD_ZIP_128, CMD_UNLIMITED,
@@ -101,6 +102,8 @@ static const UiMenuItem machine_items[] = {
 	{ "Slots...", CMD_SLOTS, "F4", 0 },
 	{ "Printer", CMD_PRINTER, NULL, 0 },
 	{ "Controllers...", CMD_CONTROLLERS, NULL, 0 },
+	{ "", 0, NULL, UI_MI_SEP },
+	{ "PC Transporter Control Panel", CMD_PCT_PANEL, NULL, 0 },
 };
 static const UiMenuItem speed_items[] = {
 	{ "1.0 MHz", CMD_SPEED_1, NULL, 0 },
@@ -633,6 +636,7 @@ app_command(int id)
 	case CMD_CHOOSE_ROM: ui_file_browser_open("Choose ROM File", rom_picked); break;
 	case CMD_DRIVES: ui_drives_toggle(); break;
 	case CMD_SLOTS: ui_slots_toggle(); break;
+	case CMD_PCT_PANEL: sdl_pcxport_panel_hotkey(); break;
 	case CMD_PRINTER: ui_printer_toggle(); break;
 	case CMD_CONTROLLERS: ui_controllers_toggle(); break;
 	case CMD_EJECT_ALL: ui_eject_all(); break;
@@ -700,6 +704,7 @@ app_item_state(int id)
 	case CMD_DRIVES: return ui_drives_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_BROWSER: return ui_browser_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_SLOTS: return ui_slots_is_open() ? UI_MI_CHECKED : 0;
+	case CMD_PCT_PANEL: return g_pcxport_slot ? 0 : UI_MI_DISABLED;
 	case CMD_PRINTER: return ui_printer_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_CONTROLLERS: return ui_controllers_is_open() ? UI_MI_CHECKED : 0;
 	case CMD_SPEED_1: return g_limit_speed == 1 ? UI_MI_CHECKED : 0;
