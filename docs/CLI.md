@@ -51,7 +51,7 @@ used when its slot is set to "Your Card" in the IIgs Control Panel.
 |---|---|
 | `-rom <file>` | IIgs ROM file (ROM 01 or ROM 03) |
 | `-rompath <folder>` | find the ROM file in this folder |
-| `-ramsize <n>M` | memory expansion, `0M`–`8M` |
+| `-ramsize <n>M` | memory expansion, `0M`–`14M` (more than 8 MB as with an AppleSqueezer; the IIgs then has about 14 MB) |
 | `-mhz <n>` | `1`, `2.8` (stock), `8`, `16`, `32`, `64`, `128` (ZipGS) or `max` |
 | `-nothrottle` | as fast as possible (same as `-mhz max`) |
 

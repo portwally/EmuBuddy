@@ -104,6 +104,7 @@ INDEX = [
     ("Share a Folder", ["Share a Folder", "Share Folder"]),
     ("shared folders", ["shared folder", "Shared folder"]),
     ("Second Sight VGA card", ["Second Sight"]),
+    ("AppleSqueezer", ["AppleSqueezer"]),
     ("ShrinkIt archives", ["ShrinkIt"]),
     ("skins", ["skin"]),
     ("slots", ["slot ", "Slots"]),

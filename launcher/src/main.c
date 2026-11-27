@@ -858,7 +858,7 @@ typedef struct {
 } Choice;
 
 static Choice g_ch[] = {
-	{ "ramsize", { "0M", "1M", "2M", "4M", "8M" }, 5, -1 },
+	{ "ramsize", { "0M", "1M", "2M", "4M", "8M", "12M", "14M" }, 7, -1 },
 	{ "mhz", { "1", "2.8", "8", "16", "32", "64", "128", "max" }, 8, -1 },
 	{ "sl1", { "none", "imagewriter", "postscript", "modem" }, 4, 0 },
 	{ "sl2", { "none", "modem", "imagewriter", "fujinet" }, 4, 0 },

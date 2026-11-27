@@ -124,7 +124,7 @@ usage(void)
 "Machine:\n"
 "  -rom <file>          IIgs ROM file (ROM 01 or ROM 03)\n"
 "  -rompath <folder>    look for the ROM file in this folder\n"
-"  -ramsize <n>M        memory expansion (0M-8M)\n"
+"  -ramsize <n>M        memory expansion (0M-14M)\n"
 "  -mhz <n>             1, 2.8 (stock), 8, 16, 32, 64, 128 (ZipGS) or max\n"
 "  -nothrottle          run as fast as possible (same as -mhz max)\n"
 "\n"
@@ -530,8 +530,8 @@ emubuddy_cli(int *pargc, char ***pargv)
 			}
 		} else if(is(o, "-ramsize")) {
 			n = atoi(v);
-			if(n < 0 || n > 8) {
-				fprintf(stderr, "EmuBuddy: -ramsize 0M to 8M\n");
+			if(n < 0 || n > 14) {
+				fprintf(stderr, "EmuBuddy: -ramsize 0M to 14M\n");
 				return -1;
 			}
 			snprintf(buf, sizeof(buf), "%d", n * 1024 * 1024);
