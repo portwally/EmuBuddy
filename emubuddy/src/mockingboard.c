@@ -24,28 +24,107 @@ dword64	g_mockingboard_event_int_dusec = 0ULL;	// 0 -> no event pending
 
 extern int g_irq_pending;
 extern double g_dsamps_per_dfcyc;
+extern int g_slot4_mockingboard;
+
+// EmuBuddy: the Phasor (Applied Engineering), docs/SPEECH_PHASOR_PLAN.md.
+//  g_slot4_mockingboard == 2.  Four AY-3-8913, two on each 6522, and three
+//  modes set through $C0C0-$C0CF: 0 Mockingboard, 5 Phasor native, 7 Echo+.
+//  The card's behaviour follows AppleWin's notes from real Phasor hardware.
+int	g_phasor_mode = 0;
+int	g_mock_clk_mul = 1;		// AY clock: 2 in Phasor native mode
+
+static Ay8913 *
+mock_ay(int pair_num, int chip)
+{
+	if(chip) {
+		return &(g_mockingboard.pair[pair_num].ay8913_b);
+	}
+	return &(g_mockingboard.pair[pair_num].ay8913);
+}
+
+int
+mock_phasor_native(void)
+{
+	return (g_slot4_mockingboard == 2) && (g_phasor_mode == 5);
+}
+
+// Number of AY chips that can sound: 4 on a Phasor, 2 on a Mockingboard
+int
+mock_num_ays(void)
+{
+	return (g_slot4_mockingboard == 2) ? 4 : 2;
+}
+
+// The AY for sound.c: ay 0, 1 are the first AY of 6522 0, 1 (left, right);
+//  ay 2, 3 the Phasor's second AY of 6522 0, 1
+struct Ay8913_st *
+mock_ay_num(int ay)
+{
+	return mock_ay(ay & 1, ay >> 1);
+}
+
+static void
+phasor_set_mode(word32 mode, dword64 dfcyc)
+{
+	int	old_native;
+
+	old_native = mock_phasor_native();
+	if(g_phasor_mode != (int)mode) {
+		sound_play(dfcyc);		// the old clock up to now
+	}
+	g_phasor_mode = mode & 7;
+	g_mock_clk_mul = (g_phasor_mode == 5) ? 2 : 1;
+	if(g_phasor_mode == 0) {
+		g_mockingboard.pair[0].ay_sel[0] = 1;
+		g_mockingboard.pair[1].ay_sel[0] = 1;
+	}
+	if(old_native != mock_phasor_native()) {
+		mbspeech_card_mode(dfcyc);
+	}
+}
+
+// Any access to $C0C0-$C0CF (slot 4's device select) with a Phasor in slot 4
+void
+phasor_devsel(word32 loc, dword64 dfcyc)
+{
+	word32	mode;
+
+	mode = g_phasor_mode;
+	if(loc & 8) {
+		mode = 0;
+	}
+	mode |= (loc & 7);
+	if(getenv("EMUBUDDY_SPEECHLOG")) {	// the Phasor's mode switches
+		printf("Phasor: $C0%02X, mode %d -> %d\n", loc & 0xff,
+						g_phasor_mode, mode);
+	}
+	phasor_set_mode(mode, dfcyc);
+}
 
 void
 mock_ay8913_reset(int pair_num, dword64 dfcyc)
 {
 	Ay8913	*ay8913ptr;
-	int	i;
+	int	i, chip;
 
 	if(dfcyc) {
 		// Avoid unused parameter warning
 	}
-	ay8913ptr = &(g_mockingboard.pair[pair_num].ay8913);
-	ay8913ptr->reg_addr_latch = 16;		// out-of-range, mb-audit1.3
-	for(i = 0; i < 16; i++) {
-		ay8913ptr->regs[i] = 0;
+	// The reset line reaches both AYs of a Phasor, whatever its mode
+	for(chip = 0; chip < 2; chip++) {
+		ay8913ptr = mock_ay(pair_num, chip);
+		ay8913ptr->reg_addr_latch = 16;	// out-of-range, mb-audit1.3
+		for(i = 0; i < 16; i++) {
+			ay8913ptr->regs[i] = 0;
+		}
+		for(i = 0; i < 3; i++) {
+			ay8913ptr->toggle_tone[i] = 0;
+			ay8913ptr->tone_samp[i] = 0;
+		}
+		ay8913ptr->noise_val = 0x12345678;
+		ay8913ptr->noise_samp = 0;
+		ay8913ptr->env_dsamp = 0;
 	}
-	for(i = 0; i < 3; i++) {
-		ay8913ptr->toggle_tone[i] = 0;
-		ay8913ptr->tone_samp[i] = 0;
-	}
-	ay8913ptr->noise_val = 0x12345678;
-	ay8913ptr->noise_samp = 0;
-	ay8913ptr->env_dsamp = 0;
 }
 
 void
@@ -75,6 +154,7 @@ mockingboard_reset(dword64 dfcyc)
 
 	mock_ay8913_reset(0, dfcyc);
 	mock_ay8913_reset(1, dfcyc);
+	phasor_set_mode(0, dfcyc);		// reset: Mockingboard mode
 }
 
 void
@@ -277,25 +357,68 @@ mockingboard_event(dword64 dfcyc)
 	mock_update_timers(1, dfcyc);
 }
 
+// Which 6522s an address in $Cnxx selects: bit 0 the first, bit 1 the second
+static int
+mock_via_cs(word32 loc)
+{
+	if(g_slot4_mockingboard != 2 || g_phasor_mode == 0) {
+		return ((loc >> 7) & 1) + 1;		// Mockingboard: A7
+	}
+	if(g_phasor_mode == 5) {			// native: A7 and A4
+		return ((loc & 0x80) >> 6) | ((loc & 0x10) >> 4);
+	}
+	if(g_phasor_mode == 7) {			// Echo+: the second
+		return 2;
+	}
+	return 0;
+}
+
 word32
 mockingboard_read(word32 loc, dword64 dfcyc)
 {
-	int	pair_num;
+	word32	val;
+	int	cs, any;
 
 	// printf("mockingboard read: %04x\n", loc);
-	pair_num = (loc >> 7) & 1;		// 0 or 1
-	return mock_6522_read(pair_num, loc & 0xf, dfcyc);
+	cs = mock_via_cs(loc);
+	val = 0;
+	any = 0;
+	if(cs & 1) {
+		val |= mock_6522_read(0, loc & 0xf, dfcyc);
+		any = 1;
+	}
+	if(cs & 2) {
+		val |= mock_6522_read(1, loc & 0xf, dfcyc);
+		any = 1;
+	}
+	if(mock_phasor_native() && !(loc & 0x90) && (loc & 0x60)) {
+		// Phasor native: the speech chips can be read, A/R in bit 7
+		val = (float_bus(dfcyc) & 0x7f) |
+					mbspeech_read(loc & 0xff, dfcyc);
+		any = 1;
+	}
+	if(!any) {
+		return float_bus(dfcyc);
+	}
+	return val;
 }
 
 void
 mockingboard_write(word32 loc, word32 val, dword64 dfcyc)
 {
-	int	pair_num;
+	int	cs;
 
 	// printf("mockingboard write: %04x=%02x\n", loc, val);
-	pair_num = (loc >> 7) & 1;		// 0 or 1
-	mock_6522_write(pair_num, loc & 0xf, val, dfcyc);
-	if(loc & 0x60) {			// EmuBuddy: the speech chips
+	cs = mock_via_cs(loc);
+	if(cs & 1) {
+		mock_6522_write(0, loc & 0xf, val, dfcyc);
+	}
+	if(cs & 2) {
+		mock_6522_write(1, loc & 0xf, val, dfcyc);
+	}
+	if((loc & 0x60) && (g_slot4_mockingboard != 2 ||
+					g_phasor_mode != 7)) {
+		// EmuBuddy: the speech chips (none in Echo+ mode)
 		mbspeech_write(loc & 0xff, val, dfcyc);
 	}
 }
@@ -551,19 +674,36 @@ mock_6522_new_ifr(dword64 dfcyc, int pair_num, word32 ifr, word32 ier)
 	return ifr;
 }
 
+static word32
+mock_ay_reg_val(int pair_num, int chip)
+{
+	Ay8913	*ay8913ptr;
+
+	ay8913ptr = mock_ay(pair_num, chip);
+	if(ay8913ptr->reg_addr_latch < 16) {
+		return ay8913ptr->regs[ay8913ptr->reg_addr_latch];
+	}
+	return 0;
+}
+
+// Read the AY register: chips is bit 0 the first AY, bit 1 the second
+//  (both: the or of the two, as on the Phasor)
 void
-mock_ay8913_reg_read(int pair_num)
+mock_ay8913_reg_read(int pair_num, int chips)
 {
 	Mos6522	*mos6522ptr;
-	Ay8913	*ay8913ptr;
-	word32	reg_addr_latch, mask, val, ora;
+	word32	mask, val, ora;
 
 	mos6522ptr = &(g_mockingboard.pair[pair_num].mos6522);
-	ay8913ptr = &(g_mockingboard.pair[pair_num].ay8913);
-	reg_addr_latch = ay8913ptr->reg_addr_latch;
 	val = 0;
-	if(reg_addr_latch < 16) {
-		val = ay8913ptr->regs[reg_addr_latch];
+	if(chips == 0) {
+		val = 0xff;		// Phasor: no AY drives the bus, it reads high
+	}
+	if(chips & 1) {
+		val |= mock_ay_reg_val(pair_num, 0);
+	}
+	if(chips & 2) {
+		val |= mock_ay_reg_val(pair_num, 1);
 	}
 	// ORA at 6522 is merge of ORA using DDRA
 	mask = mos6522ptr->ddra;
@@ -578,7 +718,7 @@ word32 g_mock_channel_regs[3] = {
 };
 
 void
-mock_ay8913_reg_write(int pair_num, dword64 dfcyc)
+mock_ay8913_reg_write(int pair_num, int chip, dword64 dfcyc)
 {
 	Mos6522	*mos6522ptr;
 	Ay8913	*ay8913ptr;
@@ -587,12 +727,13 @@ mock_ay8913_reg_write(int pair_num, dword64 dfcyc)
 	int	i;
 
 	mos6522ptr = &(g_mockingboard.pair[pair_num].mos6522);
-	ay8913ptr = &(g_mockingboard.pair[pair_num].ay8913);
+	ay8913ptr = mock_ay(pair_num, chip);
 	reg_addr_latch = ay8913ptr->reg_addr_latch;
 	ora = mos6522ptr->ora;
 	dsamps = dfcyc * g_dsamps_per_dfcyc;
 	if(reg_addr_latch < 16) {
-		mask = (g_mockingboard.disable_mask >> (3*pair_num)) & 7;
+		mask = (g_mockingboard.disable_mask >>
+					(3*(pair_num + 2*chip))) & 7;
 		rmask = 0;
 		do_print = 0;
 		for(i = 0; i < 3; i++) {
@@ -633,9 +774,13 @@ mock_ay8913_control_update(int pair_num, word32 new_val, word32 prev_val,
 {
 	Mos6522	*mos6522ptr;
 	Ay8913	*ay8913ptr;
+	Mock_pair *pairptr;
+	word32	cs, cs_new, chips;
+	int	native, wrote_b;
 
 	mos6522ptr = &(g_mockingboard.pair[pair_num].mos6522);
 	ay8913ptr = &(g_mockingboard.pair[pair_num].ay8913);
+	pairptr = &(g_mockingboard.pair[pair_num]);
 	// printf("ay8913 %d control now:%02x\n", pair_num, new_val);
 
 	// new_val and prev_val are { reset_l, BDIR, BC1 }
@@ -647,15 +792,63 @@ mock_ay8913_control_update(int pair_num, word32 new_val, word32 prev_val,
 		mock_ay8913_reset(pair_num, dfcyc);
 		return;
 	}
+	// Phasor native and Echo+ mode: ORB bits 4 and 3 (active low) select
+	//  the first and the second AY; Mockingboard mode: the first only
+	cs = 1;
+	cs_new = 1;
+	native = mock_phasor_native();
+	if(g_slot4_mockingboard == 2 &&
+				(g_phasor_mode == 5 || g_phasor_mode == 7)) {
+		cs = ((~prev_val >> 4) & 1) | ((~prev_val >> 2) & 2);
+		cs_new = ((~new_val >> 4) & 1) | ((~new_val >> 2) & 2);
+	}
 	new_val = new_val & 7;
 	prev_val = prev_val & 7;
 	if(prev_val == 7) {		// Latch new address, latch it now
-		ay8913ptr->reg_addr_latch = mos6522ptr->ora;
+		// The Phasor's GAL in native mode: latching through the first
+		//  AY deselects the second; through the second, selects both
+		if(cs & 1) {
+			ay8913ptr->reg_addr_latch = mos6522ptr->ora;
+			pairptr->ay_sel[0] = 1;
+			if(native) {
+				pairptr->ay_sel[1] = 0;
+			}
+		}
+		if(cs & 2) {
+			pairptr->ay8913_b.reg_addr_latch = mos6522ptr->ora;
+			pairptr->ay_sel[1] = 1;
+			if(native) {
+				pairptr->ay_sel[0] = 1;
+				ay8913ptr->reg_addr_latch = mos6522ptr->ora;
+			}
+		}
 	} else if(prev_val == 6) {	// Write data, do it now
-		mock_ay8913_reg_write(pair_num, dfcyc);
+		// Native mode: a write through the first AY also reaches the
+		//  second if it is selected
+		wrote_b = 0;
+		if((cs & 1) && (!native || pairptr->ay_sel[0])) {
+			mock_ay8913_reg_write(pair_num, 0, dfcyc);
+			if(native && pairptr->ay_sel[1]) {
+				mock_ay8913_reg_write(pair_num, 1, dfcyc);
+				wrote_b = 1;
+			}
+		}
+		if((cs & 2) && !wrote_b && (!native || pairptr->ay_sel[1])) {
+			mock_ay8913_reg_write(pair_num, 1, dfcyc);
+		}
 	}
 	if(new_val == 5) {
-		mock_ay8913_reg_read(pair_num);
+		chips = cs_new;
+		if(native) {		// as for writes; both: the or of the two
+			chips = 0;
+			if((cs_new & 1) && pairptr->ay_sel[0]) {
+				chips |= 1;
+			}
+			if((cs_new & 3) && pairptr->ay_sel[1]) {
+				chips |= 2;
+			}
+		}
+		mock_ay8913_reg_read(pair_num, chips);
 	}
 }
 

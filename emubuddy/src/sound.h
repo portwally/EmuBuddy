@@ -77,6 +77,8 @@ STRUCT(Ay8913) {
 STRUCT(Mock_pair) {
 	Mos6522	mos6522;
 	Ay8913	ay8913;
+	Ay8913	ay8913_b;		// EmuBuddy: the Phasor's second AY on this 6522
+	byte	ay_sel[2];		// Phasor native mode: AY chip selected (GAL)
 };
 
 STRUCT(Mockingboard) {

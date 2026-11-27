@@ -280,6 +280,7 @@ STRUCT(Lzw_state) {
 #define IRQ_PENDING_DOC			0x08000
 #define IRQ_PENDING_MOCKINGBOARDA	0x10000
 #define IRQ_PENDING_MOCKINGBOARDB	0x20000		/* must be BOARDA*2 */
+#define IRQ_PENDING_MBSPEECH		0x40000		/* Phasor native: A/R */
 
 
 #define EXTRU(val, pos, len)					\

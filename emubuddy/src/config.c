@@ -169,7 +169,7 @@ extern Cfg_menu g_cfg_sdl_video_menu[];
  * position use KEGS's existing g_mainwin_width/height/xpos/ypos.) */
 /* Which emulated cards are plugged in (EmuBuddy "Slots" window). They live in
  * the main menu table so they are saved in emubuddy.config. */
-int	g_slot4_mockingboard = 0;	/* slot 4: 1 Mockingboard, 0 empty */
+int	g_slot4_mockingboard = 0;	/* slot 4: 1 Mockingboard, 2 Phasor, 0 empty */
 extern char *g_bridge_root;		/* bridge.c: the bridge folder */
 int	g_helper_ask = 1;			/* offer to install the IIgs drop helper */
 int	g_bridge_off = 0;			/* the user switched the bridge off */
@@ -456,7 +456,7 @@ Cfg_menu g_cfg_main_menu[] = {
 		KNMP(g_config_kegs_auto_update), CFGTYPE_INT },
 { "Mockingboard speech chips,0,None,1,One,2,Two", KNMP(g_mb_speech),
 								CFGTYPE_INT },
-{ "Slot 4 Mockingboard,0,Empty,1,Mockingboard",
+{ "Slot 4 Mockingboard,0,Empty,1,Mockingboard,2,Phasor",
 		KNMP(g_slot4_mockingboard), CFGTYPE_INT },
 { "Slot 7 SCSI card,0,Empty,1,SCSI card,2,High-Speed SCSI card", KNMP(g_slot7_scsi), CFGTYPE_INT },
 { "High-Speed SCSI card ROM", KNMP(g_hsscsi_rom), CFGTYPE_STR },

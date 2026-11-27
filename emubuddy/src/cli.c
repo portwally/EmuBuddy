@@ -249,6 +249,8 @@ slot_option(int slot, const char *card)
 	case 4:
 		if(is(card, "mockingboard") || is(card, "mockingboarda")) {
 			emit2("-g_slot4_mockingboard", "1");
+		} else if(is(card, "phasor")) {
+			emit2("-g_slot4_mockingboard", "2");
 		} else if(is(card, "uthernet2") || is(card, "uthernet")) {
 			emit2("-g_uthernet2_slot", "4");
 			emit2("-g_slot4_mockingboard", "0");

@@ -1092,7 +1092,8 @@ io_read(word32 loc, dword64 *cyc_ptr)
 	word32	new_lcbank2, new_wrdefram, new_prewrite, new_rdrom, tmp;
 	int	i;
 
-	if(g_uthernet2_slot && ((loc & 0xff0) == (0x80 + (g_uthernet2_slot << 4)))) {
+	if(g_uthernet2_slot && ((loc & 0xff0) == (0x80 + (g_uthernet2_slot << 4))) &&
+			!(g_uthernet2_slot == 4 && g_slot4_mockingboard == 2)) {
 		return uthernet2_read(loc & 0xf);	// Uthernet II card
 	}
 
@@ -1500,11 +1501,18 @@ io_read(word32 loc, dword64 *cyc_ptr)
 
 		/* 0xc0c0 - 0xc0cf */
 		case 0xc0: case 0xc1: case 0xc2: case 0xc3:
-			// Slot 4 has a Slinky RAM card
-			return slinky_devsel_read(dfcyc, loc);
 		case 0xc4: case 0xc5: case 0xc6: case 0xc7:
 		case 0xc8: case 0xc9: case 0xca: case 0xcb:
 		case 0xcc: case 0xcd: case 0xce: case 0xcf:
+			if(g_slot4_mockingboard == 2) {
+				// EmuBuddy: the Phasor's mode switch
+				phasor_devsel(loc, dfcyc);
+				return float_bus(dfcyc);
+			}
+			if((loc & 0xf) <= 3) {
+				// Slot 4 has a Slinky RAM card
+				return slinky_devsel_read(dfcyc, loc);
+			}
 			return 0;
 		/* 0xc0d0 - 0xc0df */
 		case 0xd0: case 0xd1: case 0xd2: case 0xd3:
@@ -1584,7 +1592,8 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 	word32	new_tmp;
 	int	fixup;
 
-	if(g_uthernet2_slot && ((loc & 0xff0) == (0x80 + (g_uthernet2_slot << 4)))) {
+	if(g_uthernet2_slot && ((loc & 0xff0) == (0x80 + (g_uthernet2_slot << 4))) &&
+			!(g_uthernet2_slot == 4 && g_slot4_mockingboard == 2)) {
 		uthernet2_write(loc & 0xf, val & 0xff);	// Uthernet II card
 		return;
 	}
@@ -2184,12 +2193,19 @@ io_write(word32 loc, word32 val, dword64 *cyc_ptr)
 
 		/* 0xc0c0 - 0xc0cf */
 		case 0xc0: case 0xc1: case 0xc2: case 0xc3:
-			// Slot 4 has a Slinky RAM card
-			slinky_devsel_write(dfcyc, loc, val);
-			return;
 		case 0xc4: case 0xc5: case 0xc6: case 0xc7:
 		case 0xc8: case 0xc9: case 0xca: case 0xcb:
 		case 0xcc: case 0xcd: case 0xce: case 0xcf:
+			if(g_slot4_mockingboard == 2) {
+				// EmuBuddy: the Phasor's mode switch
+				phasor_devsel(loc, dfcyc);
+				return;
+			}
+			if((loc & 0xf) <= 3) {
+				// Slot 4 has a Slinky RAM card
+				slinky_devsel_write(dfcyc, loc, val);
+				return;
+			}
 			UNIMPL_WRITE;
 
 		/* 0xc0d0 - 0xc0df */

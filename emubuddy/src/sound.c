@@ -42,6 +42,8 @@ int	g_sound_max_multiplier = 6;		// 6*32 = ~200 msecs
 int	g_sound_min_samples = 48000 * 32/1000;	// 32 msecs
 
 Mockingboard g_mockingboard;
+extern int g_mock_clk_mul;
+extern int g_phasor_mode;
 
 // The AY8913 chip has non-linear amplitudes (it has 16 levels) and the
 //  documentation does not match measured results.  But all the measurements
@@ -602,21 +604,21 @@ sound_play(dword64 dfcyc)
 						snd_buf_init, outptr_start);
 
 	num_pairs = 0;
-	// Do Mockinboard channels
-	for(i = 0; i < 2; i++) {			// Pair: 0 or 1
-		ay8913ptr = &(g_mockingboard.pair[i].ay8913);
+	// Do Mockinboard channels (EmuBuddy: four AYs on a Phasor)
+	for(i = 0; i < mock_num_ays(); i++) {		// AY 0..3
+		ay8913ptr = mock_ay_num(i);
 		for(j = 0; j < 3; j++) {		// Channels: A, B, or C
 			if((ay8913ptr->regs[8 + j] & 0x1f) == 0) {
 				continue;
 			}
-			num_pairs = 2;
+			num_pairs = mock_num_ays();
 			g_last_mock_vbl_count = g_vbl_count;
 			break;
 		}
 	}
 	if((g_vbl_count - g_last_mock_vbl_count) < 120) {
 		// Keep playing for 2 seconds, to avoid some static issues
-		num_pairs = 2;
+		num_pairs = mock_num_ays();
 	}
 	if(num_pairs) {
 		sound_mask = -1;
@@ -634,6 +636,10 @@ sound_play(dword64 dfcyc)
 		}
 		for(i = 0; i < 16; i++) {
 			dvolume = (g_doc_vol * VAL_MOCK_RANGE) / (15.0 * 3.0);
+			if(num_pairs > 2 && g_phasor_mode != 0) {
+				// Phasor (native, Echo+): two AYs on each side
+				dvolume = dvolume * 0.6;
+			}
 			ivol = (int)(g_ay8913_ampl_factor[i] * dvolume);
 			g_mock_volume[i] = ivol;
 		}
@@ -794,7 +800,7 @@ sound_mock_envelope(int pair, int *env_ptr, int num_samps, int *vol_ptr)
 		return;
 	}
 
-	ay8913ptr = &(g_mockingboard.pair[pair].ay8913);
+	ay8913ptr = mock_ay_num(pair);
 	ampl = ay8913ptr->regs[8] | ay8913ptr->regs[9] | ay8913ptr->regs[10];
 	if((ampl & 0x10) == 0) {
 		// No one uses the envelope
@@ -813,7 +819,7 @@ sound_mock_envelope(int pair, int *env_ptr, int num_samps, int *vol_ptr)
 	// inc_per_tick 62.5KHz tick: (1/env_period)
 	// inc_per_dfcyc: (1/(16*env_period))
 	// inc_per_samp = inc_per_dfcyc * g_fcyc_per_samp
-	dusecs_per_samp = g_fcyc_per_samp / 65536.0;
+	dusecs_per_samp = g_mock_clk_mul * g_fcyc_per_samp / 65536.0;
 	dsamp_inc = (dword64)((dmul * dusecs_per_samp / denv_period));
 			// Amount to inc per sample, fixed point, 40 bit frac
 
@@ -860,7 +866,7 @@ sound_mock_noise(int pair, byte *noise_ptr, int num_samps)
 		return;
 	}
 
-	ay8913ptr = &(g_mockingboard.pair[pair].ay8913);
+	ay8913ptr = mock_ay_num(pair);
 	doit = 0;
 	for(i = 0; i < 3; i++) {
 		ampl = ay8913ptr->regs[8 + i];
@@ -879,7 +885,7 @@ sound_mock_noise(int pair, byte *noise_ptr, int num_samps)
 	noise_samp = ay8913ptr->noise_samp;
 	noise_period = (ay8913ptr->regs[6] & 0x1f);
 	noise_period = noise_period << 16;
-	samp_inc = (word32)(g_fcyc_per_samp / 16.0);
+	samp_inc = (word32)(g_mock_clk_mul * g_fcyc_per_samp / 16.0);
 			// Amount to inc per sample
 	if(noise_samp >= noise_period) {
 		// Period changed during sound, reset
@@ -919,7 +925,7 @@ sound_mock_play(int pair, int channel, int *outptr, int *env_ptr,
 		return;
 	}
 
-	ay8913ptr = &(g_mockingboard.pair[pair].ay8913);
+	ay8913ptr = mock_ay_num(pair);
 	ampl = ay8913ptr->regs[8 + channel] & 0x1f;
 	if(ampl == 0) {
 		return;
@@ -935,12 +941,12 @@ sound_mock_play(int pair, int channel, int *outptr, int *env_ptr,
 			return;
 		}
 	}
-	outptr += pair;			// pair[1] is right
+	outptr += (pair & 1);		// pair[1] is right (AY 1 and 3)
 	tone_samp = ay8913ptr->tone_samp[channel];
 	tone_period = ay8913ptr->regs[2*channel] +
 					(256 * ay8913ptr->regs[2*channel + 1]);
 	tone_period = tone_period << 16;
-	samp_inc = (word32)(g_fcyc_per_samp / 8.0);
+	samp_inc = (word32)(g_mock_clk_mul * g_fcyc_per_samp / 8.0);
 			// Amount to inc per sample
 	do_print = 0;
 	if(g_mockingboard.disable_mask) {

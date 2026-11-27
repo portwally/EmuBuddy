@@ -122,14 +122,45 @@ Kept outside the repository in `/Applications/Emulatoren/Apple IIgs disks/Mockin
 - Seen on the way, not changed: EmuBuddy's `EMUBUDDY_SOUNDFILE` WAV keeps a stale length in its header when a
   headless run ends at its snapshot frame (`sound_file_close` is not called); the samples are all there.
 
-### Phase 2: the Phasor (medium)
+### Phase 2: the Phasor (medium) — done 2026-11-27
 
-- Card type in slot 4: Mockingboard or Phasor (`g_slot4_mockingboard`: 0, 1 Mockingboard, 2 Phasor).
-- Each pair gets a second AY; the port-B chip selects, the address decoding of the three modes, the doubled clock in
-  native mode, and `$C0C0–$C0CF` for the mode switch (Slinky off while the Phasor is in).
-- `sound.c` mixes four AYs (twelve channels), first VIA's AYs left, second's right.
-- Speech: the same chips as phase 1; readable in native mode; A/R also on the IRQ line.
-- Done when: mb-audit's Phasor tests pass and Phasor music plays with all four chips.
+- Card type in slot 4: `g_slot4_mockingboard` 0 empty, 1 Mockingboard, **2 Phasor** (config "Slot 4 Mockingboard",
+  CLI `-sl4 phasor`). The Slots window still shows it as "Mockingboard" until phase 3, and keeps a Phasor a Phasor
+  when its settings are applied.
+- **Mode switch:** any access to `$C0C0–$C0CF` (`phasor_devsel`): address bit 3 clears the mode, bits 2–0 are or-ed
+  in. Reset: Mockingboard mode. With the Phasor in slot 4 these addresses belong to it: the Slinky RAM card's
+  `$C0C0–$C0C3` and an Uthernet II also set to slot 4 (the default config has one there, and `-sl4` on the command
+  line did not move it) no longer see them. With a Mockingboard, both stay as before.
+- **Addresses:** Mockingboard mode as before (A7 picks the 6522); native mode A7 and A4 (none, one or both 6522s; a
+  read of both is the or of the two); Echo+ mode the second 6522 at every address. Nothing selected reads the
+  floating bus.
+- **Four AYs:** each 6522 has a second AY (`Mock_pair.ay8913_b`). In native and Echo+ mode ORB bits 4 and 3 (active
+  low) select the first and second AY; in Mockingboard mode only the first answers. The Phasor's GAL in native mode,
+  as AppleWin describes it from real cards: latching through the first AY deselects the second, latching through the
+  second selects both; a write through the first also reaches the second if selected; a read of both is the or of
+  the two; an AY that is not selected leaves the bus high (`$FF`). The reset bit resets both AYs in every mode.
+- **Clock:** native mode runs all four AYs at twice the clock (tone, noise and envelope counters), Mockingboard and
+  Echo+ mode at the normal clock.
+- **Sound:** `sound.c` plays four AYs, the first 6522's two on the left, the second's on the right; in native and
+  Echo+ mode each AY plays at 0.6 of the level so that two on one side do not clip. Mockingboard mode keeps today's
+  level.
+- **Speech on the Phasor:** Mockingboard mode as on the Mockingboard C. Native mode: the chips can be read (bit 7 =
+  request; reading does not clear it), and A/R drives the IRQ line directly (`IRQ_PENDING_MBSPEECH`) instead of CA1.
+  Echo+ mode: no speech writes, A/R reaches nothing. On a mode change a pending request moves to the new line.
+- **Two speech-chip details found with mb-audit's Phasor tests** (they apply to the Mockingboard too):
+  mode 00 (DR1:DR0 at CTL 1→0) only keeps A/R from the computer, while the phoneme runs in the previous mode and
+  bit 7 still goes up; and CTL 1→0 starts the phoneme in register 0, so the request is down until it ends. The chip
+  model gives no request in mode 00 and does not restart at CTL 1→0, so `mbspeech.c` hands it the previous mode and
+  writes register 0 again there. The chip files stay unchanged.
+- **Results** (mb-audit v1.61, 1 MHz): the Phasor is found ("P" for both 6522s, "Phasor mode=Native"), and with no
+  speech chip `$363`, one `$401`, two `$49E`: **all tests passed**, including the AY tests of all four chips, the
+  GAL tests and the Phasor speech tests (`reference/emubuddy-mbaudit-phasor.png`). The Mockingboard still passes with
+  the same totals as in phase 1 (`$32D`, `$35F`, `$390`).
+- **Music:** mb-audit's music test (menu D) plays in native mode with all four AYs sounding, each with its own
+  volumes; 30 s recorded, peak 13,240, nothing clipped (`reference/emubuddy-phasor-music-test.wav`).
+- `EMUBUDDY_SPEECHLOG` also logs the Phasor's mode switches.
+- Not checked: the Phasor's own disks (`phasor1-4.dsk`) and programs that use Echo+ mode; how the music sounds next
+  to a real Phasor (by ear).
 
 ### Phase 3: settings, Launcher and documents (small)
 

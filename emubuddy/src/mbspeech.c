@@ -16,6 +16,13 @@
 //  . register = address bits 2-0; the chip cannot be read on a Mockingboard;
 //  . writes to registers 0, 1, 2 (and 3 with CTL=1) clear the request;
 //  . Ctrl-Reset does not reach the chips (only the 6522s are reset);
+//  . on a Phasor in native mode the chips can be read (bit 7 = A/R) and
+//    A/R drives the IRQ line directly instead of CA1;
+//  . mode 00 (DR1:DR0 at CTL 1->0) only keeps A/R from the computer: the
+//    phoneme runs in the previous mode and bit 7 still goes up (AppleWin,
+//    from real cards).  The chip model gives no A/R in mode 00, so it is
+//    given the previous mode, and A/R is not passed on;
+//  . CTL 1->0 starts the phoneme in register 0 (A/R down until it ends);
 //  . a phoneme repeats until it is changed: when a write to register 1 or 2
 //    answers a request, the chip asks again when the phoneme ends again.
 //    The chip model keeps its request up after such a write, so the
@@ -36,6 +43,7 @@ extern int g_audio_rate;
 extern int g_doc_vol;
 extern dword64 g_cur_dfcyc;
 extern int g_slot4_mockingboard;
+extern int g_phasor_mode;
 
 int	g_mb_speech = 1;		// speech chips: 0 none, 1 one, 2 two
 
@@ -50,11 +58,47 @@ typedef struct {
 	int	request;		// A/R as last seen
 	int	powered_down;		// CTL=1
 	int	r0;			// last value written to register 0
+	int	ints;			// A/R reaches the computer (mode not 00)
+	int	mode_prev;		// the last mode other than 00
 	float	fifo[SPK_FIFO];
 	int	head, count;
 } Spk;
 
 static Spk	g_spk[2];
+
+// A/R reaches the computer: CA1 of the chip's 6522, or (Phasor native mode)
+//  the IRQ line itself
+static void
+spk_signal(Spk *k, dword64 dfcyc)
+{
+	Mos6522	*via;
+
+	if(!k->ints) {			// mode 00: A/R stays on the chip
+		return;
+	}
+	if(mock_phasor_native()) {
+		add_irq(IRQ_PENDING_MBSPEECH);
+		return;
+	}
+	if(g_slot4_mockingboard == 2 && g_phasor_mode != 0) {
+		return;			// Phasor in Echo+ mode: A/R reaches nothing
+	}
+	// A/R falls: a negative edge on CA1 (PCR bit 0 = 0)
+	via = &(g_mockingboard.pair[k->pair].mos6522);
+	if((via->pcr & 1) == 0) {
+		via->ifr = mock_6522_new_ifr(dfcyc, k->pair, via->ifr | 0x02,
+								via->ier);
+	}
+}
+
+static void
+spk_irq_update(void)
+{
+	if(!(g_spk[0].request && g_spk[0].ints) &&
+				!(g_spk[1].request && g_spk[1].ints)) {
+		remove_irq(IRQ_PENDING_MBSPEECH);
+	}
+}
 static int	g_spk_rate = 0;		// rate the chips were made for
 static int	g_spk_event = 0;	// an EV_MBSPEECH event is pending
 static int	g_spk_log = -1;
@@ -96,6 +140,8 @@ spk_make(int i, dword64 dfcyc)
 	k->dsamp_done = (double)(dfcyc * g_dsamps_per_dfcyc);
 	k->request = 0;
 	k->powered_down = 1;
+	k->ints = 1;
+	k->mode_prev = 0;
 	k->head = 0;
 	k->count = 0;
 }
@@ -138,7 +184,6 @@ spk_advance(int i, dword64 dfcyc)
 	Spk	*k = &g_spk[i];
 	double	target;
 	long	n, want, got;
-	Mos6522	*via;
 
 	if(!k->chip || g_dsamps_per_dfcyc <= 0.0) {
 		return;
@@ -168,15 +213,11 @@ spk_advance(int i, dword64 dfcyc)
 		n -= got;
 		if(!k->request && ssi263_request(k->chip)) {
 			k->request = 1;
-			// A/R falls: a negative edge on CA1 (PCR bit 0 = 0)
-			via = &(g_mockingboard.pair[k->pair].mos6522);
-			if((via->pcr & 1) == 0) {
-				via->ifr = mock_6522_new_ifr(dfcyc, k->pair,
-						via->ifr | 0x02, via->ier);
-			}
+			spk_signal(k, dfcyc);
 			if(spk_logging()) {
-				printf("Speech %d: A/R, CA1 of 6522 %d\n", i,
-								k->pair);
+				printf("Speech %d: A/R, %s %d\n", i,
+					mock_phasor_native() ? "IRQ" :
+					"CA1 of 6522", k->pair);
 			}
 		}
 	}
@@ -232,7 +273,23 @@ mbspeech_write(word32 loc, word32 val, dword64 dfcyc)
 		k = &g_spk[i];
 		spk_advance(i, dfcyc);
 		reg = loc & 7;
-		ssi263_write(k->chip, reg, val & 0xff);
+		if(reg == 3 && k->powered_down && !(val & 0x80)) {
+			// CTL 1->0: the mode DR1:DR0 is taken from register 0
+			k->ints = (k->r0 >> 6) != 0;
+			if(k->ints) {
+				k->mode_prev = k->r0 >> 6;
+			} else if(k->mode_prev) {
+				ssi263_write(k->chip, 0,
+					(k->mode_prev << 6) | (k->r0 & 0x3f));
+			}
+			ssi263_write(k->chip, 3, val & 0xff);
+			// and the phoneme in register 0 starts now (as AppleWin's
+			//  Play on CTL 1->0), so A/R is down until it ends
+			ssi263_write(k->chip, 0, k->r0);
+			k->request = ssi263_request(k->chip);
+		} else {
+			ssi263_write(k->chip, reg, val & 0xff);
+		}
 		if(reg == 0) {
 			k->r0 = val & 0xff;
 		} else if((reg == 1 || reg == 2) && k->request &&
@@ -254,9 +311,46 @@ mbspeech_write(word32 loc, word32 val, dword64 dfcyc)
 				via->ifr = mock_6522_new_ifr(dfcyc, k->pair,
 						via->ifr & ~0x02, via->ier);
 			}
+			spk_irq_update();
 		}
 	}
 	spk_schedule(dfcyc);
+}
+
+// Phasor native mode: a read of a speech chip, A/R in bit 7 (1 = request);
+//  reading does not clear the request
+word32
+mbspeech_read(word32 loc, dword64 dfcyc)
+{
+	int	i;
+
+	i = -1;
+	if(loc & 0x40) {
+		i = 0;
+	}
+	if((loc & 0x20) && g_mb_speech >= 2) {
+		i = 1;
+	}
+	if(i < 0 || g_mb_speech <= 0 || !g_spk[i].chip) {
+		return 0;
+	}
+	spk_advance(i, dfcyc);
+	return g_spk[i].request ? 0x80 : 0;
+}
+
+// The Phasor went into or out of native mode: move a pending A/R to the
+//  other line
+void
+mbspeech_card_mode(dword64 dfcyc)
+{
+	int	i;
+
+	remove_irq(IRQ_PENDING_MBSPEECH);
+	for(i = 0; i < 2; i++) {
+		if(g_spk[i].chip && g_spk[i].request) {
+			spk_signal(&g_spk[i], dfcyc);	// (not in mode 00)
+		}
+	}
 }
 
 // Mix the speech of the stretch sound_play() is making into out[] (stereo)

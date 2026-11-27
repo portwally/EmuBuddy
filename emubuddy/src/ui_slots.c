@@ -131,7 +131,10 @@ apply(void)
 	}
 	g_voc_enable = g_pend[2] == 1;
 	g_secondsight = g_pend[2] == 2;
-	g_slot4_mockingboard = g_pend[3] == 1;
+	/* a Phasor (set with -sl4 phasor) stays a Phasor: the window shows it as
+	 * Mockingboard until it gets its own entry */
+	g_slot4_mockingboard = (g_pend[3] == 1) ?
+				(g_slot4_mockingboard == 2 ? 2 : 1) : 0;
 	g_uthernet2_slot = (g_pend[2] == 3) ? 3 : (g_pend[3] == 2) ? 4 : 0;
 	g_slot7_scsi = g_pend[6];	/* 0 empty, 1 hard disk card, 2 HS SCSI */
 	g_config_kegs_update_needed = 1;

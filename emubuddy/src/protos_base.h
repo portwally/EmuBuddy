@@ -511,8 +511,12 @@ void mockingboard_write(word32 loc, word32 val, dword64 dfcyc);
 word32 mock_6522_read(int pair_num, word32 loc, dword64 dfcyc);
 void mock_6522_write(int pair_num, word32 loc, word32 val, dword64 dfcyc);
 word32 mock_6522_new_ifr(dword64 dfcyc, int pair_num, word32 ifr, word32 ier);
-void mock_ay8913_reg_read(int pair_num);
-void mock_ay8913_reg_write(int pair_num, dword64 dfcyc);
+void mock_ay8913_reg_read(int pair_num, int chips);
+void mock_ay8913_reg_write(int pair_num, int chip, dword64 dfcyc);
+int mock_phasor_native(void);
+int mock_num_ays(void);
+struct Ay8913_st *mock_ay_num(int ay);
+void phasor_devsel(word32 loc, dword64 dfcyc);
 void mock_ay8913_control_update(int pair_num, word32 new_val, word32 prev_val, dword64 dfcyc);
 void mockingboard_show(int got_num, word32 disable_mask);
 
@@ -909,6 +913,8 @@ word32 float_bus_lines(dword64 dfcyc, word32 lines_since_vbl);
 void mbspeech_event(dword64 dfcyc);
 void mbspeech_write(word32 loc, word32 val, dword64 dfcyc);
 int mbspeech_mix(int *out, int num_samps, int zero_first, dword64 dfcyc);
+word32 mbspeech_read(word32 loc, dword64 dfcyc);
+void mbspeech_card_mode(dword64 dfcyc);
 
 /* secondsight.c */
 word32 secondsight_devsel_read(word32 loc, dword64 dfcyc);
