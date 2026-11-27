@@ -90,6 +90,7 @@ them).
 
 1. **14 MB of RAM**, the useful part of the AppleSqueezer — done.
 2. **Mockingboard speech (SSI-263)** and **Phasor**: both extend the existing Mockingboard, and games use them.
+   Plan: `docs/SPEECH_PHASOR_PLAN.md`.
 3. **MIDI** through the serial port: brings the IIgs's music programs to real and software synthesizers.
 4. **Uthernet (I)** only if a program that needs it turns up.
 5. **The AppleSqueezer card itself**, VidHD, CFFA 3000, RamFAST: only with documentation from their makers or a
