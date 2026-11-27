@@ -908,6 +908,7 @@ word32 float_bus_lines(dword64 dfcyc, word32 lines_since_vbl);
 word32 secondsight_devsel_read(word32 loc, dword64 dfcyc);
 void secondsight_devsel_write(word32 loc, word32 val, dword64 dfcyc);
 void secondsight_reset(void);
+void secondsight_dump(const char *prefix);
 
 /* voc.c */
 word32 voc_devsel_read(word32 loc, dword64 dfcyc);

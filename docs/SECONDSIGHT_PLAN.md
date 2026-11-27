@@ -182,20 +182,22 @@ Results:
   ClearScreen, SetPalette, SetMode `$61` with emulation off, 400 uploads of 640 bytes, and the palette fade
   (SetPalette over and over), without hanging. The window still shows the IIgs screen; the picture comes in phase 3.
 
-### Phase 2: the command engine (medium)
+### Phase 2: the command engine (medium) — done 2026-11-27
 
-- The protocol of section 3: command byte at `$C0B0` → HANDSHAKE `$01` → argument bytes at `$C0B1` → `$00` → for long
-  commands `$A5`/`$A6`. Long commands answer `$A5` after a few polls, not at once, in case a program reads the
-  register once before it changes.
-- Uploads: per 64 KB bank HANDSHAKE `$01`, then the data bytes written to `$C0B1` go to card RAM or VGA memory; reads
-  through `$C0B2` for GetStatus and GetVGAReg (with the dummy read first).
-- Memory: 1 MB VGA memory, 128 KB card RAM.
-- Commands: GetStatus, SetMode, Upload, Scroll Screen, Screen On/Off, Set Palette, SetPaletteEntry, SetBorder,
-  Clear Screen, SetShadow, SetVGAReg, GetVGAReg, SetUserMode, SetTextFont. Run Code answers with an error and a
-  message in the log.
-- A debug log (`EMUBUDDY_SSLOG=1`) prints each command and its arguments.
-- Done when: Cogito 2 runs through its command sequence without hanging, and EmuBuddy's command log matches the
-  GSSquared log in `reference/gsq-cogito2/card-log.txt` (picture not yet shown).
+- The card's memory: 1 MB video memory and 128 KB Z180 RAM (allocated on the first command), the palette (256 × R,G,B
+  with 8 bits each), border colour, SetShadow and SetTextFont values, and the VGA registers: miscellaneous output,
+  feature control, sequencer, CRTC, graphics controller, attribute controller and the Oak extended registers
+  (`$3DE/$3DF`).
+- Every command does its work: Upload into video memory (staying inside the 512 KB half it starts in, as the card
+  does) or into Z180 RAM; SetPalette (768 data bytes) and SetPaletteEntry; SetBorder; ClearScreen and ScrollScreen in
+  the low 512 KB (ScrollScreen copies forwards, as the Z180's DMA would); SetVGAReg and GetVGAReg by index/data port
+  pair; SetUserMode fills the registers from the 84-byte `vga_mode_rec` of `vga.h` (the 20 Oak registers at `$02–$06`,
+  `$13–$15`, `$17`, `$19`, `$20–$22`, `$25`, `$30–$35`) and sets mode `$FF`. A dirty flag (`g_ss_dirty`) is set on every
+  change for phase 3.
+- Test hook: `EMUBUDDY_DUMPRAM=frame:prefix` now also writes `prefix.ssvram`, `.sssram` and `.ssstate` (palette, mode,
+  flags, registers). `reference/ssrender.py` draws the video memory with the palette.
+- Result: Cogito 2's video memory at frame 3000, drawn offline at 640×400 with its palette, is the same picture GSSquared
+  shows (`reference/phase2-cogito2-vram-vs-gssquared.png`). No SetVGAReg went to an unknown port.
 
 ### Phase 3: VGA modes and the picture (large; the main part)
 

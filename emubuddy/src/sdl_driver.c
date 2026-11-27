@@ -1946,6 +1946,7 @@ sdl_dev_snapshot(Window_info *win)
 				fclose(f);
 			}
 			printf("RAM dumped to %s.fast/.slow\n", dp);
+			secondsight_dump(dp);
 		}
 	}
 	{	/* EMUBUDDY_SKINAT="frame:skin" switches the skin at that frame */
