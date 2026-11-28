@@ -44,7 +44,8 @@ case 0x02:			/*  COP */
 	INC_KPC_2;
 	psr = (psr & ~0x82) | (neg7 & 0x80) | ((!zero) << 1);
 	if(psr & 0x100) {
-		halt_printf("Halting for emul COP at %04x\n", kpc);
+		// (No halt here: COP in emulation mode is an instruction like any other,
+		//  and programs use it, C64Can's block translator for one.)
 		PUSH16(kpc & 0xffff);
 		PUSH8(psr & 0xff);
 		tmp1 = 0xfffff4;
