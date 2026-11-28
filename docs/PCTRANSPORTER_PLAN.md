@@ -30,7 +30,7 @@ EmuBuddy would run MS-DOS and PC programs (CGA games, Windows 3.0) on the IIgs, 
 | Keyboard | Nothing new: the IIgs keyboard stays the IIgs's. The Apple side driver reads it and passes keys to the PC through ports `$60–$64`. The modifier register `$CF36` is only needed on a IIe; on the IIgs the driver reads `$C025`. This must be checked in phase 3. |
 | Hard disk | Nothing new in EmuBuddy: the Apple side driver reads and writes `MSDOSVOL` through ProDOS. The card only passes the requests (mailbox `$C822–$C82A`). |
 | Floppies (TransDrive) | Last and optional: an Apple **ISM** (the MFM half of the later SWIM) at `$CF20–$CF27`, 16 MHz, 250 kbit/s MFM, with PC disk images (`.img`, 360 KB / 720 KB). EmuBuddy has only the IWM, so this is new work. Without it, programs reach the PC through the hard disk file, and PC files get onto it via the PC Transporter utilities or a disk tool. |
-| Software | **Not shipped.** The PC Transporter system disks (1.30 and 2.0) are on the Apple II Documentation Project (`mirrors.apple2.org.za/.../Interface Cards/CPU/AE PC Transporter/`), with the manual (v1.31). MS-DOS is the user's own. Download only with the user's permission, into the reference folder. |
+| Software | **Not shipped.** The PC Transporter system disks (1.30 and 2.0) are on the Apple II Documentation Project (`mirrors.apple2.org.za/.../Interface Cards/CPU/AE PC Transporter/`), with the manual (v1.31). DOS is the user's own; the tests use FreeDOS (GPL). Download only with the user's permission, into the reference folder. |
 
 ## 2. Facts (from MAME's `pc_xporter.cpp`, 2026-09-24)
 
@@ -81,6 +81,54 @@ EmuBuddy would run MS-DOS and PC programs (CGA games, Windows 3.0) on the IIgs, 
   - record screenshots and a log of the card's register traffic (MAME's `LOG_PORTS`/`LOG_IRQ`), headless, on copies of the disks.
 - Check whether the card works in MAME's IIgs at all. If it only works in the IIe, say so before phase 1.
 - Write down in this file: which slot, which IIgs settings (slot set to "Your Card", speed), what the disk does at each step.
+
+### Phase 0 results (2026-11-28, done)
+
+- **Reference MAME:** git master `ef242a94` (2026-11-27), built only for the IIgs (`./a2gs`) and the IIe (`./a2e`) in
+  `/Applications/Emulatoren/mame-master`, 4 minutes each. Tools and notes: `reference/README.txt` and `reference/tools/`
+  in `/Applications/Emulatoren/Apple IIgs disks/PC Transporter/` (not to be published).
+- **ROMs:** MAME master's IIgs also wants two keyboard microcontroller ROMs, and they're not on this Mac. Running with
+  `-adb:0 hle_keyboard -adb:1 hle_mouse` avoids them. The IIgs ROM 3 must be the copy in Ample's folder: the copy in
+  `Emulatoren/bios` has another checksum, and with it the machine hangs at start.
+- **The card works in MAME's IIgs** with system disk 2.0. Its menu runs, `AEPC.SYSTEM` finds the card, the V30 runs, and the
+  CGA screen says `DISK READ ERROR` because no disk holds MS-DOS yet. The 2.0 hard disk file `MSDOSVOL` (578 KB) is an empty
+  volume formatted by DOS 3.3. The 1.30 one holds only the PC Transporter utilities. Neither has MS-DOS.
+- **Slot 4:**
+  - the slot must be set to "Your Card" in the IIgs Control Panel (BRAM `$24` = 1), otherwise the software says
+    `PC TRANSPORTER CARD NOT FOUND`;
+  - with the card in slot 4, the PC side warns `MOUSE CARD NOT FOUND`, because the IIgs mouse firmware lives in slot 4;
+  - in slot 7 (the default "Your Card"), the mouse stays available.
+
+  EmuBuddy should set slot 4 to "Your Card" itself when the card is chosen, as it does for the Mockingboard, and the
+  manual should mention the mouse.
+- **The system disk supports the IIgs:** it has `AEPCKEY.GS`, and its READ.ME lists fixes for ROM 03 and System 5.0.
+- **Manual:** the card goes in any slot except 3. Disks for the PC can be:
+  - PC floppies in drives on the card (TransDrive, Apple 3.5 Drive);
+  - "ProDOS drives" (the IIgs's own drives, MS-DOS data in ProDOS blocks);
+  - `MSDOSVOL` hard disk files on any ProDOS volume.
+- **DOS:** the user has no MS-DOS, and MS-DOS can't be downloaded legally, so the tests use **FreeDOS 1.3** (GPL,
+  `FD13-FloppyEdition.zip` from ibiblio). `reference/tools/mk360.py` makes a 360 KB boot floppy from its 720 KB boot
+  disk: kernel, `COMMAND.COM`, `SYS`, `FORMAT`, `FDISK` and `MEM`.
+- **FreeDOS runs on the card in MAME's IIgs:**
+  - it boots from the card's 5.25" TransDrive to `A:\>`;
+  - `SYS C:` and `FDISK /ACTIVATE:1` make the hard disk file bootable;
+  - it then boots from `C:` with no floppy at all (`reference/shots/freedos-booted-from-C.png`).
+
+  **The test disk for phases 2–4:** `reference/testdisks/AEPC 2.0 FreeDOS C.po`. It is the 2.0 system disk set up with
+  A> = TransDrive 1 (5.25"), C> = `/AEPC/MSDOSVOL` (on, with FreeDOS) and D> = none.
+- **Card software:**
+  - **The stock 2.0 settings** make A> an Apple 3.5 Drive on the card's port, C> `/AE1/MSDOS2` (off) and D> `/AEPC/MSDOSVOL` (on).
+  - **The Control Panel** opens when the space bar is pressed once while `AEPC.SYSTEM` starts. Its menus take a number and Return, and Esc goes up one level. In text fields the left arrow erases.
+  - **Messages from the card's own PC BIOS** (`AEPCBIOS`), in `AEPC.SYSTEM`:
+    - `LOADING FROM DISK`;
+    - `DISK READ ERROR` (the boot read failed);
+    - `BASIC NOT LOADED, RESET SYSTEM` (nothing bootable: no active partition made the MBR call INT 18h).
+- **Things to watch in EmuBuddy:**
+  - FreeDOS's 2-second "F5 to skip" pause never ended without a key. Either the PC's timer tick doesn't advance there, or it's MAME's doing; phase 3 checks the BIOS tick count (`0040:006C`).
+  - MAME typed long command lines with lost characters.
+  - MAME ran the IIgs with the card at about 450 % speed on this Mac.
+- **Not checked:** CGA graphics modes, the IIgs's 3.5" drives as "ProDOS drives" for the PC, and Windows 3.0 (FreeDOS
+  with Windows is not a fair test).
 
 ### Phase 1: the V30
 
