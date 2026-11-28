@@ -80,6 +80,7 @@ documentation.
 | **TransWarp GS** | the other IIgs accelerator | its control panel | medium | ZipGS already covers speed |
 | **Video Overlay Card, the rest** | genlock, overlay, dissolve | nothing useful without a video source | small | not worth it |
 | **VidHD** | modern HDMI card with extra wide modes | programs using VidHD's "SHR+" modes | medium–large | needs its register description from its maker |
+| **PC Transporter** (Applied Engineering) | a PC-XT (NEC V30, 768 KB, CGA) on a card | MS-DOS and PC programs on the IIgs | large | MAME's card (BSD-3) runs DOS and Windows 3.0 since 2026-09; plan: `docs/PCTRANSPORTER_PLAN.md` |
 | **CoGS** | open item from the FujiNet work | — | — | ask its author first (see `docs/FUJINET_PLAN.md`) |
 
 Not useful in an emulator: clock cards (the IIgs has a clock), Super Serial Card (the IIgs has two serial ports), Disk
