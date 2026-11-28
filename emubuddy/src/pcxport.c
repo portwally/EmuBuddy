@@ -587,12 +587,63 @@ v30_take_int(void)
 /* Software interrupts, for EMUBUDDY_PCXPORT_TRACE=3: the disk calls */
 static word32	g_int13_buf = 0xffffffff;
 
+/* The PC Transporter has no 8087. A V30 without one runs the coprocessor
+ * instructions (ESC, $D8-$DF) as no-ops, reading their operand; libx86emu,
+ * which has no FPU either, raises "invalid opcode" instead. Programs test for
+ * the 8087 with FNINIT / FNSTSW (APLCLOCK.EXE's Lattice C start-up does), so
+ * step over the instruction as the V30 would. */
+static int
+v30_skip_esc(void)
+{
+	word32	cs, ip, base;
+	unsigned op, modrm, mod, len;
+
+	cs = g_v30->x86.saved_cs;
+	ip = g_v30->x86.saved_eip & 0xffff;
+	base = cs << 4;
+	len = 0;
+	for(;;) {
+		op = v30_mem_r8(base + ((ip + len) & 0xffff));
+		if(op == 0x26 || op == 0x2e || op == 0x36 || op == 0x3e ||
+				op == 0xf0 || op == 0xf2 || op == 0xf3) {
+			if(++len > 4) {
+				return 0;
+			}
+			continue;
+		}
+		break;
+	}
+	if(op < 0xd8 || op > 0xdf) {
+		return 0;
+	}
+	modrm = v30_mem_r8(base + ((ip + len + 1) & 0xffff));
+	mod = modrm >> 6;
+	len += 2;
+	if(mod == 1) {
+		len += 1;
+	} else if(mod == 2 || (mod == 0 && (modrm & 7) == 6)) {
+		len += 2;
+	}
+	ip = (ip + len) & 0xffff;
+	x86emu_set_seg_register(g_v30, g_v30->x86.R_CS_SEL, cs);
+	g_v30->x86.R_EIP = ip;
+	g_v30->x86.saved_eip = ip;
+	return 1;
+}
+
 static int
 v30_intr(x86emu_t *emu, u8 num, unsigned type)
 {
 	word32	i;
 
 	(void)emu;
+	if(num == 6 && (type & 0xff00) && v30_skip_esc()) {
+		return 1;
+	}
+	if((type & 0xff00) && g_pcx_trace) {
+		printf("pcxport: V30 exception %02x type %03x at %04x:%04x\n",
+			num, type, g_v30->x86.saved_cs, g_v30->x86.saved_eip);
+	}
 	if(!(type & 0xff00) && num == 0x13 && g_pcx_trace >= 3) {
 		if(g_int13_buf != 0xffffffff) {
 			printf("pcxport:   last read:");

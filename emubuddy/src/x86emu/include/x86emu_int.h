@@ -49,7 +49,7 @@
 #include "prim_ops.h"
 #include "mem.h"
 
-#define INTR_RAISE_DIV0(a)	x86emu_intr_raise(a, 0, INTR_TYPE_SOFT | INTR_MODE_RESTART, 0)
+#define INTR_RAISE_DIV0(a)	x86emu_intr_raise(a, 0, INTR_TYPE_SOFT, 0)	/* EmuBuddy: 8086/V30 return past the DIV */
 #define INTR_RAISE_SOFT(a, n)	x86emu_intr_raise(a, n, INTR_TYPE_SOFT, 0)
 #define INTR_RAISE_GP(a, err)	x86emu_intr_raise(a, 0x0d, INTR_TYPE_FAULT | INTR_MODE_RESTART | INTR_MODE_ERRCODE, err)
 #define INTR_RAISE_UD(a)	x86emu_intr_raise(a, 0x06, INTR_TYPE_FAULT | INTR_MODE_RESTART, 0)

@@ -12,3 +12,6 @@ EmuBuddy changes, nothing else:
 - mem.c: <sys/io.h> is not included; the host port I/O calls are the dummy
   macros the library already has for other CPUs. EmuBuddy installs its own
   memory and I/O handler (x86emu_set_memio_handler), so they are never used.
+- include/x86emu_int.h: a divide error returns past the DIV, as on the
+  8086 and the V30 (the 386 returns to the DIV itself, so a handler that
+  simply IRETs would loop for ever).
